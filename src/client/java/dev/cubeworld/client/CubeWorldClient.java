@@ -3,6 +3,7 @@ package dev.cubeworld.client;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.network.CubeNetworking;
+import dev.cubeworld.worldgen.SeamLayout;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -16,6 +17,9 @@ public class CubeWorldClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.PlanetPayload.TYPE, (payload, context) ->
 			CubePlanetMath.setClientCubeState(true, payload.diameterChunks()));
 
+		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.SeamPayload.TYPE, (payload, context) ->
+			SeamClient.layout = new SeamLayout(payload.diameterChunks()));
+
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.EntityGravityPayload.TYPE, (payload, context) -> {
 			Entity entity = context.client().level == null ? null : context.client().level.getEntity(payload.entityId());
 			if (entity != null) {
@@ -23,7 +27,9 @@ public class CubeWorldClient implements ClientModInitializer {
 			}
 		});
 
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-			CubePlanetMath.setClientCubeState(false, CubePlanetMath.MIN_DIAMETER_CHUNKS));
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			CubePlanetMath.setClientCubeState(false, CubePlanetMath.MIN_DIAMETER_CHUNKS);
+			SeamClient.layout = null;
+		});
 	}
 }

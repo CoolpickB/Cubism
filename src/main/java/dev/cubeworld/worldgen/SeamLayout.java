@@ -1,7 +1,12 @@
 package dev.cubeworld.worldgen;
 
+import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.math.CubePlanetMath;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -39,6 +44,12 @@ public final class SeamLayout {
 
 	public static void setActive(SeamLayout layout) {
 		active = layout;
+	}
+
+	/** The layout of a level whose generator stores the cube in seam regions, or null for any other level. */
+	public static @Nullable SeamLayout of(ServerLevel level) {
+		return level.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator generator
+			&& generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS) ? active : null;
 	}
 
 	/** Row-major 3x3 matrix of the face rotation, taken from {@link OrientedWorldGenLevel#toWorld}. */
@@ -139,5 +150,45 @@ public final class SeamLayout {
 		this.toCube(this.faceIndexAt(sx), sx, sy, sz, cube);
 		int distance = Math.max(Math.abs(cube[0]), Math.max(Math.abs(cube[1] - this.centerY), Math.abs(cube[2])));
 		return distance < this.radius;
+	}
+
+	/**
+	 * Adds the chunks of the neighbor faces that a viewer at the storage position can see across a seam. A chunk
+	 * counts when part of its wedge is within {@code viewDistance} chunks of the viewer in cube space. The test runs
+	 * in the frame of the neighbor face, where the viewer stands outside the wedge, next to the shared edge.
+	 */
+	public void collectNeighborChunks(int sx, int sy, int sz, int viewDistance, LongSet out) {
+		int face = this.faceIndexAt(sx);
+		int[] cube = new int[3];
+		this.toCube(face, sx, sy, sz, cube);
+		int[] viewer = new int[3];
+		int reach = viewDistance * 16;
+		int top = this.centerY + this.radius + CubePlanetMath.ATMOSPHERE_HEIGHT;
+		int half = this.spacing / 2;
+		for (int g = 0; g < FACES.length; g++) {
+			if (g == face || FACES[g] == FACES[face].getOpposite()) {
+				continue;
+			}
+			this.toStorage(g, cube[0], cube[1], cube[2], viewer);
+			int offset = this.offsetX(g);
+			int minChunkX = Math.floorDiv(Math.max(viewer[0] - reach, offset - half), 16);
+			int maxChunkX = Math.floorDiv(Math.min(viewer[0] + reach, offset + half - 1), 16);
+			int minChunkZ = Math.floorDiv(Math.max(viewer[2] - reach, -half), 16);
+			int maxChunkZ = Math.floorDiv(Math.min(viewer[2] + reach, half - 1), 16);
+			for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+				for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+					int midX = chunkX * 16 + 8;
+					int midZ = chunkZ * 16 + 8;
+					long dx = Math.max(0, Math.abs(viewer[0] - midX) - 8);
+					long dz = Math.max(0, Math.abs(viewer[2] - midZ) - 8);
+					// The wedge floor under the chunk, lowered by the half width of the chunk.
+					int floor = this.centerY + Math.max(Math.abs(midX - offset), Math.abs(midZ)) - 8;
+					long dy = viewer[1] - Math.clamp(viewer[1], floor, top);
+					if (dx * dx + dy * dy + dz * dz <= (long) reach * reach) {
+						out.add(ChunkPos.pack(chunkX, chunkZ));
+					}
+				}
+			}
+		}
 	}
 }

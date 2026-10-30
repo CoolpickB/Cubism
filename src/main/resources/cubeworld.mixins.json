@@ -6,6 +6,7 @@
 		"BlockScanUtilsMixin",
 		"ChunkGeneratorAccessor",
 		"ChunkGeneratorMixin",
+		"ChunkMapMixin",
 		"EntityMixin",
 		"DiskFeatureMixin",
 		"FallenTreeFeatureMixin",

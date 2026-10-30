@@ -4,6 +4,7 @@ import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.gravity.CubePlanet;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.worldgen.CubeChunkGenerator;
+import dev.cubeworld.worldgen.SeamLayout;
 import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
@@ -39,6 +40,20 @@ public final class CubeNetworking {
 		}
 	}
 
+	/** Tells the client that the level stores the cube in seam regions. */
+	public record SeamPayload(int diameterChunks) implements CustomPacketPayload {
+		public static final Type<SeamPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(CubeWorldMod.MOD_ID, "seam"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, SeamPayload> CODEC = StreamCodec.composite(
+			ByteBufCodecs.VAR_INT, SeamPayload::diameterChunks,
+			SeamPayload::new
+		);
+
+		@Override
+		public Type<SeamPayload> type() {
+			return TYPE;
+		}
+	}
+
 	public record EntityGravityPayload(int entityId, Direction gravity) implements CustomPacketPayload {
 		public static final Type<EntityGravityPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(CubeWorldMod.MOD_ID, "entity_gravity"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, EntityGravityPayload> CODEC = StreamCodec.composite(
@@ -68,6 +83,7 @@ public final class CubeNetworking {
 
 	public static void register() {
 		PayloadTypeRegistry.clientboundPlay().register(PlanetPayload.TYPE, PlanetPayload.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(SeamPayload.TYPE, SeamPayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(EntityGravityPayload.TYPE, EntityGravityPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(PlayerGravityPayload.TYPE, PlayerGravityPayload.CODEC);
 
@@ -85,6 +101,9 @@ public final class CubeNetworking {
 			if (server.overworld().getChunkSource().getGenerator() instanceof CubeChunkGenerator generator) {
 				sender.sendPacket(new PlanetPayload(generator.diameterChunks()));
 				sender.sendPacket(payloadFor(handler.player));
+			}
+			if (SeamLayout.of(server.overworld()) != null) {
+				sender.sendPacket(new SeamPayload(CubeWorldMod.SEAM_DIAMETER_CHUNKS));
 			}
 		});
 
