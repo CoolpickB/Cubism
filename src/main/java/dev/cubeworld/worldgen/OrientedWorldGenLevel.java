@@ -4,6 +4,7 @@ import dev.cubeworld.math.CubePlanetMath;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
+import net.minecraft.core.QuartPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.server.MinecraftServer;
@@ -18,12 +19,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
+import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
@@ -51,161 +53,98 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * Wraps a {@link WorldGenLevel} so vanilla {@link net.minecraft.world.level.levelgen.feature.Feature}
- * implementations (trees, ores, flowers, grass patches, freeze layers, springs, disks) execute
- * in a virtual +Y-up coordinate system anchored on any of the 6 cube faces.
+ * Shows one cube face to vanilla features as a vanilla overworld. The virtual frame is the entity frame of the
+ * face (see {@link CubePlanetMath#localToWorld}), rotated about the cube center, so virtual Y is the distance
+ * along the face normal plus {@code centerY} and the face surface is at virtual Y 64 on every face.
+ *
+ * <p>Reads and writes reach only the 3x3 chunks that vanilla permits around the chunk being decorated. Other
+ * reads give air. Heightmaps come from the terrain density ({@link CubeChunkGenerator#faceHeight}), because a
+ * column on a side face goes through many chunks.
  */
 public final class OrientedWorldGenLevel implements WorldGenLevel {
-	public static final int VIRTUAL_SEA_LEVEL = CubePlanetMath.TOP_SURFACE_Y;
+	public static final int VIRTUAL_MIN_Y = -64;
+	public static final int VIRTUAL_HEIGHT = 384;
 
 	private final WorldGenLevel delegate;
-	private final ChunkPos centerChunkPos;
-	private final Direction outward;
-	private final Direction gravity;
+	private final CubeChunkGenerator generator;
+	private final Direction face;
 	private final int centerY;
-	private final int anchorVx;
-	private final int anchorVy;
-	private final int anchorVz;
-	private final int anchorWx;
-	private final int anchorWy;
-	private final int anchorWz;
-	private final int minSafeX;
-	private final int maxSafeX;
-	private final int minSafeY;
-	private final int maxSafeY;
-	private final int minSafeZ;
-	private final int maxSafeZ;
+	private final ChunkPos centerChunk;
+	private final BiomeResolver biomes;
 
-	public OrientedWorldGenLevel(
-		WorldGenLevel delegate,
-		ChunkPos centerChunkPos,
-		Direction outward,
-		int centerY,
-		BlockPos worldSurfaceSeaAnchor
-	) {
+	public OrientedWorldGenLevel(WorldGenLevel delegate, CubeChunkGenerator generator, Direction face, ChunkPos centerChunk) {
 		this.delegate = delegate;
-		this.centerChunkPos = centerChunkPos;
-		this.outward = outward;
-		this.gravity = outward.getOpposite();
-		this.centerY = centerY;
-		this.anchorWx = worldSurfaceSeaAnchor.getX();
-		this.anchorWy = worldSurfaceSeaAnchor.getY();
-		this.anchorWz = worldSurfaceSeaAnchor.getZ();
-		this.anchorVx = 0;
-		this.anchorVy = VIRTUAL_SEA_LEVEL;
-		this.anchorVz = 0;
+		this.generator = generator;
+		this.face = face;
+		this.centerY = generator.centerY();
+		this.centerChunk = centerChunk;
+		this.biomes = generator.createBiomeResolver();
+	}
 
-		int centerMinX = centerChunkPos.getMinBlockX();
-		int centerMinZ = centerChunkPos.getMinBlockZ();
-		this.minSafeX = centerMinX - 15;
-		this.maxSafeX = centerMinX + 30;
-		this.minSafeZ = centerMinZ - 15;
-		this.maxSafeZ = centerMinZ + 30;
-		this.minSafeY = delegate.getMinY() + 1;
-		this.maxSafeY = delegate.getMinY() + delegate.getHeight() - 2;
+	public Direction face() {
+		return this.face;
+	}
+
+	public static BlockPos toWorld(Direction face, int centerY, int vx, int vy, int vz) {
+		int x = vx;
+		int y = vy - centerY;
+		int z = vz;
+		return switch (face) {
+			case UP -> new BlockPos(x, y + centerY, z);
+			case DOWN -> new BlockPos(-x, -y + centerY, z);
+			case SOUTH -> new BlockPos(x, -z + centerY, y);
+			case NORTH -> new BlockPos(x, z + centerY, -y);
+			case EAST -> new BlockPos(y, -x + centerY, z);
+			case WEST -> new BlockPos(-y, x + centerY, z);
+		};
+	}
+
+	public static BlockPos toVirtual(Direction face, int centerY, int wx, int wy, int wz) {
+		int x = wx;
+		int y = wy - centerY;
+		int z = wz;
+		return switch (face) {
+			case UP -> new BlockPos(x, y + centerY, z);
+			case DOWN -> new BlockPos(-x, -y + centerY, z);
+			case SOUTH -> new BlockPos(x, z + centerY, -y);
+			case NORTH -> new BlockPos(x, -z + centerY, y);
+			case EAST -> new BlockPos(-y, x + centerY, z);
+			case WEST -> new BlockPos(y, -x + centerY, z);
+		};
 	}
 
 	public BlockPos toWorld(BlockPos vPos) {
-		if (this.outward == Direction.UP) {
-			return vPos;
-		}
-		int dvx = vPos.getX() - this.anchorVx;
-		int dvy = vPos.getY() - this.anchorVy;
-		int dvz = vPos.getZ() - this.anchorVz;
-		int wx;
-		int wy;
-		int wz;
-		switch (this.gravity) {
-			case UP -> {
-				wx = this.anchorWx - dvx;
-				wy = this.anchorWy - dvy;
-				wz = this.anchorWz + dvz;
-			}
-			case NORTH -> {
-				wx = this.anchorWx + dvx;
-				wy = this.anchorWy - dvz;
-				wz = this.anchorWz + dvy;
-			}
-			case SOUTH -> {
-				wx = this.anchorWx + dvx;
-				wy = this.anchorWy + dvz;
-				wz = this.anchorWz - dvy;
-			}
-			case WEST -> {
-				wx = this.anchorWx + dvy;
-				wy = this.anchorWy - dvx;
-				wz = this.anchorWz + dvz;
-			}
-			case EAST -> {
-				wx = this.anchorWx - dvy;
-				wy = this.anchorWy + dvx;
-				wz = this.anchorWz + dvz;
-			}
-			default -> {
-				wx = this.anchorWx + dvx;
-				wy = this.anchorWy + dvy;
-				wz = this.anchorWz + dvz;
-			}
-		}
-		return new BlockPos(wx, wy, wz);
+		return toWorld(this.face, this.centerY, vPos.getX(), vPos.getY(), vPos.getZ());
 	}
 
 	public BlockPos toVirtual(BlockPos wPos) {
-		if (this.outward == Direction.UP) {
-			return wPos;
-		}
-		int dwx = wPos.getX() - this.anchorWx;
-		int dwy = wPos.getY() - this.anchorWy;
-		int dwz = wPos.getZ() - this.anchorWz;
-		int dvx;
-		int dvy;
-		int dvz;
-		switch (this.gravity) {
-			case UP -> {
-				dvx = -dwx;
-				dvy = -dwy;
-				dvz = dwz;
-			}
-			case NORTH -> {
-				dvx = dwx;
-				dvy = dwz;
-				dvz = -dwy;
-			}
-			case SOUTH -> {
-				dvx = dwx;
-				dvy = -dwz;
-				dvz = dwy;
-			}
-			case WEST -> {
-				dvx = -dwy;
-				dvy = dwx;
-				dvz = dwz;
-			}
-			case EAST -> {
-				dvx = dwy;
-				dvy = -dwx;
-				dvz = dwz;
-			}
-			default -> {
-				dvx = dwx;
-				dvy = dwy;
-				dvz = dwz;
-			}
-		}
-		return new BlockPos(this.anchorVx + dvx, this.anchorVy + dvy, this.anchorVz + dvz);
+		return toVirtual(this.face, this.centerY, wPos.getX(), wPos.getY(), wPos.getZ());
 	}
 
-	public boolean isWithinSafeBounds(BlockPos wPos) {
-		int x = wPos.getX();
-		int y = wPos.getY();
-		int z = wPos.getZ();
-		return x >= this.minSafeX && x <= this.maxSafeX
-			&& z >= this.minSafeZ && z <= this.maxSafeZ
-			&& y >= this.minSafeY && y <= this.maxSafeY;
+	/** True when vanilla permits this region to read and write the world position. */
+	public boolean isReachable(BlockPos wPos) {
+		return Math.abs((wPos.getX() >> 4) - this.centerChunk.x()) <= 1
+			&& Math.abs((wPos.getZ() >> 4) - this.centerChunk.z()) <= 1
+			&& !this.delegate.isOutsideBuildHeight(wPos.getY());
 	}
 
-	private boolean belongsToThisFaceSector(BlockPos wPos) {
-		return CubePlanetMath.getPyramidOutwardFace(wPos.getX(), wPos.getY(), wPos.getZ(), this.centerY) == this.outward;
+	/** {@link net.minecraft.world.level.levelgen.feature.Feature#markAboveForPostProcessing} in the virtual frame. */
+	public void markAboveForPostProcessing(BlockPos vPos) {
+		BlockPos.MutableBlockPos pos = vPos.mutable();
+		for (int i = 0; i < 2; i++) {
+			pos.move(Direction.UP);
+			if (this.getBlockState(pos).isAir()) {
+				return;
+			}
+			this.markPosForPostProcessing(pos);
+		}
+	}
+
+	public void markPosForPostProcessing(BlockPos vPos) {
+		BlockPos wPos = toWorld(vPos);
+		if (isReachable(wPos)) {
+			this.delegate.getChunk(wPos).markPosForPostProcessing(wPos);
+		}
 	}
 
 	@Override
@@ -216,7 +155,7 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 	@Override
 	public boolean ensureCanWrite(BlockPos vPos) {
 		BlockPos wPos = toWorld(vPos);
-		return isWithinSafeBounds(wPos) && belongsToThisFaceSector(wPos) && this.delegate.ensureCanWrite(wPos);
+		return isReachable(wPos) && this.delegate.ensureCanWrite(wPos);
 	}
 
 	@Override
@@ -232,10 +171,7 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 	@Override
 	public DifficultyInstance getCurrentDifficultyAt(BlockPos vPos) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos)) {
-			return this.delegate.getCurrentDifficultyAt(this.centerChunkPos.getWorldPosition());
-		}
-		return this.delegate.getCurrentDifficultyAt(wPos);
+		return this.delegate.getCurrentDifficultyAt(isReachable(wPos) ? wPos : this.centerChunk.getWorldPosition());
 	}
 
 	@Override
@@ -275,128 +211,119 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 
 	@Override
 	public void playSound(Entity entity, BlockPos vPos, SoundEvent sound, SoundSource source, float volume, float pitch) {
-		BlockPos wPos = toWorld(vPos);
-		if (isWithinSafeBounds(wPos)) {
-			this.delegate.playSound(entity, wPos, sound, source, volume, pitch);
-		}
 	}
 
 	@Override
 	public void addParticle(ParticleOptions options, double x, double y, double z, double dx, double dy, double dz) {
-		this.delegate.addParticle(options, x, y, z, dx, dy, dz);
 	}
 
 	@Override
 	public void levelEvent(Entity entity, int type, BlockPos vPos, int data) {
-		BlockPos wPos = toWorld(vPos);
-		if (isWithinSafeBounds(wPos)) {
-			this.delegate.levelEvent(entity, type, wPos, data);
-		}
 	}
 
 	@Override
 	public void gameEvent(Holder<GameEvent> event, Vec3 pos, GameEvent.Context context) {
-		this.delegate.gameEvent(event, pos, context);
 	}
 
+	// Ticks arrive here from createTick, which already converted the position to the world frame.
 	@Override
 	public LevelTickAccess<Block> getBlockTicks() {
-		return new LevelTickAccess<>() {
-			@Override
-			public boolean willTickThisTick(BlockPos vPos, Block type) {
-				return false;
-			}
-
-			@Override
-			public boolean hasScheduledTick(BlockPos vPos, Block type) {
-				return false;
-			}
-
-			@Override
-			public void schedule(ScheduledTick<Block> tick) {
-				if (isWithinSafeBounds(tick.pos())) {
-					OrientedWorldGenLevel.this.delegate.getBlockTicks().schedule(tick);
-				}
-			}
-
-			@Override
-			public int count() {
-				return 0;
-			}
-		};
+		return new ReachableTicks<>(this.delegate.getBlockTicks());
 	}
 
 	@Override
 	public LevelTickAccess<Fluid> getFluidTicks() {
-		return new LevelTickAccess<>() {
-			@Override
-			public boolean willTickThisTick(BlockPos vPos, Fluid type) {
-				return false;
-			}
+		return new ReachableTicks<>(this.delegate.getFluidTicks());
+	}
 
-			@Override
-			public boolean hasScheduledTick(BlockPos vPos, Fluid type) {
-				return false;
-			}
+	private final class ReachableTicks<T> implements LevelTickAccess<T> {
+		private final LevelTickAccess<T> ticks;
 
-			@Override
-			public void schedule(ScheduledTick<Fluid> tick) {
-				if (isWithinSafeBounds(tick.pos())) {
-					OrientedWorldGenLevel.this.delegate.getFluidTicks().schedule(tick);
-				}
-			}
+		private ReachableTicks(LevelTickAccess<T> ticks) {
+			this.ticks = ticks;
+		}
 
-			@Override
-			public int count() {
-				return 0;
+		@Override
+		public boolean willTickThisTick(BlockPos pos, T type) {
+			return false;
+		}
+
+		@Override
+		public boolean hasScheduledTick(BlockPos pos, T type) {
+			return false;
+		}
+
+		@Override
+		public void schedule(ScheduledTick<T> tick) {
+			if (isReachable(tick.pos())) {
+				this.ticks.schedule(tick);
 			}
-		};
+		}
+
+		@Override
+		public int count() {
+			return 0;
+		}
 	}
 
 	@Override
 	public ChunkAccess getChunk(BlockPos vPos) {
 		BlockPos wPos = toWorld(vPos);
-		int wChunkX = wPos.getX() >> 4;
-		int wChunkZ = wPos.getZ() >> 4;
-		if (!isWithinSafeBounds(wPos) || !this.delegate.hasChunk(wChunkX, wChunkZ)) {
-			return this.delegate.getChunk(this.centerChunkPos.getMinBlockX() >> 4, this.centerChunkPos.getMinBlockZ() >> 4);
-		}
-		return this.delegate.getChunk(wChunkX, wChunkZ);
+		return isReachable(wPos) ? this.delegate.getChunk(wPos) : this.delegate.getChunk(this.centerChunk.x(), this.centerChunk.z());
+	}
+
+	// Chunk coordinates have no single world chunk in a turned frame. The region refuses a FULL request for the
+	// center chunk while it generates, so ask for any status.
+	@Override
+	public ChunkAccess getChunk(int chunkX, int chunkZ) {
+		return this.delegate.getChunk(this.centerChunk.x(), this.centerChunk.z());
 	}
 
 	@Override
 	public ChunkAccess getChunk(int chunkX, int chunkZ, ChunkStatus status, boolean create) {
-		BlockPos wPos = toWorld(new BlockPos(chunkX << 4, VIRTUAL_SEA_LEVEL, chunkZ << 4));
-		int wChunkX = wPos.getX() >> 4;
-		int wChunkZ = wPos.getZ() >> 4;
-		if (!isWithinSafeBounds(wPos) || !this.delegate.hasChunk(wChunkX, wChunkZ)) {
-			return this.delegate.getChunk(this.centerChunkPos.getMinBlockX() >> 4, this.centerChunkPos.getMinBlockZ() >> 4, status, create);
-		}
-		return this.delegate.getChunk(wChunkX, wChunkZ, status, create);
+		return this.delegate.getChunk(this.centerChunk.x(), this.centerChunk.z(), ChunkStatus.EMPTY, create);
 	}
 
 	@Override
 	public boolean hasChunk(int chunkX, int chunkZ) {
-		BlockPos wPos = toWorld(new BlockPos(chunkX << 4, VIRTUAL_SEA_LEVEL, chunkZ << 4));
-		return isWithinSafeBounds(wPos) && this.delegate.hasChunk(wPos.getX() >> 4, wPos.getZ() >> 4);
+		return true;
 	}
 
 	@Override
 	public int getHeight(Heightmap.Types type, int vx, int vz) {
-		for (int vy = VIRTUAL_SEA_LEVEL + 64; vy >= VIRTUAL_SEA_LEVEL - 48; vy--) {
-			BlockState state = getBlockState(new BlockPos(vx, vy, vz));
-			boolean match = switch (type) {
-				case WORLD_SURFACE, WORLD_SURFACE_WG -> !state.isAir();
-				case OCEAN_FLOOR, OCEAN_FLOOR_WG -> !state.isAir() && state.getFluidState().isEmpty();
-				case MOTION_BLOCKING -> !state.isAir() || !state.getFluidState().isEmpty();
-				case MOTION_BLOCKING_NO_LEAVES -> (!state.isAir() || !state.getFluidState().isEmpty())
-					&& !(state.getBlock() instanceof LeavesBlock);
-			};
-			if (match) {
+		boolean oceanFloor = type == Heightmap.Types.OCEAN_FLOOR || type == Heightmap.Types.OCEAN_FLOOR_WG;
+		int terrainHeight = this.generator.faceHeight(this.face, vx, vz, oceanFloor);
+		// Blocks from earlier features (trees, lakes) change the height. Use them where the region can read them.
+		Predicate<BlockState> opaque = type.isOpaque();
+		BlockPos.MutableBlockPos vPos = new BlockPos.MutableBlockPos();
+		for (int vy = terrainHeight + 40; vy >= terrainHeight - 16; vy--) {
+			BlockPos wPos = toWorld(this.face, this.centerY, vx, vy, vz);
+			if (CubePlanetMath.getPyramidOutwardFace(wPos.getX(), wPos.getY(), wPos.getZ(), this.centerY) != this.face) {
+				continue;
+			}
+			if (!isReachable(wPos)) {
+				return terrainHeight;
+			}
+			if (opaque.test(this.delegate.getBlockState(wPos))) {
 				return vy + 1;
 			}
 		}
-		return VIRTUAL_SEA_LEVEL;
+		return terrainHeight;
+	}
+
+	@Override
+	public int getBrightness(LightLayer layer, BlockPos vPos) {
+		return layer == LightLayer.SKY && this.canSeeSky(vPos) ? 15 : 0;
+	}
+
+	@Override
+	public int getRawBrightness(BlockPos vPos, int darkening) {
+		return Math.max(this.getBrightness(LightLayer.SKY, vPos) - darkening, 0);
+	}
+
+	@Override
+	public boolean canSeeSky(BlockPos vPos) {
+		return vPos.getY() >= this.getHeight(Heightmap.Types.WORLD_SURFACE, vPos.getX(), vPos.getZ());
 	}
 
 	@Override
@@ -412,26 +339,23 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 	@Override
 	public Holder<Biome> getBiome(BlockPos vPos) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos)) {
-			return this.delegate.getBiome(this.centerChunkPos.getWorldPosition());
-		}
-		return this.delegate.getBiome(wPos);
+		return this.biomes.getNoiseBiome(QuartPos.fromBlock(wPos.getX()), QuartPos.fromBlock(wPos.getY()), QuartPos.fromBlock(wPos.getZ()));
 	}
 
 	@Override
 	public Holder<Biome> getUncachedNoiseBiome(int qx, int qy, int qz) {
-		BlockPos wPos = toWorld(new BlockPos(qx << 2, qy << 2, qz << 2));
-		return this.delegate.getUncachedNoiseBiome(wPos.getX() >> 2, wPos.getY() >> 2, wPos.getZ() >> 2);
+		BlockPos wPos = toWorld(new BlockPos((qx << 2) + 2, (qy << 2) + 2, (qz << 2) + 2));
+		return this.biomes.getNoiseBiome(QuartPos.fromBlock(wPos.getX()), QuartPos.fromBlock(wPos.getY()), QuartPos.fromBlock(wPos.getZ()));
 	}
 
 	@Override
 	public boolean isClientSide() {
-		return this.delegate.isClientSide();
+		return false;
 	}
 
 	@Override
 	public int getSeaLevel() {
-		return VIRTUAL_SEA_LEVEL;
+		return this.generator.getSeaLevel();
 	}
 
 	@Override
@@ -439,14 +363,15 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 		return this.delegate.dimensionType();
 	}
 
+	// Vanilla height ranges (ores, lakes, geodes) count from the overworld floor, so the face uses its build range.
 	@Override
 	public int getMinY() {
-		return this.delegate.getMinY();
+		return VIRTUAL_MIN_Y;
 	}
 
 	@Override
 	public int getHeight() {
-		return this.delegate.getHeight();
+		return VIRTUAL_HEIGHT;
 	}
 
 	@Override
@@ -487,28 +412,19 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 	@Override
 	public BlockEntity getBlockEntity(BlockPos vPos) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos)) {
-			return null;
-		}
-		return this.delegate.getBlockEntity(wPos);
+		return isReachable(wPos) ? this.delegate.getBlockEntity(wPos) : null;
 	}
 
 	@Override
 	public BlockState getBlockState(BlockPos vPos) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos)) {
-			return Blocks.AIR.defaultBlockState();
-		}
-		return this.delegate.getBlockState(wPos);
+		return isReachable(wPos) ? this.delegate.getBlockState(wPos) : Blocks.AIR.defaultBlockState();
 	}
 
 	@Override
 	public FluidState getFluidState(BlockPos vPos) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos)) {
-			return Fluids.EMPTY.defaultFluidState();
-		}
-		return this.delegate.getFluidState(wPos);
+		return isReachable(wPos) ? this.delegate.getFluidState(wPos) : Fluids.EMPTY.defaultFluidState();
 	}
 
 	@Override
@@ -521,34 +437,23 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 		return predicate.test(getFluidState(vPos));
 	}
 
+	// Block states keep their local orientation (GOALS.md, core model item 4).
 	@Override
 	public boolean setBlock(BlockPos vPos, BlockState state, int flags, int recursionLeft) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos) || !belongsToThisFaceSector(wPos)) {
-			return false;
-		}
-		if (!this.delegate.ensureCanWrite(wPos)) {
-			return false;
-		}
-		return this.delegate.setBlock(wPos, state, flags, recursionLeft);
+		return isReachable(wPos) && this.delegate.setBlock(wPos, state, flags, recursionLeft);
 	}
 
 	@Override
 	public boolean removeBlock(BlockPos vPos, boolean isMoving) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos) || !belongsToThisFaceSector(wPos)) {
-			return false;
-		}
-		return this.delegate.removeBlock(wPos, isMoving);
+		return isReachable(wPos) && this.delegate.removeBlock(wPos, isMoving);
 	}
 
 	@Override
 	public boolean destroyBlock(BlockPos vPos, boolean dropBlock, Entity entity, int recursionLeft) {
 		BlockPos wPos = toWorld(vPos);
-		if (!isWithinSafeBounds(wPos) || !belongsToThisFaceSector(wPos)) {
-			return false;
-		}
-		return this.delegate.destroyBlock(wPos, dropBlock, entity, recursionLeft);
+		return isReachable(wPos) && this.delegate.destroyBlock(wPos, dropBlock, entity, recursionLeft);
 	}
 
 	@Override

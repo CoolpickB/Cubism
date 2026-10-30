@@ -4,12 +4,21 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import dev.cubeworld.math.CubePlanetMath;
+import dev.cubeworld.mixin.ChunkGeneratorAccessor;
 import dev.cubeworld.mixin.RandomStateAccessor;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntArraySet;
+import it.unimi.dsi.fastutil.ints.IntSet;
+import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.QuartPos;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.util.Mth;
@@ -23,8 +32,11 @@ import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeManager;
+import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.biome.FeatureSorter;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SnowyBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -33,7 +45,9 @@ import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.WorldgenRandom;
+import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
+import net.minecraft.world.level.levelgen.RandomSupport;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -41,12 +55,21 @@ import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.world.level.levelgen.feature.SnowAndFreezeFeature;
+import net.minecraft.world.level.levelgen.placement.BiomeFilter;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
+import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CubeChunkGenerator extends ChunkGenerator {
 	public static final MapCodec<CubeChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance ->
@@ -60,6 +83,11 @@ public class CubeChunkGenerator extends ChunkGenerator {
 	);
 
 	private static final int MAX_ATMOSPHERE_ABOVE_SURFACE = 96;
+	// Trees grow up to about 30 blocks. Assigning a vegetation feature by a point 12 blocks above its base keeps
+	// the full tree inside the 1-chunk write margin on side faces, where up goes across chunks.
+	private static final int VEGETATION_ASSIGN_SHIFT = 12;
+	private static final int MAX_SURFACE_INDEX = 512;
+	private static final int MAX_CACHED_FACE_CHUNKS = 16384;
 
 	private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 	private static final BlockState WATER = Blocks.WATER.defaultBlockState();
@@ -91,6 +119,9 @@ public class CubeChunkGenerator extends ChunkGenerator {
 	private final int centerY;
 	private final int innerBedrockRadius;
 	private volatile NoiseRouter cubeRouter;
+	private volatile RandomState activeRandomState;
+	private final Map<Long, short[]> faceHeightCache = new ConcurrentHashMap<>();
+	private final Map<Long, Set<Holder<Biome>>> faceBiomeCache = new ConcurrentHashMap<>();
 
 	public CubeChunkGenerator(BiomeSource biomeSource, Holder<NoiseGeneratorSettings> settings, int diameterChunks) {
 		super(biomeSource);
@@ -142,6 +173,7 @@ public class CubeChunkGenerator extends ChunkGenerator {
 
 	private NoiseRouter ensureCubeRouterInstalled(RandomState randomState) {
 		NoiseRouter router = getOrCreateCubeRouter();
+		this.activeRandomState = randomState;
 		RandomStateAccessor accessor = (RandomStateAccessor) (Object) randomState;
 		if (accessor.cubeworld$getRouter() != router) {
 			accessor.cubeworld$setRouter(router);
@@ -705,6 +737,12 @@ public class CubeChunkGenerator extends ChunkGenerator {
 		worldSurface.update(lx, wy, lz, state);
 	}
 
+	/**
+	 * Runs the vanilla placed features of each face in the virtual frame of that face (see
+	 * {@link OrientedWorldGenLevel}). Each face is cut into virtual chunks. Vanilla placement gives the feature
+	 * positions of a virtual chunk, and this chunk places the features whose position falls inside it. Thus each
+	 * feature is placed exactly once, from inside the region that vanilla permits.
+	 */
 	@Override
 	public void applyBiomeDecoration(WorldGenLevel level, ChunkAccess chunk, StructureManager structureManager) {
 		RandomState randomState = level.getLevel().getChunkSource().randomState();
@@ -713,310 +751,315 @@ public class CubeChunkGenerator extends ChunkGenerator {
 		ChunkPos chunkPos = chunk.getPos();
 		int minX = chunkPos.getMinBlockX();
 		int minZ = chunkPos.getMinBlockZ();
-		long seed = level.getSeed();
-
-		int maxExtent = this.radiusBlocks + 32;
-		int closestX = Mth.clamp(0, minX, minX + 15);
-		int closestZ = Mth.clamp(0, minZ, minZ + 15);
-		if (Math.abs(closestX) > maxExtent || Math.abs(closestZ) > maxExtent) {
+		int maxExtent = this.radiusBlocks + MAX_ATMOSPHERE_ABOVE_SURFACE;
+		if (Math.abs(Mth.clamp(0, minX, minX + 15)) > maxExtent || Math.abs(Mth.clamp(0, minZ, minZ + 15)) > maxExtent) {
 			return;
 		}
 
-		// 1. Place real vanilla underground ore & disk features across the chunk's crust
-		placeVanillaUndergroundOres(level, chunk, chunkPos, minX, minZ, seed);
+		List<FeatureSorter.StepFeatureData> featureSteps = ((ChunkGeneratorAccessor) this).cubeworld$getFeaturesPerStep().get();
+		int minY = Math.max(level.getMinY(), this.centerY - maxExtent);
+		int maxY = Math.min(level.getMinY() + level.getHeight() - 1, this.centerY + maxExtent);
+		int lowestOrigin = OrientedWorldGenLevel.VIRTUAL_MIN_Y;
+		int highestOrigin = this.centerY + maxExtent + 1;
+		int faceReach = Math.floorDiv(maxExtent, 16) + 1;
 
-		// 2. Decorate Top (+Y) and Bottom (-Y) faces using real vanilla PlacedFeatures from BiomeGenerationSettings
-		if (Math.abs(closestX) <= this.radiusBlocks && Math.abs(closestZ) <= this.radiusBlocks) {
-			decorateHorizontalFaceWithVanillaFeatures(level, chunkPos, minX, minZ, Direction.UP, seed);
-			decorateHorizontalFaceWithVanillaFeatures(level, chunkPos, minX, minZ, Direction.DOWN, seed);
+		for (Direction face : Direction.values()) {
+			BlockPos a = OrientedWorldGenLevel.toVirtual(face, this.centerY, minX, minY, minZ);
+			BlockPos b = OrientedWorldGenLevel.toVirtual(face, this.centerY, minX + 15, maxY, minZ + 15);
+			int windowMinY = Math.min(a.getY(), b.getY());
+			int windowMaxY = Math.max(a.getY(), b.getY());
+			if (windowMaxY < lowestOrigin || windowMinY - VEGETATION_ASSIGN_SHIFT > highestOrigin) {
+				continue;
+			}
+			int minVcx = Math.max(-faceReach, Math.min(a.getX(), b.getX()) >> 4);
+			int maxVcx = Math.min(faceReach, Math.max(a.getX(), b.getX()) >> 4);
+			int minVcz = Math.max(-faceReach, Math.min(a.getZ(), b.getZ()) >> 4);
+			int maxVcz = Math.min(faceReach, Math.max(a.getZ(), b.getZ()) >> 4);
+
+			OrientedWorldGenLevel faceLevel = new OrientedWorldGenLevel(level, this, face, chunkPos);
+			for (int vcx = minVcx; vcx <= maxVcx; vcx++) {
+				for (int vcz = minVcz; vcz <= maxVcz; vcz++) {
+					// No feature starts above the surface of this virtual chunk.
+					if (windowMinY - VEGETATION_ASSIGN_SHIFT > faceHeights(face, vcx, vcz)[MAX_SURFACE_INDEX]) {
+						continue;
+					}
+					decorateVirtualChunk(level, faceLevel, featureSteps, vcx, vcz, chunkPos);
+				}
+			}
 		}
+		level.setCurrentlyGenerating(null);
+	}
 
-		// 3. Decorate Side faces (+X, -X, +Z, -Z) using real vanilla PlacedFeatures via OrientedWorldGenLevel
-		for (Direction side : new Direction[]{Direction.EAST, Direction.WEST, Direction.SOUTH, Direction.NORTH}) {
-			int surfaceCoord = (side.getAxisDirection() == Direction.AxisDirection.POSITIVE) ? this.radiusBlocks : -this.radiusBlocks;
-			if (side.getAxis() == Direction.Axis.X) {
-				if (surfaceCoord >= minX - 36 && surfaceCoord <= minX + 51 && Math.abs(closestZ) <= this.radiusBlocks) {
-					decorateSideFaceWithVanillaFeatures(level, chunk, chunkPos, minX, minZ, side, seed);
+	private void decorateVirtualChunk(
+		WorldGenLevel level,
+		OrientedWorldGenLevel faceLevel,
+		List<FeatureSorter.StepFeatureData> featureSteps,
+		int vcx,
+		int vcz,
+		ChunkPos chunkPos
+	) {
+		Direction face = faceLevel.face();
+		BlockPos origin = new BlockPos(vcx << 4, OrientedWorldGenLevel.VIRTUAL_MIN_Y, vcz << 4);
+		WorldgenRandom random = new WorldgenRandom(new XoroshiroRandomSource(RandomSupport.generateUniqueSeed()));
+		// The top face is the vanilla frame, so it keeps the vanilla seed.
+		long faceSeed = face == Direction.UP ? level.getSeed() : level.getSeed() + face.ordinal() * 0x9E3779B97F4A7C15L;
+		long decorationSeed = random.setDecorationSeed(faceSeed, origin.getX(), origin.getZ());
+		Set<Holder<Biome>> biomes = faceBiomes(faceLevel, vcx, vcz);
+		Registry<PlacedFeature> featureRegistry = level.registryAccess().lookupOrThrow(Registries.PLACED_FEATURE);
+		WorldgenRandom placeRandom = new WorldgenRandom(new XoroshiroRandomSource(0L));
+
+		for (int stepIndex = 0; stepIndex < featureSteps.size(); stepIndex++) {
+			FeatureSorter.StepFeatureData stepData = featureSteps.get(stepIndex);
+			IntSet possibleFeatures = new IntArraySet();
+			for (Holder<Biome> biome : biomes) {
+				List<HolderSet<PlacedFeature>> featuresInBiome = this.getBiomeGenerationSettings(biome).features();
+				if (stepIndex < featuresInBiome.size()) {
+					for (Holder<PlacedFeature> feature : featuresInBiome.get(stepIndex)) {
+						possibleFeatures.add(stepData.indexMapping().applyAsInt(feature.value()));
+					}
+				}
+			}
+			int[] featureIndices = possibleFeatures.toIntArray();
+			Arrays.sort(featureIndices);
+			int assignShift = stepIndex == GenerationStep.Decoration.VEGETAL_DECORATION.ordinal() ? VEGETATION_ASSIGN_SHIFT : 0;
+
+			for (int featureIndex : featureIndices) {
+				PlacedFeature placed = stepData.features().get(featureIndex);
+				level.setCurrentlyGenerating(() -> featureRegistry.getResourceKey(placed).map(Object::toString).orElseGet(placed::toString));
+				random.setFeatureSeed(decorationSeed, featureIndex, stepIndex);
+				Feature feature = placed.feature().value();
+				if (feature instanceof SnowAndFreezeFeature) {
+					freezeColumns(faceLevel, origin, chunkPos);
+					continue;
+				}
+
+				List<BlockPos> positions = placementPositions(faceLevel, placed, random, origin);
+				for (int i = 0; i < positions.size(); i++) {
+					BlockPos pos = positions.get(i);
+					if (!isInChunk(faceLevel.toWorld(pos.above(assignShift)), chunkPos)) {
+						continue;
+					}
+					BlockPos worldPos = faceLevel.toWorld(pos);
+					if (CubePlanetMath.getPyramidOutwardFace(worldPos.getX(), worldPos.getY(), worldPos.getZ(), this.centerY) != face) {
+						continue;
+					}
+					if (hasBiomeFilter(placed) && !this.getBiomeGenerationSettings(faceLevel.getBiome(pos)).hasFeature(placed)) {
+						continue;
+					}
+					// Each position gets its own random, so the result does not depend on which chunk places it.
+					placeRandom.setFeatureSeed(decorationSeed + (i + 1L) * 0x5DEECE66DL, featureIndex, stepIndex);
+					feature.place(faceLevel, this, placeRandom, pos);
+				}
+			}
+		}
+	}
+
+	/**
+	 * The positions that {@code FeaturePlacer} gives, in the same order and with the same random calls. The biome
+	 * filter is left out here because it reads the biome; the caller applies it to the positions that it keeps.
+	 */
+	private List<BlockPos> placementPositions(OrientedWorldGenLevel faceLevel, PlacedFeature placed, RandomSource random, BlockPos origin) {
+		List<PlacementModifier> modifiers = placed.placement();
+		List<BlockPos> result = new ArrayList<>();
+		if (modifiers.isEmpty()) {
+			result.add(origin);
+			return result;
+		}
+		PlacementContext context = new PlacementContext(faceLevel, this, Optional.of(placed));
+		List<BlockPos> pending = new ArrayList<>();
+		IntArrayList pendingModifier = new IntArrayList();
+		List<BlockPos> modified = new ArrayList<>();
+		pending.add(origin);
+		pendingModifier.add(0);
+		while (!pending.isEmpty()) {
+			BlockPos pos = pending.removeLast();
+			int modifierIndex = pendingModifier.removeInt(pendingModifier.size() - 1);
+			PlacementModifier modifier = modifiers.get(modifierIndex);
+			modified.clear();
+			if (modifier instanceof BiomeFilter) {
+				modified.add(pos);
+			} else {
+				modifier.modify(context, random, pos, modified::add);
+			}
+			int next = modifierIndex + 1;
+			if (next < modifiers.size()) {
+				for (int i = modified.size() - 1; i >= 0; i--) {
+					pending.add(modified.get(i));
+					pendingModifier.add(next);
 				}
 			} else {
-				if (surfaceCoord >= minZ - 36 && surfaceCoord <= minZ + 51 && Math.abs(closestX) <= this.radiusBlocks) {
-					decorateSideFaceWithVanillaFeatures(level, chunk, chunkPos, minX, minZ, side, seed);
-				}
+				result.addAll(modified);
 			}
 		}
+		return result;
 	}
 
-	private void placeVanillaUndergroundOres(
-		WorldGenLevel level,
-		ChunkAccess chunk,
-		ChunkPos chunkPos,
-		int minX,
-		int minZ,
-		long seed
-	) {
-		long chunkSeed = hashCoords(minX, 0, minZ, seed ^ 0x7F4A7C15L);
-		RandomSource random = new LegacyRandomSource(chunkSeed);
-
-		int minY = Math.max(chunk.getMinY() + 8, this.centerY - this.radiusBlocks);
-		int maxY = Math.min(chunk.getMinY() + chunk.getHeight() - 8, this.centerY + this.radiusBlocks);
-		if (minY >= maxY) {
-			return;
-		}
-
-		// Sample several crust sections in this chunk and run the biome's real UNDERGROUND_ORES features directly on the world level
-		for (int sample = 0; sample < 24; sample++) {
-			int wx = minX + 4 + random.nextInt(8);
-			int wz = minZ + 4 + random.nextInt(8);
-			int wy = minY + random.nextInt(maxY - minY);
-			int cheb = CubePlanetMath.getChebyshevDistance(wx, wy, wz, this.centerY);
-			if (cheb < this.innerBedrockRadius + 6 || cheb > this.radiusBlocks - 8) {
-				continue;
-			}
-			BlockPos wPos = new BlockPos(wx, wy, wz);
-			BlockState state = level.getBlockState(wPos);
-			if (!state.is(Blocks.STONE) && !state.is(Blocks.DEEPSLATE)) {
-				continue;
-			}
-
-			Holder<Biome> biome = level.getBiome(wPos);
-			List<HolderSet<PlacedFeature>> steps = this.getBiomeGenerationSettings(biome).features();
-			int oreStepIdx = GenerationStep.Decoration.UNDERGROUND_ORES.ordinal();
-			if (oreStepIdx < steps.size()) {
-				HolderSet<PlacedFeature> oreFeatures = steps.get(oreStepIdx);
-				if (oreFeatures.size() > 0) {
-					Holder<PlacedFeature> chosen = oreFeatures.get(random.nextInt(oreFeatures.size()));
-					String key = chosen.unwrapKey().map(k -> k.identifier().getPath()).orElse("");
-					if (key.contains("ore_")) {
-						chosen.value().feature().value().place(level, this, random, wPos);
-					}
-				}
+	private static boolean hasBiomeFilter(PlacedFeature placed) {
+		for (PlacementModifier modifier : placed.placement()) {
+			if (modifier instanceof BiomeFilter) {
+				return true;
 			}
 		}
+		return false;
 	}
 
-	private void decorateHorizontalFaceWithVanillaFeatures(
-		WorldGenLevel level,
-		ChunkPos chunkPos,
-		int minX,
-		int minZ,
-		Direction outward,
-		long seed
-	) {
-		int seaY = (outward == Direction.UP)
-			? (this.centerY + this.radiusBlocks)
-			: (this.centerY - this.radiusBlocks);
-		int maxFaceCoord = this.radiusBlocks - 3;
+	private static boolean isInChunk(BlockPos worldPos, ChunkPos chunkPos) {
+		return (worldPos.getX() >> 4) == chunkPos.x() && (worldPos.getZ() >> 4) == chunkPos.z();
+	}
 
-		for (int gx = 3; gx < 15; gx += 4) {
-			for (int gz = 3; gz < 15; gz += 4) {
-				long cellSeed = hashCoords(minX + gx, seaY, minZ + gz, seed ^ outward.ordinal() * 0x9E3779B9L);
-				RandomSource random = new LegacyRandomSource(cellSeed);
-				int wx = minX + gx + random.nextInt(3) - 1;
-				int wz = minZ + gz + random.nextInt(3) - 1;
-				if (Math.abs(wx) > maxFaceCoord || Math.abs(wz) > maxFaceCoord) {
+	/** {@link SnowAndFreezeFeature} for the columns of a virtual chunk whose surface is in this chunk. */
+	private void freezeColumns(OrientedWorldGenLevel faceLevel, BlockPos origin, ChunkPos chunkPos) {
+		BlockPos.MutableBlockPos topPos = new BlockPos.MutableBlockPos();
+		BlockPos.MutableBlockPos belowPos = new BlockPos.MutableBlockPos();
+		for (int dx = 0; dx < 16; dx++) {
+			for (int dz = 0; dz < 16; dz++) {
+				int x = origin.getX() + dx;
+				int z = origin.getZ() + dz;
+				topPos.set(x, faceLevel.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z), z);
+				BlockPos worldTop = faceLevel.toWorld(topPos);
+				if (!isInChunk(worldTop, chunkPos)
+					|| CubePlanetMath.getPyramidOutwardFace(worldTop.getX(), worldTop.getY(), worldTop.getZ(), this.centerY) != faceLevel.face()) {
 					continue;
 				}
-
-				BlockPos surfaceAbove = findHorizontalFaceSurfaceAbove(level, wx, seaY, wz, outward);
-				if (surfaceAbove != null) {
-					OrientedWorldGenLevel orientedLevel = new OrientedWorldGenLevel(level, chunkPos, outward, this.centerY, surfaceAbove);
-					runVanillaSurfaceFeaturesAt(level, orientedLevel, surfaceAbove, outward, random);
+				belowPos.set(topPos).move(Direction.DOWN);
+				Biome biome = faceLevel.getBiome(topPos).value();
+				if (biome.shouldFreeze(faceLevel, belowPos, false)) {
+					faceLevel.setBlock(belowPos, Blocks.ICE.defaultBlockState(), 2);
 				}
-			}
-		}
-	}
-
-	private void decorateSideFaceWithVanillaFeatures(
-		WorldGenLevel level,
-		ChunkAccess chunk,
-		ChunkPos chunkPos,
-		int minX,
-		int minZ,
-		Direction outward,
-		long seed
-	) {
-		int maxFaceCoord = this.radiusBlocks - 3;
-		int minY = Math.max(chunk.getMinY() + 8, this.centerY - maxFaceCoord);
-		int maxY = Math.min(chunk.getMinY() + chunk.getHeight() - 8, this.centerY + maxFaceCoord);
-
-		for (int gt = 3; gt < 15; gt += 4) {
-			int wTangent = (outward.getAxis() == Direction.Axis.X ? minZ : minX) + gt;
-			if (Math.abs(wTangent) > maxFaceCoord) {
-				continue;
-			}
-
-			for (int wyBase = minY + 2; wyBase <= maxY - 2; wyBase += 4) {
-				long cellSeed = hashCoords(wTangent, wyBase, minX ^ minZ, seed ^ (outward.ordinal() * 0xBF58476DL));
-				RandomSource random = new LegacyRandomSource(cellSeed);
-				int lt = Mth.clamp(gt + random.nextInt(3) - 1, 1, 14);
-				int wy = wyBase + random.nextInt(3) - 1;
-				if (Math.abs(wy - this.centerY) > maxFaceCoord) {
-					continue;
-				}
-
-				BlockPos surfaceAbove = findSideFaceSurfaceAboveInChunk(level, chunk, minX, minZ, lt, wy, outward);
-				if (surfaceAbove != null) {
-					OrientedWorldGenLevel orientedLevel = new OrientedWorldGenLevel(level, chunkPos, outward, this.centerY, surfaceAbove);
-					runVanillaSurfaceFeaturesAt(level, orientedLevel, surfaceAbove, outward, random);
-				}
-			}
-		}
-	}
-
-	private BlockPos findHorizontalFaceSurfaceAbove(WorldGenLevel level, int wx, int seaY, int wz, Direction outward) {
-		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos(wx, seaY, wz).move(outward, 44);
-		Direction inward = outward.getOpposite();
-		for (int step = 0; step < 80; step++) {
-			BlockState state = level.getBlockState(cursor);
-			if (!state.isAir() && !state.is(Blocks.SNOW)) {
-				if (state.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock) {
-					return null;
-				}
-				if (CubePlanetMath.getPyramidOutwardFace(cursor.getX(), cursor.getY(), cursor.getZ(), this.centerY) != outward) {
-					return null;
-				}
-				BlockPos above = cursor.relative(outward);
-				BlockState aboveState = level.getBlockState(above);
-				if (aboveState.isAir() || aboveState.is(Blocks.WATER) || aboveState.is(Blocks.SNOW)) {
-					return above;
-				}
-				return null;
-			}
-			cursor.move(inward);
-		}
-		return null;
-	}
-
-	private BlockPos findSideFaceSurfaceAboveInChunk(
-		WorldGenLevel level,
-		ChunkAccess chunk,
-		int minX,
-		int minZ,
-		int localTangent,
-		int wy,
-		Direction outward
-	) {
-		LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(wy));
-		if (section.hasOnlyAir()) {
-			return null;
-		}
-		int secY = SectionPos.sectionRelative(wy);
-		boolean positive = outward.getAxisDirection() == Direction.AxisDirection.POSITIVE;
-		boolean xAxis = outward.getAxis() == Direction.Axis.X;
-
-		int startStep = positive ? 15 : 0;
-		int endStep = positive ? -1 : 16;
-		int delta = positive ? -1 : 1;
-
-		for (int ln = startStep; ln != endStep; ln += delta) {
-			int lx = xAxis ? ln : localTangent;
-			int lz = xAxis ? localTangent : ln;
-			BlockState state = section.getBlockState(lx, secY, lz);
-			if (!state.isAir() && !state.is(Blocks.SNOW)) {
-				if (state.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock) {
-					return null;
-				}
-				int wx = minX + lx;
-				int wz = minZ + lz;
-				int cheb = CubePlanetMath.getChebyshevDistance(wx, wy, wz, this.centerY);
-				if (cheb < this.radiusBlocks - 28 || cheb > this.radiusBlocks + 44) {
-					return null;
-				}
-				if (CubePlanetMath.getPyramidOutwardFace(wx, wy, wz, this.centerY) != outward) {
-					return null;
-				}
-				BlockPos above = new BlockPos(wx + outward.getStepX(), wy, wz + outward.getStepZ());
-				BlockState aboveState = level.getBlockState(above);
-				if (aboveState.isAir() || aboveState.is(Blocks.WATER) || aboveState.is(Blocks.SNOW)) {
-					return above;
-				}
-				return null;
-			}
-		}
-		return null;
-	}
-
-	private void runVanillaSurfaceFeaturesAt(
-		WorldGenLevel rawLevel,
-		OrientedWorldGenLevel orientedLevel,
-		BlockPos surfaceAboveWorldPos,
-		Direction outward,
-		RandomSource random
-	) {
-		BlockPos groundWorldPos = surfaceAboveWorldPos.relative(outward.getOpposite());
-		BlockState groundState = rawLevel.getBlockState(groundWorldPos);
-		BlockState aboveState = rawLevel.getBlockState(surfaceAboveWorldPos);
-
-		Holder<Biome> biomeHolder = rawLevel.getBiome(groundWorldPos);
-		String biomePath = biomeHolder.unwrapKey().map(k -> k.identifier().getPath()).orElse("plains");
-		BiomeGenerationSettings genSettings = this.getBiomeGenerationSettings(biomeHolder);
-		List<HolderSet<PlacedFeature>> steps = genSettings.features();
-
-		BlockPos vSurfacePos = orientedLevel.toVirtual(surfaceAboveWorldPos);
-
-		int vegStepIdx = GenerationStep.Decoration.VEGETAL_DECORATION.ordinal();
-		if (vegStepIdx < steps.size()) {
-			HolderSet<PlacedFeature> vegFeatures = steps.get(vegStepIdx);
-			boolean placedTree = false;
-			boolean placedFlora = false;
-
-			for (Holder<PlacedFeature> holder : vegFeatures) {
-				String key = holder.unwrapKey().map(k -> k.identifier().getPath()).orElse("");
-				Feature feature = holder.value().feature().value();
-
-				if (aboveState.is(Blocks.WATER)) {
-					if (!placedFlora && (key.contains("seagrass") || key.contains("kelp"))) {
-						if (random.nextInt(4) == 0 && feature.place(orientedLevel, this, random, vSurfacePos)) {
-							placedFlora = true;
-						}
-					}
-					continue;
-				}
-
-				boolean isTreeFeature = key.contains("tree") || key.contains("birch") || key.contains("oak")
-					|| key.contains("spruce") || key.contains("pine") || key.contains("acacia")
-					|| key.contains("jungle") || key.contains("cherry") || key.contains("mangrove")
-					|| key.contains("dark_forest") || key.contains("bamboo") || key.contains("mushroom_island");
-
-				if (isTreeFeature) {
-					if (!placedTree && shouldAttemptTreeInBiome(key, random)) {
-						if (feature.place(orientedLevel, this, random, vSurfacePos)) {
-							placedTree = true;
-							if (groundState.is(Blocks.GRASS_BLOCK) || groundState.is(Blocks.PODZOL) || groundState.is(Blocks.MYCELIUM)) {
-								orientedLevel.setBlock(vSurfacePos.below(), DIRT, 2);
-							}
-						}
-					}
-				} else if (!placedTree && !placedFlora && (key.contains("flower") || key.contains("grass") || key.contains("fern")
-					|| key.contains("bush") || key.contains("cactus") || key.contains("sugar_cane")
-					|| key.contains("pumpkin") || key.contains("melon") || key.contains("patch_"))) {
-					if (random.nextInt(3) == 0 && feature.place(orientedLevel, this, random, vSurfacePos)) {
-						placedFlora = true;
+				if (biome.shouldSnow(faceLevel, topPos)) {
+					faceLevel.setBlock(topPos, Blocks.SNOW.defaultBlockState(), 2);
+					BlockState belowState = faceLevel.getBlockState(belowPos);
+					if (belowState.hasProperty(SnowyBlock.SNOWY)) {
+						faceLevel.setBlock(belowPos, belowState.setValue(SnowyBlock.SNOWY, true), 2);
 					}
 				}
 			}
 		}
-
-		// Snow layer in snowy biomes
-		if (aboveState.isAir()
-			&& (biomePath.contains("snowy") || biomePath.contains("frozen") || biomePath.contains("grove") || biomePath.contains("ice_spikes"))
-			&& orientedLevel.getBlockState(vSurfacePos).isAir()
-			&& groundState.isSolidRender()) {
-			orientedLevel.setBlock(vSurfacePos, Blocks.SNOW.defaultBlockState(), 2);
-		}
 	}
 
-	private static boolean shouldAttemptTreeInBiome(String featureKey, RandomSource random) {
-		if (featureKey.contains("dark_forest") || featureKey.contains("jungle") || featureKey.contains("bamboo")) {
-			return random.nextInt(2) == 0;
+	public BiomeResolver createBiomeResolver() {
+		return this.getBiomeSource().createCachingResolver(this.activeRandomState);
+	}
+
+	/** The biomes of a virtual chunk, from the surface down to the vanilla floor. Like vanilla, it limits the features to try. */
+	private Set<Holder<Biome>> faceBiomes(OrientedWorldGenLevel faceLevel, int vcx, int vcz) {
+		long key = faceCacheKey(faceLevel.face(), vcx, vcz);
+		Set<Holder<Biome>> cached = this.faceBiomeCache.get(key);
+		if (cached != null) {
+			return cached;
 		}
-		if (featureKey.contains("plains") || featureKey.contains("meadow")) {
-			return random.nextInt(28) == 0;
+		Set<Holder<Biome>> biomes = new ObjectArraySet<>();
+		for (int qx = 0; qx < 4; qx++) {
+			for (int qz = 0; qz < 4; qz++) {
+				int vx = (vcx << 4) + (qx << 2) + 2;
+				int vz = (vcz << 4) + (qz << 2) + 2;
+				int surface = faceHeight(faceLevel.face(), vx, vz, true);
+				for (int vy = surface + 16; vy >= OrientedWorldGenLevel.VIRTUAL_MIN_Y; vy -= 16) {
+					biomes.add(faceLevel.getBiome(new BlockPos(vx, vy, vz)));
+				}
+			}
 		}
-		if (featureKey.contains("savanna") || featureKey.contains("snowy") || featureKey.contains("windswept")) {
-			return random.nextInt(10) == 0;
+		biomes.retainAll(this.getBiomeSource().possibleBiomes());
+		if (this.faceBiomeCache.size() > MAX_CACHED_FACE_CHUNKS) {
+			this.faceBiomeCache.clear();
 		}
-		return random.nextInt(4) == 0;
+		this.faceBiomeCache.put(key, biomes);
+		return biomes;
+	}
+
+	/**
+	 * The vanilla heightmap of a face column in the virtual frame, from the terrain density alone: the virtual Y
+	 * above the top solid block, or above the sea for {@code oceanFloor == false}.
+	 */
+	public int faceHeight(Direction face, int vx, int vz, boolean oceanFloor) {
+		short[] heights = faceHeights(face, vx >> 4, vz >> 4);
+		return heights[(((vx & 15) << 4) | (vz & 15)) * 2 + (oceanFloor ? 0 : 1)];
+	}
+
+	private short[] faceHeights(Direction face, int vcx, int vcz) {
+		long key = faceCacheKey(face, vcx, vcz);
+		short[] cached = this.faceHeightCache.get(key);
+		if (cached != null) {
+			return cached;
+		}
+
+		DensitySampler sampler = this.activeRandomState.getSampler(getOrCreateCubeRouter().finalDensity());
+		SamplerContext ctx = SamplerContext.builder().enableCaches().build();
+		Long2FloatOpenHashMap corners = new Long2FloatOpenHashMap();
+		corners.defaultReturnValue(Float.NaN);
+		int seaY = this.centerY + this.radiusBlocks;
+		int topY = seaY + MAX_ATMOSPHERE_ABOVE_SURFACE;
+		int bottomY = this.centerY + this.innerBedrockRadius;
+		short[] heights = new short[MAX_SURFACE_INDEX + 1];
+		int maxSurface = Integer.MIN_VALUE;
+
+		for (int lx = 0; lx < 16; lx++) {
+			for (int lz = 0; lz < 16; lz++) {
+				int vx = (vcx << 4) + lx;
+				int vz = (vcz << 4) + lz;
+				int floor = bottomY;
+				for (int vy = topY; vy > bottomY; vy--) {
+					BlockPos w = OrientedWorldGenLevel.toWorld(face, this.centerY, vx, vy, vz);
+					if (terrainDensity(sampler, ctx, corners, w.getX(), w.getY(), w.getZ()) > 0.0f) {
+						floor = vy + 1;
+						break;
+					}
+				}
+				int surface = floor;
+				boolean seaColumn = Math.max(Math.abs(vx), Math.abs(vz)) <= this.radiusBlocks - 2;
+				if (seaColumn && floor <= seaY) {
+					surface = seaY + 1;
+				}
+				int index = ((lx << 4) | lz) * 2;
+				heights[index] = (short) floor;
+				heights[index + 1] = (short) surface;
+				maxSurface = Math.max(maxSurface, surface);
+			}
+		}
+		heights[MAX_SURFACE_INDEX] = (short) maxSurface;
+
+		if (this.faceHeightCache.size() > MAX_CACHED_FACE_CHUNKS) {
+			this.faceHeightCache.clear();
+		}
+		this.faceHeightCache.put(key, heights);
+		return heights;
+	}
+
+	/** The density that {@link #generateChunkTerrain} gives a block: exact near cube edges, else interpolated in 4-block cells. */
+	private float terrainDensity(DensitySampler sampler, SamplerContext ctx, Long2FloatOpenHashMap corners, int wx, int wy, int wz) {
+		int x0 = wx & ~3;
+		int y0 = wy & ~3;
+		int z0 = wz & ~3;
+		int midCheb = CubePlanetMath.getChebyshevDistance(x0 + 2, y0 + 2, z0 + 2, this.centerY);
+		int midSecond = CubePlanetMath.getSecondMaxCoord(x0 + 2, y0 + 2, z0 + 2, this.centerY);
+		if (midSecond >= midCheb - 6 && midCheb >= this.radiusBlocks - 32 && midCheb <= this.radiusBlocks + 48) {
+			return sampler.sampleValue(ctx, wx, wy, wz);
+		}
+		float fx = (wx - x0) * 0.25f;
+		float fy = (wy - y0) * 0.25f;
+		float fz = (wz - z0) * 0.25f;
+		float d00 = Mth.lerp(fy, densityCorner(sampler, ctx, corners, x0, y0, z0), densityCorner(sampler, ctx, corners, x0, y0 + 4, z0));
+		float d10 = Mth.lerp(fy, densityCorner(sampler, ctx, corners, x0 + 4, y0, z0), densityCorner(sampler, ctx, corners, x0 + 4, y0 + 4, z0));
+		float d01 = Mth.lerp(fy, densityCorner(sampler, ctx, corners, x0, y0, z0 + 4), densityCorner(sampler, ctx, corners, x0, y0 + 4, z0 + 4));
+		float d11 = Mth.lerp(fy, densityCorner(sampler, ctx, corners, x0 + 4, y0, z0 + 4), densityCorner(sampler, ctx, corners, x0 + 4, y0 + 4, z0 + 4));
+		return Mth.lerp(fz, Mth.lerp(fx, d00, d10), Mth.lerp(fx, d01, d11));
+	}
+
+	private float densityCorner(DensitySampler sampler, SamplerContext ctx, Long2FloatOpenHashMap corners, int x, int y, int z) {
+		long key = BlockPos.asLong(x, y, z);
+		float value = corners.get(key);
+		if (Float.isNaN(value)) {
+			int cheb = CubePlanetMath.getChebyshevDistance(x, y, z, this.centerY);
+			value = (cheb < this.innerBedrockRadius - 4 || cheb > this.radiusBlocks + MAX_ATMOSPHERE_ABOVE_SURFACE + 4)
+				? -1.0f
+				: sampler.sampleValue(ctx, x, y, z);
+			corners.put(key, value);
+		}
+		return value;
+	}
+
+	private static long faceCacheKey(Direction face, int vcx, int vcz) {
+		return ((long) face.ordinal() << 60) | ((vcx & 0x3FFFFFFFL) << 30) | (vcz & 0x3FFFFFFFL);
 	}
 
 	@Override
