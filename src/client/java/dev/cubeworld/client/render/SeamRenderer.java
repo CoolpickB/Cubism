@@ -275,13 +275,19 @@ public final class SeamRenderer {
 
 	/**
 	 * Called before a vanilla section moves to {@code newNode}. When the section leaves the face region of its new
-	 * position, its chunk is about to become a seam chunk, so the mesh stays for the seam renderer.
+	 * position, or its face is no longer the camera face, its chunk is about to become a seam chunk, so the mesh stays
+	 * for the seam renderer. The second case is a crossing where the view square moves along z in storage: from WEST
+	 * to SOUTH, the WEST sections at the shared edge wrap to new z positions in the WEST region.
 	 */
 	public static void onVanillaSectionMoving(SectionRenderDispatcher.RenderSection section, long newNode) {
 		SeamLayout layout = SeamClient.layout;
+		if (layout == null || section instanceof SeamSection || !(section.getSectionMesh() instanceof CompiledSectionMesh)) {
+			return;
+		}
 		long oldNode = section.getSectionNode();
-		if (layout == null || section instanceof SeamSection || !(section.getSectionMesh() instanceof CompiledSectionMesh)
-			|| layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(oldNode))) == layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(newNode)))) {
+		int oldFace = layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(oldNode)));
+		if (oldFace == layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(newNode)))
+			&& oldFace == layout.faceIndexAt(Minecraft.getInstance().gameRenderer.mainCamera().blockPosition().getX())) {
 			return;
 		}
 		SeamSection seam = sections.get(oldNode);
