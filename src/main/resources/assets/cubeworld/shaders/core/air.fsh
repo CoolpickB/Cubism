@@ -1,0 +1,100 @@
+#version 330
+#extension GL_ARB_separate_shader_objects : require
+
+#include <minecraft:fog.glsl>
+#include <minecraft:dynamictransforms.glsl>
+
+// Inputs, packed into the transform uniforms by CubeSky:
+//   TextureMat: columns 0-2 turn the camera face frame into the cube frame. Column 3 is the camera position in the
+//               cube frame, and in w the local time at the camera.
+//   ColorModulator: x the cube radius, y the brightest stars of the day.
+//   ModelOffset: the direction toward the sun in the cube frame.
+// Sampler0 holds the vanilla colors over one day: row 0 the sky color with the star brightness in alpha, row 1 the
+// fog color.
+uniform sampler2D Sampler0;
+
+layout(location = 0) in vec3 faceDirection;
+
+layout(location = 0) out vec4 fragColor;
+
+const float DAY = 24000.0;
+const float PI = 3.14159265;
+// The rounded edges of the cube surface have this radius, as in CubeTime.
+const float EDGE = 32.0;
+// The air ends this high above the surface, at the build limit.
+const float TOP = 256.0;
+const float SCALE_HEIGHT = 48.0;
+const float DENSITY = 0.15;
+// The highest the sun stands over a face, as a sine: 54.7 degrees.
+const float SUN_REACH = 0.81649658;
+const vec3 AXIS = vec3(0.57735027);
+const int STEPS = 48;
+
+void main() {
+#ifdef SPACE
+    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+#else
+    vec3 view = normalize(faceDirection);
+    vec3 direction = mat3(TextureMat) * view;
+    vec3 camera = TextureMat[3].xyz;
+    float inner = ColorModulator.x - EDGE;
+    float starMax = ColorModulator.y;
+    vec3 sun = ModelOffset;
+    vec3 sunMotion = cross(AXIS, sun);
+
+    // Vanilla draws the sky as a disc 16 blocks over the camera, faded into the fog by distance. The same fade keeps
+    // the look of vanilla toward the horizon. The fog color of vanilla at the camera has extra tints, such as sunrise
+    // when the camera looks at the sun, which also go onto the fog of the other times.
+    float haze = view.y <= 0.0 ? 1.0 : clamp(16.0 / (view.y * FogSkyEnd), 0.0, 1.0);
+    haze *= FogColor.a;
+    vec3 fogTint = FogColor.rgb - texture(Sampler0, vec2(TextureMat[3].w / DAY, 0.75)).rgb;
+
+    vec3 q0 = camera - clamp(camera, -inner, inner);
+    float ground = min(-48.0, length(q0) - EDGE - 16.0);
+
+    float far = 2.0 * (inner + EDGE + TOP) * 1.7320508;
+    float transmittance = 1.0;
+    float starlight = 0.0;
+    vec3 color = vec3(0.0);
+    float previous = 0.0;
+    for (int i = 1; i <= STEPS; i++) {
+        // Short steps near the camera, where the air is thick and the colors change.
+        float f = float(i) / float(STEPS);
+        float distance = far * f * f;
+        float step = distance - previous;
+        vec3 p = camera + direction * (previous + 0.5 * step);
+        previous = distance;
+
+        vec3 q = p - clamp(p, -inner, inner);
+        float r = length(q);
+        float height = r - EDGE;
+        vec3 normal = r > 0.0 ? q / r : vec3(0.0, 1.0, 0.0);
+
+        // The local time is the vanilla time with the same height of the sun over this bit of air.
+        float rise = acos(clamp(dot(sun, normal) / SUN_REACH, -1.0, 1.0)) / PI * 12000.0;
+        float ticks = dot(sunMotion, normal) >= 0.0 ? 6000.0 - rise : 6000.0 + rise;
+        vec4 sky = texture(Sampler0, vec2(ticks / DAY, 0.25));
+        vec3 fog = max(texture(Sampler0, vec2(ticks / DAY, 0.75)).rgb + fogTint, 0.0);
+        vec3 air = mix(sky.rgb, fog, haze);
+
+        float opacity;
+        if (height < ground) {
+            opacity = 1.0;
+        } else if (height < TOP) {
+            opacity = 1.0 - exp(-DENSITY * exp(-max(height, 0.0) / SCALE_HEIGHT) * step);
+        } else {
+            opacity = 0.0;
+        }
+        float weight = transmittance * opacity;
+        color += weight * air;
+        starlight += weight * sky.a / starMax;
+        transmittance -= weight;
+        if (height < ground) {
+            break;
+        }
+    }
+    // The stars under the air were drawn at the brightest of the day. The alpha dims them to the vanilla brightness of
+    // the air they shine through, and leaves them full in space.
+    fragColor = vec4(color, 1.0 - transmittance - starlight);
+#endif
+}

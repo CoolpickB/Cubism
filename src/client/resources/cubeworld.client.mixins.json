@@ -3,6 +3,7 @@
 	"package": "dev.cubeworld.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"AtmosphericFogEnvironmentMixin",
 		"CameraMixin",
 		"ClientPacketListenerMixin",
 		"ClientChunkCacheMixin",
@@ -20,7 +21,8 @@
 		"MultiPlayerGameModeMixin",
 		"RenderSectionAccessor",
 		"RenderSectionMixin",
-		"DebugEntryPositionMixin"
+		"DebugEntryPositionMixin",
+		"SkyRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

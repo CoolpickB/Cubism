@@ -2,6 +2,7 @@ package dev.cubeworld.client;
 
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
+import dev.cubeworld.client.render.CubeSky;
 import dev.cubeworld.client.render.SeamRenderer;
 import dev.cubeworld.network.CubeNetworking;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -18,6 +19,7 @@ import java.io.File;
 public class CubeWorldClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+		CubeSky.init();
 		CubeNetworking.clientGravitySender = gravity -> ClientPlayNetworking.send(new CubeNetworking.PlayerGravityPayload(gravity));
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.PlanetPayload.TYPE, (payload, context) ->

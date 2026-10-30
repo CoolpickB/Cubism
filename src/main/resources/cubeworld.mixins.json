@@ -45,7 +45,13 @@
 		"MoveToTargetSinkMixin",
 		"NearestLivingEntitySensorMixin",
 		"RangedAttackMixin",
-		"TargetSearchMixin"
+		"TargetSearchMixin",
+		"AttributeTrackSamplerAccessor",
+		"EnvironmentAttributeSystemMixin",
+		"LevelMixin",
+		"PhantomSpawnerMixin",
+		"ServerChunkCacheMixin",
+		"ServerPlayerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
