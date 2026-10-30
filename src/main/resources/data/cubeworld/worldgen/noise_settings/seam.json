@@ -119,5 +119,20 @@
     "vegetation": "minecraft:overworld/vegetation"
   },
   "sea_level": 63,
-  "spawn_target": []
+  "spawn_target": [
+    {
+      "minecraft:overworld/continents": [-0.11, 1.0],
+      "minecraft:overworld/erosion": [-1.0, 1.0],
+      "minecraft:overworld/ridges": [-1.0, -0.16],
+      "minecraft:overworld/temperature": [-1.0, 1.0],
+      "minecraft:overworld/vegetation": [-1.0, 1.0]
+    },
+    {
+      "minecraft:overworld/continents": [-0.11, 1.0],
+      "minecraft:overworld/erosion": [-1.0, 1.0],
+      "minecraft:overworld/ridges": [0.16, 1.0],
+      "minecraft:overworld/temperature": [-1.0, 1.0],
+      "minecraft:overworld/vegetation": [-1.0, 1.0]
+    }
+  ]
 }

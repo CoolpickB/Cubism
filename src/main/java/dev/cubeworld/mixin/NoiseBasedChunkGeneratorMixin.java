@@ -6,6 +6,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.worldgen.SeamLayout;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -13,6 +14,8 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.SpawnTargetPoint;
+import net.minecraft.world.level.levelgen.densityfunction.DensitySamplerSet;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
@@ -23,6 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.jspecify.annotations.Nullable;
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -60,6 +64,39 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 				return status.fluidType().is(Blocks.LAVA) ? status : new Aquifer.FluidStatus(layout.seaLevelAt(x, z, seaLevel), fluid);
 			};
 		});
+	}
+
+	/**
+	 * Vanilla searches up to 2048 blocks from the origin for land, which leads into other face regions and the space
+	 * between wedges. Here the search stays near the center of the UP face, so that the player spawns on top of the
+	 * cube, away from the mountain rims of the edges. The fitness is the vanilla one.
+	 */
+	@WrapOperation(
+		method = "getOrigin",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/NoiseSpawnFinder;findSpawnPosition(Ljava/util/List;Lnet/minecraft/world/level/levelgen/densityfunction/DensitySamplerSet;)Lnet/minecraft/core/BlockPos;")
+	)
+	private BlockPos cubeworld$spawnOnTopFace(List<SpawnTargetPoint> targets, DensitySamplerSet samplers, Operation<BlockPos> original) {
+		SeamLayout layout = SeamLayout.active();
+		if (layout == null || !((NoiseBasedChunkGenerator) (Object) this).generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+			return original.call(targets, samplers);
+		}
+		int limit = layout.radius / 2;
+		BlockPos best = BlockPos.ZERO;
+		long bestFitness = Long.MAX_VALUE;
+		for (int x = -limit; x <= limit; x += 16) {
+			for (int z = -limit; z <= limit; z += 16) {
+				long fitness = Long.MAX_VALUE;
+				for (SpawnTargetPoint target : targets) {
+					fitness = Math.min(fitness, target.sampleFitness(samplers, x, 0, z));
+				}
+				fitness = fitness * 2048L * 2048L + (long) x * x + (long) z * z;
+				if (fitness < bestFitness) {
+					bestFitness = fitness;
+					best = new BlockPos(x, 0, z);
+				}
+			}
+		}
+		return best;
 	}
 
 	/**
