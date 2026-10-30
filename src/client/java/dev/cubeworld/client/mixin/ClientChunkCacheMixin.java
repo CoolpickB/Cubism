@@ -1,8 +1,7 @@
 package dev.cubeworld.client.mixin;
 
 import dev.cubeworld.client.SeamClient;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import dev.cubeworld.client.render.SeamRenderer;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
@@ -18,6 +17,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Keeps the chunks of neighbor faces that the server sends across seams. They lie outside the square around the
  * player that vanilla stores, so vanilla would ignore them.
@@ -26,7 +28,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ClientChunkCacheMixin {
 	@Shadow @Final ClientLevel level;
 
-	@Unique private final Long2ObjectMap<LevelChunk> seamChunks = new Long2ObjectOpenHashMap<>();
+	// Section compile workers read chunks while the client thread adds and drops them.
+	@Unique private final Map<Long, LevelChunk> seamChunks = new ConcurrentHashMap<>();
 	// A copy of the range of the private vanilla storage: its center, and its radius from calculateStorageRange.
 	@Unique private volatile int centerX;
 	@Unique private volatile int centerZ;
@@ -67,6 +70,7 @@ public abstract class ClientChunkCacheMixin {
 		}
 		chunk.replaceWithPacketData(chunkX, chunkZ, data);
 		this.level.onChunkLoaded(pos);
+		SeamRenderer.onChunkLoaded(pos);
 		cir.setReturnValue(chunk);
 	}
 
@@ -85,6 +89,7 @@ public abstract class ClientChunkCacheMixin {
 		LevelChunk chunk = this.seamChunks.remove(pos.pack());
 		if (chunk != null) {
 			this.level.unload(chunk);
+			SeamRenderer.onChunkUnloaded(pos);
 		}
 	}
 }

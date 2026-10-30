@@ -2,12 +2,18 @@ package dev.cubeworld.client;
 
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
+import dev.cubeworld.client.render.SeamRenderer;
 import dev.cubeworld.network.CubeNetworking;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Screenshot;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.world.entity.Entity;
+
+import java.io.File;
 
 public class CubeWorldClient implements ClientModInitializer {
 	@Override
@@ -27,9 +33,20 @@ public class CubeWorldClient implements ClientModInitializer {
 			}
 		});
 
+		if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+			// Lets test scripts take a screenshot of the game without a keypress: create screenshot.request in the game directory.
+			ClientTickEvents.END_CLIENT_TICK.register(client -> {
+				File request = new File(client.gameDirectory, "screenshot.request");
+				if (request.delete()) {
+					Screenshot.grab(client, false);
+				}
+			});
+		}
+
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			CubePlanetMath.setClientCubeState(false, CubePlanetMath.MIN_DIAMETER_CHUNKS);
 			SeamClient.layout = null;
+			SeamRenderer.clear();
 		});
 	}
 }

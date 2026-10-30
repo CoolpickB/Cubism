@@ -7,6 +7,8 @@
 		"ClientChunkCacheMixin",
 		"EntityRenderDispatcherMixin",
 		"EntityRenderStateMixin",
+		"LevelExtractorMixin",
+		"LevelRendererMixin",
 		"LocalPlayerMixin",
 		"ModelBlockRendererMixin",
 		"PresetEditorMixin"
