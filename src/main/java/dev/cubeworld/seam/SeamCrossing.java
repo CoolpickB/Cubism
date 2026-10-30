@@ -8,6 +8,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -120,6 +121,12 @@ public final class SeamCrossing {
 			Vec3 heading = look.x * look.x + look.z * look.z < 1.0E-6 ? away : look;
 			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
 			xRot = (float) Math.toDegrees(Math.asin(Mth.clamp(-look.y, -1.0, 1.0)));
+		} else if (entity instanceof Projectile && entity.getDeltaMovement().lengthSqr() > 1.0E-7) {
+			// A projectile points along its flight, with its own sign convention, and eases to that direction each
+			// tick. Any other rotation here shows as a swing after the crossing.
+			Vec3 flight = rotate(m, entity.getDeltaMovement());
+			yRot = (float) Math.toDegrees(Math.atan2(flight.x, flight.z));
+			xRot = (float) Math.toDegrees(Math.atan2(flight.y, flight.horizontalDistance()));
 		} else {
 			// A body rolls over the edge: the part of its facing toward the edge, which turns up, points away from the
 			// edge instead. Else a boat that comes at the edge a little to the side faces along the edge.
