@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -109,11 +110,24 @@ public final class SeamCrossing {
 		double halfHeight = entity.getBbHeight() / 2.0;
 		Vec3 center = rotate(m, entity.position().add(0.0, halfHeight, 0.0)).add(m[9], m[10], m[11]);
 		Vec3 look = rotate(m, Vec3.directionFromRotation(entity.getXRot(), entity.getYRot()));
-		// A look along the edge normal turns vertical, where it gives no yaw. The turned downward direction then
-		// points away from the edge, the way the entity moves on.
-		Vec3 heading = look.x * look.x + look.z * look.z < 1.0E-6 ? rotate(m, new Vec3(0.0, -1.0, 0.0)) : look;
-		float yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
-		float xRot = (float) Math.toDegrees(Math.asin(Mth.clamp(-look.y, -1.0, 1.0)));
+		// The turned downward direction points away from the edge, the way the entity moves on.
+		Vec3 away = rotate(m, new Vec3(0.0, -1.0, 0.0));
+		float yRot;
+		float xRot;
+		if (entity instanceof Player) {
+			// The camera keeps the exact turned look. A look along the edge normal turns vertical, where it gives no
+			// yaw, so the away direction gives it.
+			Vec3 heading = look.x * look.x + look.z * look.z < 1.0E-6 ? away : look;
+			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
+			xRot = (float) Math.toDegrees(Math.asin(Mth.clamp(-look.y, -1.0, 1.0)));
+		} else {
+			// A body rolls over the edge: the part of its facing toward the edge, which turns up, points away from the
+			// edge instead. Else a boat that comes at the edge a little to the side faces along the edge.
+			Vec3 facing = rotate(m, Vec3.directionFromRotation(0.0F, entity.getYRot()));
+			Vec3 heading = new Vec3(facing.x + facing.y * away.x, 0.0, facing.z + facing.y * away.z);
+			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
+			xRot = entity.getXRot();
+		}
 		return new TeleportTransition(
 			level, center.subtract(0.0, halfHeight, 0.0), rotate(m, entity.getDeltaMovement()), yRot, xRot, TeleportTransition.DO_NOTHING
 		);
