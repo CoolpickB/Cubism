@@ -1,0 +1,17 @@
+{
+	"required": true,
+	"package": "dev.cubeworld.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"EntityMixin",
+		"FlowingFluidMixin",
+		"LivingEntityMixin",
+		"PlayerMixin",
+		"RandomStateAccessor",
+		"VegetationBlockMixin",
+		"WorldPresetsMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

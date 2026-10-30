@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "dev.cubeworld.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"CameraMixin",
+		"EntityRenderDispatcherMixin",
+		"EntityRenderStateMixin",
+		"LocalPlayerMixin",
+		"ModelBlockRendererMixin",
+		"PresetEditorMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

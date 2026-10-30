@@ -1,0 +1,15 @@
+# Gradle / Loom
+.gradle/
+build/
+run/
+out/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Secrets
+cubeworld github token.txt
+*token*.txt

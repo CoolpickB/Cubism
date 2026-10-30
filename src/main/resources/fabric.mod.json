@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "cubeworld",
+	"version": "${version}",
+	"name": "Cube World",
+	"description": "Generates a 3D cubic planet with 6-directional inverse-pyramid gravity and a dynamic bedrock core.",
+	"authors": [
+		"Coolpick"
+	],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dev.cubeworld.CubeWorldMod"
+		],
+		"client": [
+			"dev.cubeworld.client.CubeWorldClient"
+		]
+	},
+	"mixins": [
+		"cubeworld.mixins.json",
+		{
+			"config": "cubeworld.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

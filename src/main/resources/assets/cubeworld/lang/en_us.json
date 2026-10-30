@@ -1,0 +1,9 @@
+{
+	"generator.cubeworld.cube": "Cube World",
+	"cubeworld.customize.title": "Customize Cube World",
+	"cubeworld.customize.diameter": "Cube Diameter: %s Chunks (%s Blocks)",
+	"cubeworld.customize.center": "Planet Core Center: (0, %s, 0)",
+	"cubeworld.customize.core.solid": "Bedrock Core: 3x3x3 Solid Core (Inverse Pyramid Tips Meet)",
+	"cubeworld.customize.core.hollow": "Bedrock Core: %sx%sx%s Hollow Shell (%sx%sx%s Void Core)",
+	"cubeworld.customize.surface_bounds": "Cube Vertical Span: Y = %s (Bottom Face) to Y = 64 (Top Face)"
+}
