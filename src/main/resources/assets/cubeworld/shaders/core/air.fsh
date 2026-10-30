@@ -42,11 +42,8 @@ void main() {
     vec3 sun = ModelOffset;
     vec3 sunMotion = cross(AXIS, sun);
 
-    // Vanilla draws the sky as a disc 16 blocks over the camera, faded into the fog by distance. The same fade keeps
-    // the look of vanilla toward the horizon. The fog color of vanilla at the camera has extra tints, such as sunrise
-    // when the camera looks at the sun, which also go onto the fog of the other times.
-    float haze = view.y <= 0.0 ? 1.0 : clamp(16.0 / (view.y * FogSkyEnd), 0.0, 1.0);
-    haze *= FogColor.a;
+    // The fog color of vanilla at the camera has extra tints, such as sunrise when the camera looks at the sun, which
+    // also go onto the fog of the other times.
     vec3 fogTint = FogColor.rgb - texture(Sampler0, vec2(TextureMat[3].w / DAY, 0.75)).rgb;
 
     vec3 q0 = camera - clamp(camera, -inner, inner);
@@ -57,12 +54,16 @@ void main() {
     float starlight = 0.0;
     vec3 color = vec3(0.0);
     float previous = 0.0;
+    // Each pixel takes its samples at a different place in the steps, so the long far steps show as fine noise, not
+    // as rings.
+    float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float topDensity = exp(-TOP / SCALE_HEIGHT);
     for (int i = 1; i <= STEPS; i++) {
         // Short steps near the camera, where the air is thick and the colors change.
         float f = float(i) / float(STEPS);
         float distance = far * f * f;
         float step = distance - previous;
-        vec3 p = camera + direction * (previous + 0.5 * step);
+        vec3 p = camera + direction * (previous + jitter * step);
         previous = distance;
 
         vec3 q = p - clamp(p, -inner, inner);
@@ -75,13 +76,20 @@ void main() {
         float ticks = dot(sunMotion, normal) >= 0.0 ? 6000.0 - rise : 6000.0 + rise;
         vec4 sky = texture(Sampler0, vec2(ticks / DAY, 0.25));
         vec3 fog = max(texture(Sampler0, vec2(ticks / DAY, 0.75)).rgb + fogTint, 0.0);
-        vec3 air = mix(sky.rgb, fog, haze);
+        // Vanilla draws the sky as a disc 16 blocks over the camera, faded into the fog by distance, so the sky turns
+        // to fog toward the horizon. Here the horizon is that of the surface under this bit of air, so the haze bends
+        // over the edges with the air.
+        float elevation = dot(direction, normal);
+        float haze = elevation <= 0.0 ? 1.0 : clamp(16.0 / (elevation * FogSkyEnd), 0.0, 1.0);
+        vec3 air = mix(sky.rgb, fog, haze * FogColor.a);
 
         float opacity;
         if (height < ground) {
             opacity = 1.0;
         } else if (height < TOP) {
-            opacity = 1.0 - exp(-DENSITY * exp(-max(height, 0.0) / SCALE_HEIGHT) * step);
+            // The density goes to zero at the top, so the end of the air has no edge.
+            float density = (exp(-max(height, 0.0) / SCALE_HEIGHT) - topDensity) / (1.0 - topDensity);
+            opacity = 1.0 - exp(-DENSITY * density * step);
         } else {
             opacity = 0.0;
         }

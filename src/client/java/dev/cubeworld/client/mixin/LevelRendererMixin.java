@@ -8,9 +8,12 @@ import com.mojang.renderpearl.api.textures.GpuTextureView;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.cubeworld.client.SeamClient;
+import dev.cubeworld.client.render.CubeClouds;
 import dev.cubeworld.client.render.SeamRenderer;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
+import net.minecraft.client.CloudStatus;
+import net.minecraft.client.renderer.CloudRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
 import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
@@ -157,5 +160,45 @@ public abstract class LevelRendererMixin {
 		original.call(dispatcher, state, camera, state.x, state.y, state.z, poseStack, output);
 		camera.orientation.set(orientation);
 		poseStack.popPose();
+	}
+
+	/** In the cube, one cloud layer per face, which fold over the edges, in place of the one flat layer of vanilla. */
+	@WrapOperation(method = "prepareTranslucents", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/CloudRenderer;prepare(ILnet/minecraft/client/CloudStatus;FILnet/minecraft/world/phys/Vec3;JF)V"))
+	private void cubeworld$prepareCubeClouds(
+		CloudRenderer renderer, int color, CloudStatus status, float bottomY, int range, Vec3 camera, long gameTime, float partialTicks, Operation<Void> original
+	) {
+		if (!CubeClouds.prepare(SeamClient.layout, color, status, bottomY, range, camera, gameTime, partialTicks)) {
+			original.call(renderer, color, status, bottomY, range, camera, gameTime, partialTicks);
+		}
+	}
+
+	@WrapOperation(method = "executeClassicTransparency", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/CloudRenderer;render(Lnet/minecraft/client/CloudStatus;Lcom/mojang/renderpearl/api/commands/RenderPass;)V"))
+	private void cubeworld$renderCubeClouds(CloudRenderer renderer, CloudStatus status, RenderPass renderPass, Operation<Void> original) {
+		if (CubeClouds.active()) {
+			CubeClouds.forEachShown(layer -> original.call(layer, status, renderPass));
+		} else {
+			original.call(renderer, status, renderPass);
+		}
+	}
+
+	@WrapOperation(method = "executeOit", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/CloudRenderer;renderOit(Lnet/minecraft/client/CloudStatus;Lnet/minecraft/client/renderer/oit/OitStage;Lcom/mojang/renderpearl/api/textures/GpuTextureView;Lnet/minecraft/client/renderer/oit/OitRenderPassProvider$Parameters;)V"))
+	private void cubeworld$renderCubeCloudsOit(
+		CloudRenderer renderer, CloudStatus status, OitStage stage, GpuTextureView depth, OitRenderPassProvider.Parameters params, Operation<Void> original
+	) {
+		if (CubeClouds.active()) {
+			CubeClouds.forEachShown(layer -> original.call(layer, status, stage, depth, params));
+		} else {
+			original.call(renderer, status, stage, depth, params);
+		}
+	}
+
+	@Inject(method = "endFrame", at = @At("TAIL"))
+	private void cubeworld$endCubeClouds(CallbackInfo ci) {
+		CubeClouds.endFrame();
+	}
+
+	@Inject(method = "close", at = @At("TAIL"))
+	private void cubeworld$closeCubeClouds(CallbackInfo ci) {
+		CubeClouds.close();
 	}
 }

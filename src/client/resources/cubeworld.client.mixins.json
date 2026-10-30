@@ -5,6 +5,8 @@
 	"client": [
 		"AtmosphericFogEnvironmentMixin",
 		"CameraMixin",
+		"CloudRendererAccessor",
+		"CloudRendererMixin",
 		"ClientPacketListenerMixin",
 		"ClientChunkCacheMixin",
 		"ClientChunkCacheStorageMixin",
