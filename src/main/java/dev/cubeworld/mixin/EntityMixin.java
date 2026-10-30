@@ -33,6 +33,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
@@ -575,6 +576,38 @@ public abstract class EntityMixin implements GravityEntityAccess {
 	private boolean cubeworld$closerAcrossSeams(boolean closer, @Local(argsOnly = true) Entity other, @Local(argsOnly = true) double distance) {
 		Vec3 self = this.cubeworld$positionInRegionOf(other.getX(), other.getZ());
 		return self == null ? closer : self.closerThan(other.position(), distance);
+	}
+
+	/**
+	 * Above the atmosphere the wedge of a face is wider than its storage strip, and a point past the strip is in the
+	 * wedge of no strip. So the strip edges are walls, as the world border is. Below the atmosphere top an entity
+	 * crosses a diagonal long before it gets to a strip edge.
+	 */
+	@ModifyReturnValue(
+		method = "collectCollidersIgnoringWorldBorder(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/level/Level;Ljava/util/List;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;",
+		at = @At("RETURN")
+	)
+	private static List<VoxelShape> cubeworld$stripWalls(List<VoxelShape> colliders, @Local(argsOnly = true) @Nullable Entity source, @Local(argsOnly = true) Level level, @Local(argsOnly = true) AABB box) {
+		SeamLayout layout = source == null ? null : SeamLayout.of(level);
+		Vec3 center = box.getCenter();
+		int face = layout == null ? -1 : SeamInteraction.regionFace(layout, center.x, center.z);
+		if (face < 0) {
+			return colliders;
+		}
+		double half = layout.spacing / 2.0;
+		double minX = layout.offsetX(face) - half;
+		double maxX = layout.offsetX(face) + half;
+		double reach = Math.max(Math.max(box.getXsize(), box.getZsize()), 1.0) * 2.0;
+		if (box.minX - minX > reach && maxX - box.maxX > reach && box.minZ + half > reach && half - box.maxZ > reach) {
+			return colliders;
+		}
+		List<VoxelShape> all = new ArrayList<>(colliders);
+		all.add(Shapes.join(
+			Shapes.INFINITY,
+			Shapes.box(minX, Double.NEGATIVE_INFINITY, -half + 1.0, maxX, Double.POSITIVE_INFINITY, half - 1.0),
+			BooleanOp.ONLY_FIRST
+		));
+		return all;
 	}
 
 	/** This entity moved into the face region of {@code (x, z)}, or null when it is already in that region. */

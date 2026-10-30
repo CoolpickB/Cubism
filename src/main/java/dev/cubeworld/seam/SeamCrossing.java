@@ -1,7 +1,9 @@
 package dev.cubeworld.seam;
 
 import dev.cubeworld.worldgen.SeamLayout;
+import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
@@ -74,7 +76,13 @@ public final class SeamCrossing {
 			}
 			stopPath(entity.teleport(transitions.get(i)));
 			for (int j = 0; j < passengers.size(); j++) {
-				stopPath(passengers.get(j).teleport(passengerTransitions.get(j)));
+				TeleportTransition passengerTransition = passengerTransitions.get(j);
+				Entity passenger = passengers.get(j).teleport(passengerTransition);
+				stopPath(passenger);
+				// The client ignores the position packet of a player who rides, so the turned look goes separately.
+				if (passenger instanceof ServerPlayer player) {
+					player.connection.send(new ClientboundPlayerRotationPacket(passengerTransition.yRot(), false, passengerTransition.xRot(), false));
+				}
 			}
 		}
 	}
