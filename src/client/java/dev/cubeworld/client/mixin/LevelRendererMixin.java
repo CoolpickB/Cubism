@@ -51,7 +51,7 @@ public abstract class LevelRendererMixin {
 	) {
 		ChunkSectionsToRender vanilla = original.call(self, modelView, respectTranslucentOrder);
 		Vec3 camera = this.levelRenderState.cameraRenderState.pos;
-		SeamRenderer.prepareFrame(self, modelView, BlockPos.containing(camera), camera, matrix -> original.call(self, matrix, respectTranslucentOrder));
+		SeamRenderer.prepareFrame(self, modelView, BlockPos.containing(camera), camera, this.levelRenderState.cameraRenderState.cullFrustum, matrix -> original.call(self, matrix, respectTranslucentOrder));
 		return vanilla;
 	}
 

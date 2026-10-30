@@ -19,6 +19,7 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import dev.cubeworld.client.mixin.RenderSectionAccessor;
 import net.minecraft.client.renderer.ViewArea;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
 import net.minecraft.client.renderer.chunk.CompiledSectionMesh;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
@@ -31,6 +32,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -378,10 +380,11 @@ public final class SeamRenderer {
 
 	/**
 	 * Compiles waiting sections, then builds one draw per neighbor face with {@code prepare}: the vanilla method
-	 * that turns {@code LevelRenderer.visibleSections} into a draw for a model-view matrix.
+	 * that turns {@code LevelRenderer.visibleSections} into a draw for a model-view matrix. Sections that show
+	 * outside {@code frustum}, which is in the frame of the camera face, are not drawn.
 	 */
 	public static void prepareFrame(
-		LevelRenderer levelRenderer, Matrix4fc modelView, BlockPos cameraBlock, Vec3 cameraPos, Preparer prepare
+		LevelRenderer levelRenderer, Matrix4fc modelView, BlockPos cameraBlock, Vec3 cameraPos, Frustum frustum, Preparer prepare
 	) {
 		frameDraws.clear();
 		SeamLayout layout = SeamClient.layout;
@@ -423,7 +426,8 @@ public final class SeamRenderer {
 			for (int face = 0; face < SeamLayout.FACES.length; face++) {
 				// The opposite face shares no seam with the camera face. Its sections can be left over from a quick
 				// second crossing, and its motion would draw them in the sky.
-				if (layout.motion(face, cameraFace)[4] == -1) {
+				int[] shown = layout.motion(face, cameraFace);
+				if (shown[4] == -1) {
 					continue;
 				}
 				visible.clear();
@@ -434,7 +438,7 @@ public final class SeamRenderer {
 				}
 				for (Long2ObjectMap<SeamSection> store : List.of(sections, adopted)) {
 					for (SeamSection section : store.values()) {
-						if (layout.faceIndexAt(section.storageOrigin.getX()) == face) {
+						if (layout.faceIndexAt(section.storageOrigin.getX()) == face && frustum.isVisible(shownBox(shown, section.storageOrigin))) {
 							section.virtualOrigin = section.storageOrigin.subtract(transform.cameraInFace).offset(cameraBlock);
 							visible.add(section);
 						}
@@ -448,6 +452,12 @@ public final class SeamRenderer {
 			visible.clear();
 			visible.addAll(vanillaVisible);
 		}
+	}
+
+	/** The box of a section where it shows in the camera face, for the motion {@code m} into that face. */
+	private static AABB shownBox(int[] m, BlockPos origin) {
+		Vec3 min = Vec3.atLowerCornerOf(origin);
+		return new AABB(SeamInteraction.move(m, min), SeamInteraction.move(m, min.add(16.0, 16.0, 16.0)));
 	}
 
 	/**
