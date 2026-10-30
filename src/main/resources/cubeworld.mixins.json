@@ -5,18 +5,22 @@
 	"mixins": [
 		"BlockScanUtilsMixin",
 		"ChunkGeneratorAccessor",
+		"ChunkGeneratorMixin",
 		"EntityMixin",
 		"DiskFeatureMixin",
 		"FallenTreeFeatureMixin",
 		"LakeFeatureMixin",
 		"MultifaceGrowthFeatureMixin",
+		"NoiseBasedChunkGeneratorMixin",
 		"FlowingFluidMixin",
 		"LivingEntityMixin",
 		"OreFeatureMixin",
 		"PlayerMixin",
+		"RandomStateMixin",
 		"RandomStateAccessor",
 		"ServerGamePacketListenerImplMixin",
 		"VegetationBlockMixin",
+		"WorldGenRegionMixin",
 		"WorldPresetsMixin"
 	],
 	"injectors": {

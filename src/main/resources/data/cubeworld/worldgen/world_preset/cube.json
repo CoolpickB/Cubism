@@ -3,13 +3,12 @@
     "minecraft:overworld": {
       "type": "cubeworld:cube_overworld",
       "generator": {
-        "type": "cubeworld:cube",
+        "type": "minecraft:noise",
         "biome_source": {
           "type": "minecraft:multi_noise",
           "preset": "minecraft:overworld"
         },
-        "settings": "minecraft:overworld",
-        "diameter_chunks": 24
+        "settings": "cubeworld:seam"
       }
     },
     "minecraft:the_end": {

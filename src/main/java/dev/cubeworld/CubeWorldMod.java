@@ -9,6 +9,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 
 public class CubeWorldMod implements ModInitializer {
@@ -23,6 +24,14 @@ public class CubeWorldMod implements ModInitializer {
 		Registries.DIMENSION_TYPE,
 		Identifier.fromNamespaceAndPath(MOD_ID, "cube_overworld")
 	);
+
+	/** Noise settings that make a vanilla noise generator store the cube as six face regions joined by seams. */
+	public static final ResourceKey<NoiseGeneratorSettings> SEAM_SETTINGS = ResourceKey.create(
+		Registries.NOISE_SETTINGS,
+		Identifier.fromNamespaceAndPath(MOD_ID, "seam")
+	);
+
+	public static final int SEAM_DIAMETER_CHUNKS = 24;
 
 	@Override
 	public void onInitialize() {

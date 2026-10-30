@@ -27,8 +27,23 @@ public final class CubeDensityFunctions {
 	private CubeDensityFunctions() {}
 
 	public static NoiseRouter rewriteRouter(NoiseRouter router, int centerY, int radiusBlocks, int innerBedrockRadius) {
+		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, innerBedrockRadius);
+		return new NoiseRouter(
+			rule.rewrite(router.temperature()),
+			rule.rewrite(router.vegetation()),
+			rule.rewrite(router.continents()),
+			rule.rewrite(router.erosion()),
+			rule.rewrite(router.depth()),
+			rule.rewrite(router.ridges()),
+			rule.rewrite(router.chunkSurfaceLevel()),
+			rule.rewrite(router.finalDensity())
+		);
+	}
+
+	/** Rewrites a density function to work on the cube in world coordinates. The rule memoizes and is not thread-safe. */
+	public static DfRewriteRule cubeRule(int centerY, int radiusBlocks, int innerBedrockRadius) {
 		Map<DensityFunction, DensityFunction> memo = new IdentityHashMap<>();
-		DfRewriteRule rule = new DfRewriteRule() {
+		return new DfRewriteRule() {
 			@Override
 			public DensityFunction rewrite(DensityFunction fn) {
 				DensityFunction cached = memo.get(fn);
@@ -72,17 +87,6 @@ public final class CubeDensityFunctions {
 				return transformed;
 			}
 		};
-
-		return new NoiseRouter(
-			rule.rewrite(router.temperature()),
-			rule.rewrite(router.vegetation()),
-			rule.rewrite(router.continents()),
-			rule.rewrite(router.erosion()),
-			rule.rewrite(router.depth()),
-			rule.rewrite(router.ridges()),
-			rule.rewrite(router.chunkSurfaceLevel()),
-			rule.rewrite(router.finalDensity())
-		);
 	}
 
 	private static DensityFunction unwrapReferences(DensityFunction fn) {
