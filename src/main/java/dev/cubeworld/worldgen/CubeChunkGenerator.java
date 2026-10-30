@@ -99,7 +99,6 @@ public class CubeChunkGenerator extends ChunkGenerator {
 		this.radiusBlocks = CubePlanetMath.getRadiusBlocks(this.diameterChunks);
 		this.centerY = CubePlanetMath.getCenterY(this.diameterChunks);
 		this.innerBedrockRadius = CubePlanetMath.getInnerBedrockRadius(this.diameterChunks);
-		CubePlanetMath.setClientCubeState(true, this.diameterChunks);
 	}
 
 	public Holder<NoiseGeneratorSettings> generatorSettings() {

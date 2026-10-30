@@ -1,10 +1,9 @@
 package dev.cubeworld.math;
 
 import net.minecraft.core.Direction;
-import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
-import org.joml.Vector3f;
 
 public final class CubePlanetMath {
 	public static final int MIN_DIAMETER_CHUNKS = 24;
@@ -12,26 +11,15 @@ public final class CubePlanetMath {
 	public static final int TOP_SURFACE_Y = 64;
 	public static final int CRUST_THICKNESS = 191;
 
-	/**
-	 * Half-width (in blocks) of the continuous Mario-Galaxy edge/corner rounding band (R - r).
-	 * Within 16 blocks of any cube edge or corner, the continuous up vector tilts smoothly
-	 * around the inner cube's edge/corner, reaching 45 degrees at the crest.
-	 */
-	public static final double EDGE_ROUNDING_BAND = 16.0;
-
-	/**
-	 * Hysteresis for the discrete AABB hitbox axis swap (~6 degrees past the 45-degree crest).
-	 */
-	public static final double HITBOX_AXIS_HYSTERESIS = 1.6;
-
-	private static volatile int activeClientCenterY = TOP_SURFACE_Y - (MIN_DIAMETER_CHUNKS * 8);
+	// Set on the client from the planet payload. The server reads the chunk generator instead.
+	private static volatile int activeClientDiameterChunks = MIN_DIAMETER_CHUNKS;
 	private static volatile boolean activeClientIsCube = false;
 
 	private CubePlanetMath() {}
 
 	public static void setClientCubeState(boolean isCube, int diameterChunks) {
 		activeClientIsCube = isCube;
-		activeClientCenterY = getCenterY(diameterChunks);
+		activeClientDiameterChunks = diameterChunks;
 	}
 
 	public static boolean isClientCubeActive() {
@@ -39,7 +27,11 @@ public final class CubePlanetMath {
 	}
 
 	public static int getClientCenterY() {
-		return activeClientCenterY;
+		return getCenterY(activeClientDiameterChunks);
+	}
+
+	public static int getClientRadius() {
+		return getRadiusBlocks(activeClientDiameterChunks);
 	}
 
 	public static int getRadiusBlocks(int diameterChunks) {
@@ -60,94 +52,38 @@ public final class CubePlanetMath {
 	}
 
 	/**
-	 * Closest-point-on-inner-cube continuous outward "up" unit vector u(p).
-	 * - Over the interior of a face (more than EDGE_ROUNDING_BAND from an edge), u(p) is exact face-normal.
-	 * - Near an edge, u(p) rotates smoothly around the inner cube edge like a cylinder (45 deg at the crest).
-	 * - Near a 3-way corner, u(p) rotates smoothly in both directions like a sphere.
+	 * The sticky gravity rule (GOALS.md, core model item 6). The feet position decides. The offset uses
+	 * the same block-center convention as {@link #getPyramidOutwardFace}, so the block at index R from the
+	 * center is the first block inside the plane.
+	 *
+	 * @return the gravity direction (pointing toward the center)
 	 */
-	public static Vec3 getContinuousUpVector(double x, double y, double z, int centerY) {
-		double dx = x;
-		double dy = y - centerY;
-		double dz = z;
-
-		double ax = Math.abs(dx);
-		double ay = Math.abs(dy);
-		double az = Math.abs(dz);
-		double cheb = Math.max(ax, Math.max(ay, az));
-		if (cheb < 1.0E-4) {
-			return new Vec3(0.0, 1.0, 0.0);
+	public static Direction stickyGravity(Vec3 feet, int centerY, int radius, Direction current) {
+		double ox = feet.x - 0.5;
+		double oy = feet.y - centerY - 0.5;
+		double oz = feet.z - 0.5;
+		Direction currentFace = current.getOpposite();
+		if (planeExcess(currentFace, ox, oy, oz, radius) > 0.0) {
+			return current;
 		}
-
-		double innerR = Math.max(4.0, cheb - EDGE_ROUNDING_BAND);
-		double qx = Mth.clamp(dx, -innerR, innerR);
-		double qy = Mth.clamp(dy, -innerR, innerR);
-		double qz = Mth.clamp(dz, -innerR, innerR);
-
-		double ux = dx - qx;
-		double uy = dy - qy;
-		double uz = dz - qz;
-		double len = Math.sqrt(ux * ux + uy * uy + uz * uz);
-		if (len < 1.0E-6) {
-			return new Vec3(0.0, 1.0, 0.0);
-		}
-		return new Vec3(ux / len, uy / len, uz / len);
-	}
-
-	/**
-	 * Returns the continuous camera orientation quaternion at body center (x, y, z)
-	 * by parallel-transporting the discrete face frame's up vector (-discreteGravity) to the continuous up vector u(p).
-	 */
-	public static Quaternionf getContinuousCameraRotation(double x, double y, double z, int centerY, Direction discreteGravity) {
-		Quaternionf faceRot = getCameraRotation(discreteGravity);
-		Vec3 contUp = getContinuousUpVector(x, y, z, centerY);
-		Vector3f faceUpVec = new Vector3f(
-			-discreteGravity.getStepX(),
-			-discreteGravity.getStepY(),
-			-discreteGravity.getStepZ()
-		);
-		Vector3f contUpVec = new Vector3f((float) contUp.x, (float) contUp.y, (float) contUp.z);
-		Quaternionf tilt = new Quaternionf().rotationTo(faceUpVec, contUpVec);
-		return tilt.mul(faceRot);
-	}
-
-	/**
-	 * Determines the discrete dominant gravity Direction (for the axis-aligned hitbox and grounded anti-slide)
-	 * with hysteresis across the 45-degree crest.
-	 */
-	public static Direction getGravityDirection(double x, double y, double z, int centerY, Direction currentGravity) {
-		double dx = x;
-		double dy = y - centerY;
-		double dz = z;
-
-		double ax = Math.abs(dx);
-		double ay = Math.abs(dy);
-		double az = Math.abs(dz);
-
-		if (currentGravity != null) {
-			boolean sameSign = switch (currentGravity) {
-				case DOWN -> dy >= -1.0;
-				case UP -> dy <= 1.0;
-				case WEST -> dx >= -1.0;
-				case EAST -> dx <= 1.0;
-				case NORTH -> dz >= -1.0;
-				case SOUTH -> dz <= 1.0;
-			};
-			if (sameSign) {
-				switch (currentGravity.getAxis()) {
-					case X -> ax += HITBOX_AXIS_HYSTERESIS;
-					case Y -> ay += HITBOX_AXIS_HYSTERESIS;
-					case Z -> az += HITBOX_AXIS_HYSTERESIS;
-				}
+		Direction best = null;
+		double bestExcess = 0.0;
+		for (Direction face : Direction.values()) {
+			double excess = planeExcess(face, ox, oy, oz, radius);
+			if (excess > bestExcess) {
+				bestExcess = excess;
+				best = face;
 			}
 		}
+		return best == null ? current : best.getOpposite();
+	}
 
-		if (ay >= ax && ay >= az) {
-			return dy >= 0.0 ? Direction.DOWN : Direction.UP;
-		} else if (ax >= ay && ax >= az) {
-			return dx >= 0.0 ? Direction.WEST : Direction.EAST;
-		} else {
-			return dz >= 0.0 ? Direction.NORTH : Direction.SOUTH;
-		}
+	private static double planeExcess(Direction face, double ox, double oy, double oz, int radius) {
+		return face.getStepX() * ox + face.getStepY() * oy + face.getStepZ() * oz - radius;
+	}
+
+	public static Direction sectorGravity(Vec3 pos, int centerY) {
+		return getPyramidOutwardFace((int) Math.floor(pos.x), (int) Math.floor(pos.y), (int) Math.floor(pos.z), centerY).getOpposite();
 	}
 
 	public static Direction getPyramidOutwardFace(int x, int y, int z, int centerY) {
@@ -187,8 +123,12 @@ public final class CubePlanetMath {
 		}
 	}
 
+	public static Vec3 up(Direction gravity) {
+		return new Vec3(-gravity.getStepX(), -gravity.getStepY(), -gravity.getStepZ());
+	}
+
 	/**
-	 * Transforms a vector from the entity's local frame (where -Y is along gravity) into world coordinates.
+	 * Transforms a vector from the local frame (where -Y is along gravity) into world coordinates.
 	 * Matches getCameraRotation(gravity) on all 6 faces.
 	 */
 	public static Vec3 localToWorld(Vec3 local, Direction gravity) {
@@ -202,9 +142,6 @@ public final class CubePlanetMath {
 		};
 	}
 
-	/**
-	 * Transforms a vector from world coordinates into the entity's local frame (where -Y is along gravity).
-	 */
 	public static Vec3 worldToLocal(Vec3 world, Direction gravity) {
 		return switch (gravity) {
 			case DOWN -> world;
@@ -216,37 +153,35 @@ public final class CubePlanetMath {
 		};
 	}
 
-	/**
-	 * Rotates a block-model Direction into world space for a face whose inward gravity is `gravity`.
-	 */
+	// The frames are signed axis permutations about the origin, so transforming the two corners keeps a box exact.
+	public static AABB localToWorld(AABB local, Direction gravity) {
+		if (gravity == Direction.DOWN) {
+			return local;
+		}
+		return new AABB(localToWorld(local.getMinPosition(), gravity), localToWorld(local.getMaxPosition(), gravity));
+	}
+
+	public static AABB worldToLocal(AABB world, Direction gravity) {
+		if (gravity == Direction.DOWN) {
+			return world;
+		}
+		return new AABB(worldToLocal(world.getMinPosition(), gravity), worldToLocal(world.getMaxPosition(), gravity));
+	}
+
 	public static Direction rotateDirection(Direction localDir, Direction gravity) {
 		if (localDir == null || gravity == Direction.DOWN) {
 			return localDir;
 		}
-		int lx = localDir.getStepX();
-		int ly = localDir.getStepY();
-		int lz = localDir.getStepZ();
-		int wx;
-		int wy;
-		int wz;
-		switch (gravity) {
-			case UP -> { wx = -lx; wy = -ly; wz = lz; }
-			case NORTH -> { wx = lx; wy = -lz; wz = ly; }
-			case SOUTH -> { wx = lx; wy = lz; wz = -ly; }
-			case WEST -> { wx = ly; wy = -lx; wz = lz; }
-			case EAST -> { wx = -ly; wy = lx; wz = lz; }
-			default -> { return localDir; }
-		}
-		if (wx > 0) return Direction.EAST;
-		if (wx < 0) return Direction.WEST;
-		if (wy > 0) return Direction.UP;
-		if (wy < 0) return Direction.DOWN;
-		if (wz > 0) return Direction.SOUTH;
-		return Direction.NORTH;
+		Vec3 w = localToWorld(new Vec3(localDir.getStepX(), localDir.getStepY(), localDir.getStepZ()), gravity);
+		return Direction.getApproximateNearest(w.x, w.y, w.z);
+	}
+
+	public static Direction.Axis worldAxis(Direction.Axis localAxis, Direction gravity) {
+		return rotateDirection(Direction.fromAxisAndDirection(localAxis, Direction.AxisDirection.POSITIVE), gravity).getAxis();
 	}
 
 	/**
-	 * Returns the canonical face rotation quaternion that maps local UP (+Y) to the opposite of gravity (-gravity).
+	 * Returns the face rotation that maps local UP (+Y) to the opposite of gravity.
 	 */
 	public static Quaternionf getCameraRotation(Direction gravity) {
 		Quaternionf q = new Quaternionf();

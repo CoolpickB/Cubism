@@ -27,7 +27,7 @@ public class EntityRenderDispatcherMixin {
 	) {
 		EntityRenderState state = cir.getReturnValue();
 		if (state instanceof GravityRenderStateAccess access && entity instanceof GravityEntityAccess entityAccess) {
-			access.cubeworld$setRenderGravity(entityAccess.cubeworld$getGravityDirection());
+			access.cubeworld$setRenderGravity(entityAccess.cubeworld$getFrame());
 		}
 	}
 

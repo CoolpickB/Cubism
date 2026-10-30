@@ -1,5 +1,6 @@
 package dev.cubeworld;
 
+import dev.cubeworld.network.CubeNetworking;
 import dev.cubeworld.worldgen.CubeChunkGenerator;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.core.Registry;
@@ -30,5 +31,6 @@ public class CubeWorldMod implements ModInitializer {
 			Identifier.fromNamespaceAndPath(MOD_ID, "cube"),
 			CubeChunkGenerator.CODEC
 		);
+		CubeNetworking.register();
 	}
 }

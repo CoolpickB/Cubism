@@ -1,47 +1,51 @@
 package dev.cubeworld.client.mixin;
 
-import dev.cubeworld.CubeWorldMod;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LocalPlayer.class)
 public abstract class LocalPlayerMixin extends LivingEntity {
+	@Unique private Vec3 cubeworld$positionBeforeMove = Vec3.ZERO;
+
 	protected LocalPlayerMixin(EntityType<? extends LivingEntity> type, Level level) {
 		super(type, level);
 	}
 
-	@Redirect(
-		method = "aiStep",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/phys/Vec3;add(DDD)Lnet/minecraft/world/phys/Vec3;"
-		)
-	)
-	private Vec3 cubeworld$orientFlyingVerticalImpulse(Vec3 velocity, double dx, double dy, double dz) {
-		if (dx == 0.0 && dz == 0.0 && dy != 0.0) {
-			boolean isCube = this.level().dimensionTypeRegistration().is(CubeWorldMod.CUBE_OVERWORLD_TYPE)
-				|| (CubePlanetMath.isClientCubeActive() && this.level().dimension() == Level.OVERWORLD);
-			if (isCube) {
-				Direction dir = ((GravityEntityAccess) this).cubeworld$getGravityDirection();
-				double halfH = this.getBbHeight() * 0.5;
-				Vec3 contUp = CubePlanetMath.getContinuousUpVector(
-					this.getX() - dir.getStepX() * halfH,
-					this.getY() - dir.getStepY() * halfH,
-					this.getZ() - dir.getStepZ() * halfH,
-					CubePlanetMath.getClientCenterY()
-				);
-				return velocity.add(contUp.scale(dy));
-			}
+	@Inject(method = "move", at = @At("HEAD"))
+	private void cubeworld$rememberPosition(MoverType moverType, Vec3 delta, CallbackInfo ci) {
+		this.cubeworld$positionBeforeMove = this.position();
+	}
+
+	// View bobbing and step sounds use the walked distance, which must be horizontal in the local frame.
+	@ModifyExpressionValue(method = "move", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Mth;length(FF)F"))
+	private float cubeworld$localWalkedDistance(float worldLength) {
+		Direction frame = ((GravityEntityAccess) this).cubeworld$getFrame();
+		if (frame == Direction.DOWN) {
+			return worldLength;
 		}
-		return velocity.add(dx, dy, dz);
+		Vec3 moved = CubePlanetMath.worldToLocal(this.position().subtract(this.cubeworld$positionBeforeMove), frame);
+		return (float) moved.horizontalDistance();
+	}
+
+	// Auto-jump probes the world with Y-up boxes.
+	@Inject(method = "canAutoJump", at = @At("HEAD"), cancellable = true)
+	private void cubeworld$noAutoJumpWhenTurned(CallbackInfoReturnable<Boolean> cir) {
+		if (((GravityEntityAccess) this).cubeworld$getFrame() != Direction.DOWN) {
+			cir.setReturnValue(false);
+		}
 	}
 }
