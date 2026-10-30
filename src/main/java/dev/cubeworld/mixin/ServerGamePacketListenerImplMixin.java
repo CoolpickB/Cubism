@@ -3,6 +3,7 @@ package dev.cubeworld.mixin;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
+import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -61,6 +62,18 @@ public abstract class ServerGamePacketListenerImplMixin {
 		}
 		AABB box = entity.getBoundingBox().inflate(0.0625).expandTowards(CubePlanetMath.up(frame).scale(-0.55));
 		cir.setReturnValue(entity.level().findBlocksIn(box).filterState(state -> state.isAir()).allMatched());
+	}
+
+	/**
+	 * Near a diagonal, the blocks under a player can belong to the next face, where the storage holds only cleared
+	 * air. Collision reads those blocks from their owner, so this check must count them too.
+	 */
+	@Inject(method = "noBlocksAround", at = @At("RETURN"), cancellable = true)
+	private void cubeworld$blocksAcrossSeam(Entity entity, CallbackInfoReturnable<Boolean> cir) {
+		if (cir.getReturnValueZ() && SeamLayout.of(entity.level()) != null) {
+			AABB box = entity.getBoundingBox().inflate(0.0625).expandTowards(0.0, -0.55, 0.0);
+			cir.setReturnValue(entity.level().noBlockCollision(entity, box));
+		}
 	}
 
 	// The floating check reads this as the vertical movement of the packet.

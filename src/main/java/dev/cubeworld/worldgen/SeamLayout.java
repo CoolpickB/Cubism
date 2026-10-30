@@ -5,7 +5,11 @@ import dev.cubeworld.math.CubePlanetMath;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import org.jspecify.annotations.Nullable;
 
@@ -20,6 +24,7 @@ public final class SeamLayout {
 	public static final Direction[] FACES = {Direction.UP, Direction.EAST, Direction.DOWN, Direction.WEST, Direction.SOUTH, Direction.NORTH};
 
 	private static volatile @Nullable SeamLayout active;
+	private static volatile @Nullable SeamLayout client;
 
 	public final int radius;
 	public final int centerY;
@@ -50,6 +55,19 @@ public final class SeamLayout {
 	public static @Nullable SeamLayout of(ServerLevel level) {
 		return level.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator generator
 			&& generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS) ? active : null;
+	}
+
+	/** The layout that the server sent to this client, or null. The client sets it on join and clears it on leave. */
+	public static void setClient(@Nullable SeamLayout layout) {
+		client = layout;
+	}
+
+	/** The layout of a server or client level, or null when the level has no seams. */
+	public static @Nullable SeamLayout of(Level level) {
+		if (level instanceof ServerLevel serverLevel) {
+			return of(serverLevel);
+		}
+		return level.isClientSide() && level.dimension() == Level.OVERWORLD ? client : null;
 	}
 
 	/** Row-major 3x3 matrix of the face rotation, taken from {@link OrientedWorldGenLevel#toWorld}. */
@@ -110,9 +128,14 @@ public final class SeamLayout {
 		int x = cx;
 		int y = cy - this.centerY;
 		int z = cz;
-		int ax = Math.abs(x);
-		int ay = Math.abs(y);
-		int az = Math.abs(z);
+		return dominantFace(x, y, z);
+	}
+
+	/** Face index of the axis with the largest magnitude, with ties broken in the order Y, X, Z. */
+	private static int dominantFace(double x, double y, double z) {
+		double ax = Math.abs(x);
+		double ay = Math.abs(y);
+		double az = Math.abs(z);
 		Direction face;
 		if (ay >= ax && ay >= az) {
 			face = y >= 0 ? Direction.UP : Direction.DOWN;
@@ -122,6 +145,92 @@ public final class SeamLayout {
 			face = z > 0 ? Direction.SOUTH : Direction.NORTH;
 		}
 		return indexOf(face);
+	}
+
+	/**
+	 * The rigid motion {@code s_to = R s_from + t} from the storage frame of one face to the storage frame of
+	 * another, for continuous positions. Returns {@code {R (row-major, 9 values), t (3 values)}}. The block map of
+	 * {@link #toCube} and {@link #toStorage} sends block s to block {@code R s + t0}. A block fills
+	 * {@code [s, s + 1)}, so on each axis that R negates, a continuous position needs one more block than t0.
+	 */
+	public int[] motion(int fromFace, int toFace) {
+		int[] a = this.rotations[toFace];
+		int[] b = this.rotations[fromFace];
+		int[] m = new int[12];
+		for (int i = 0; i < 3; i++) {
+			for (int j = 0; j < 3; j++) {
+				int sum = 0;
+				for (int k = 0; k < 3; k++) {
+					sum += a[k * 3 + i] * b[k * 3 + j];
+				}
+				m[i * 3 + j] = sum;
+			}
+		}
+		int[] from = {this.offsetX(fromFace), this.centerY, 0};
+		int[] to = {this.offsetX(toFace), this.centerY, 0};
+		for (int i = 0; i < 3; i++) {
+			int t = to[i];
+			int rowSum = 0;
+			for (int j = 0; j < 3; j++) {
+				t -= m[i * 3 + j] * from[j];
+				rowSum += m[i * 3 + j];
+			}
+			m[9 + i] = rowSum < 0 ? t + 1 : t;
+		}
+		return m;
+	}
+
+	/**
+	 * The face that a continuous storage position crosses into, or -1 when the position is still in its own wedge
+	 * or less than {@code margin} blocks past it. The margin keeps an entity on the diagonal from crossing back and
+	 * forth: after a crossing, it is that far inside the new wedge.
+	 */
+	public int crossingFace(double x, double y, double z, double margin) {
+		int bx = Mth.floor(x);
+		int bz = Mth.floor(z);
+		if (!this.inRegion(bx, bz)) {
+			return -1;
+		}
+		int face = this.faceIndexAt(bx);
+		// Relative to the center of the cube, which is the center of a block in the integer wedge test.
+		double cx = x - this.offsetX(face) - 0.5;
+		double cy = y - this.centerY - 0.5;
+		double cz = z - 0.5;
+		if (Math.max(Math.abs(cx), Math.abs(cz)) - cy <= margin) {
+			return -1;
+		}
+		int[] m = this.rotations[face];
+		int owner = dominantFace(
+			m[0] * cx + m[1] * cy + m[2] * cz,
+			m[3] * cx + m[4] * cy + m[5] * cz,
+			m[6] * cx + m[7] * cy + m[8] * cz
+		);
+		return owner == face ? -1 : owner;
+	}
+
+	/**
+	 * The direction of gravity in the air at a continuous storage position, or null where it is straight down. It
+	 * points to the nearest point of the core box, the cube that the rounded edges are rounded about. Above the flat
+	 * part of a face that is straight down. Over an edge it turns about the edge, and over a corner it points to the
+	 * corner, so the field is continuous across the diagonals and a jump off an edge arcs onto the next face.
+	 */
+	public @Nullable Vec3 airGravity(double x, double y, double z) {
+		int bx = Mth.floor(x);
+		if (!this.inRegion(bx, Mth.floor(z))) {
+			return null;
+		}
+		double core = this.radius - CubePlanetMath.edgeRounding();
+		double cx = x - this.offsetX(this.faceIndexAt(bx)) - 0.5;
+		double cy = y - this.centerY - 0.5;
+		double cz = z - 0.5;
+		if (Math.abs(cx) <= core && Math.abs(cz) <= core) {
+			return null;
+		}
+		double dx = cx - Math.clamp(cx, -core, core);
+		double dy = cy - Math.clamp(cy, -core, core);
+		double dz = cz - Math.clamp(cz, -core, core);
+		double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		return length < 1.0E-6 ? null : new Vec3(-dx / length, -dy / length, -dz / length);
 	}
 
 	public static int indexOf(Direction face) {
@@ -144,12 +253,40 @@ public final class SeamLayout {
 		return this.ownerFace(cube[0], cube[1], cube[2]) == face;
 	}
 
-	/** True when the storage position maps to a cube position below the cube surface (Chebyshev distance under R). */
+	/**
+	 * Writes into {@code out} where the block that a storage position stands for is stored: the position in the
+	 * region of the face that owns its cube position. Outside its wedge, a region holds no real blocks, so readers
+	 * near a seam look there instead. Returns false when the position is in no region.
+	 */
+	public boolean ownerStorage(int sx, int sy, int sz, int[] out) {
+		if (!this.inRegion(sx, sz)) {
+			return false;
+		}
+		this.toCube(this.faceIndexAt(sx), sx, sy, sz, out);
+		this.toStorage(this.ownerFace(out[0], out[1], out[2]), out[0], out[1], out[2], out);
+		return true;
+	}
+
+	/** True when the storage position maps to a cube position below the rounded cube surface. */
 	public boolean belowCubeSurface(int sx, int sy, int sz) {
 		int[] cube = new int[3];
 		this.toCube(this.faceIndexAt(sx), sx, sy, sz, cube);
-		int distance = Math.max(Math.abs(cube[0]), Math.max(Math.abs(cube[1] - this.centerY), Math.abs(cube[2])));
-		return distance < this.radius;
+		return CubePlanetMath.roundedCubeDistance(cube[0], cube[1] - this.centerY, cube[2], this.radius) < 0.0;
+	}
+
+	/**
+	 * The storage Y under which a storage column is sea, for a vanilla sea level. The sea surface is the contour of
+	 * the rounded cube at the height of the sea, so it bends over each edge with the terrain, and two faces meet at
+	 * the diagonal at the same level. Past the curve of the sea, the column gets the vanilla level for no fluid.
+	 */
+	public int seaLevelAt(int sx, int sz, int seaLevel) {
+		int rounding = CubePlanetMath.edgeRounding();
+		double core = this.radius - rounding;
+		double ex = Math.max(Math.abs(sx - this.offsetX(this.faceIndexAt(sx))) - core, 0.0);
+		double ez = Math.max(Math.abs(sz) - core, 0.0);
+		double contour = rounding + seaLevel - CubePlanetMath.TOP_SURFACE_Y;
+		double rise = contour * contour - ex * ex - ez * ez;
+		return rise < 0.0 ? DimensionType.MIN_Y * 2 : (int) Math.ceil(this.centerY + core + Math.sqrt(rise));
 	}
 
 	/**

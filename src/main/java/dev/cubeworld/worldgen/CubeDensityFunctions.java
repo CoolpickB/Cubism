@@ -7,6 +7,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.util.Interval;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.levelgen.NoiseRouter;
+import net.minecraft.world.level.levelgen.Noises;
 import net.minecraft.world.level.levelgen.densityfunction.DensityBuffer;
 import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
@@ -167,6 +168,7 @@ public final class CubeDensityFunctions {
 			double s = this.scale;
 			int cy = this.centerY;
 			double r = this.radiusBlocks;
+			boolean continentalness = this.noise.is(Noises.CONTINENTALNESS) || this.noise.is(Noises.CONTINENTALNESS_LARGE);
 
 			return new DensitySampler() {
 				@Override
@@ -176,28 +178,13 @@ public final class CubeDensityFunctions {
 
 				@Override
 				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
-					double dx = x;
-					double dy = y - cy;
-					double dz = z;
-					double cheb = Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz)));
-					double surfX;
-					double surfY;
-					double surfZ;
-					if (cheb < 1.0) {
-						surfX = 0.0;
-						surfY = r;
-						surfZ = 0.0;
-					} else {
-						double proj = r / cheb;
-						surfX = dx * proj;
-						surfY = dy * proj;
-						surfZ = dz * proj;
-					}
-
-					double nx = surfX * s + sxSampler.sampleValue(ctx, x, y, z);
-					double ny = surfY * s + sySampler.sampleValue(ctx, x, y, z);
-					double nz = surfZ * s + szSampler.sampleValue(ctx, x, y, z);
-					return compiledNoise.get(nx, ny, nz);
+					double[] surface = new double[3];
+					CubePlanetMath.roundedCubeSurfacePoint(x, y - cy, z, r, surface);
+					double nx = surface[0] * s + sxSampler.sampleValue(ctx, x, y, z);
+					double ny = surface[1] * s + sySampler.sampleValue(ctx, x, y, z);
+					double nz = surface[2] * s + szSampler.sampleValue(ctx, x, y, z);
+					float value = (float) compiledNoise.get(nx, ny, nz);
+					return continentalness ? value + edgeLandBias(surface, r) : value;
 				}
 			};
 		}
@@ -224,6 +211,27 @@ public final class CubeDensityFunctions {
 		}
 	}
 
+	/** How far continentalness rises at an edge. Inland starts near 0.03 and oceans are under -0.19. */
+	private static final float EDGE_LAND_BIAS = 0.5f;
+	/** How far the edge bias reaches into a face beyond the rounded shoulder, in blocks. */
+	private static final int EDGE_LAND_WIDTH = 48;
+
+	/**
+	 * Raises continentalness near the cube edges. The ground of the rounded shoulder sinks below the face plane, and
+	 * a sea there coats the slope as a thin sheet that bends over the edge. With the bias, shoulders are land, and
+	 * the sea gathers toward the face centers, a mild version of the bowl that real cube gravity would make.
+	 */
+	private static float edgeLandBias(double[] surface, double r) {
+		double ax = Math.abs(surface[0]);
+		double ay = Math.abs(surface[1]);
+		double az = Math.abs(surface[2]);
+		// The distance to the nearest edge, along the face: the largest coordinate is the face axis, the next is the edge.
+		double second = Math.max(Math.min(ax, ay), Math.min(Math.max(ax, ay), az));
+		double width = CubePlanetMath.edgeRounding() + EDGE_LAND_WIDTH;
+		double t = Mth.clamp(1.0 - (r - second) / width, 0.0, 1.0);
+		return (float) (EDGE_LAND_BIAS * t * t * (3.0 - 2.0 * t));
+	}
+
 	public record CubeShiftNoiseFunction(
 		Holder<NormalNoise> offsetNoise,
 		ShiftAxis axis,
@@ -246,23 +254,11 @@ public final class CubeDensityFunctions {
 
 				@Override
 				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
-					double dx = x;
-					double dy = y - cy;
-					double dz = z;
-					double cheb = Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz)));
-					double sx;
-					double sy;
-					double sz;
-					if (cheb < 1.0) {
-						sx = 0.0;
-						sy = r * 0.25;
-						sz = 0.0;
-					} else {
-						double proj = (r * 0.25) / cheb;
-						sx = dx * proj;
-						sy = dy * proj;
-						sz = dz * proj;
-					}
+					double[] surface = new double[3];
+					CubePlanetMath.roundedCubeSurfacePoint(x, y - cy, z, r, surface);
+					double sx = surface[0] * 0.25;
+					double sy = surface[1] * 0.25;
+					double sz = surface[2] * 0.25;
 
 					float raw = switch (ax) {
 						case X -> compiledNoise.get(sx, sy, sz);
@@ -319,14 +315,14 @@ public final class CubeDensityFunctions {
 
 				@Override
 				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
-					int cheb = CubePlanetMath.getChebyshevDistance(x, y, z, cy);
+					float height = (float) CubePlanetMath.roundedCubeDistance(x, y - cy, z, r);
 					float vanillaY;
-					if (cheb >= r) {
-						vanillaY = 64.0f + (cheb - r);
-					} else if (cheb <= innerR) {
+					if (height >= 0.0f) {
+						vanillaY = 64.0f + height;
+					} else if (height <= innerR - r) {
 						vanillaY = -64.0f;
 					} else {
-						vanillaY = 64.0f - (r - cheb) * invCrust;
+						vanillaY = 64.0f + height * invCrust;
 					}
 
 					float t = Mth.clamp((vanillaY - fromC) * invSpan, 0.0f, 1.0f);

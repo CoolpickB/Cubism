@@ -3,10 +3,13 @@
 	"package": "dev.cubeworld.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
+		"BlockCollisionsMixin",
+		"BlockPlaceContextMixin",
 		"BlockScanUtilsMixin",
 		"ChunkGeneratorAccessor",
 		"ChunkGeneratorMixin",
 		"ChunkMapMixin",
+		"ChunkMapTrackedEntityMixin",
 		"EntityMixin",
 		"DiskFeatureMixin",
 		"FallenTreeFeatureMixin",
@@ -15,14 +18,23 @@
 		"NoiseBasedChunkGeneratorMixin",
 		"FlowingFluidMixin",
 		"LivingEntityMixin",
+		"MobMixin",
 		"OreFeatureMixin",
 		"PlayerMixin",
 		"RandomStateMixin",
 		"RandomStateAccessor",
 		"ServerGamePacketListenerImplMixin",
+		"StructureMixin",
 		"VegetationBlockMixin",
 		"WorldGenRegionMixin",
-		"WorldPresetsMixin"
+		"WorldPresetsMixin",
+		"AbstractSkeletonMixin",
+		"LookControlMixin",
+		"PathNavigationAccessor",
+		"PathNavigationMixin",
+		"PathNavigationRegionMixin",
+		"ServerExplosionMixin",
+		"GroundPathNavigationMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

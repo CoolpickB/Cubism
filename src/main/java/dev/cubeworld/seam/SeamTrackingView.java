@@ -9,16 +9,28 @@ import net.minecraft.world.level.ChunkPos;
 
 import java.util.function.Consumer;
 
-/** The vanilla square of chunks around a player, plus the chunks of neighbor faces that the player sees across seams. */
-public record SeamTrackingView(ChunkTrackingView.Positioned base, LongSet seamChunks) implements ChunkTrackingView {
+/**
+ * The vanilla square of chunks around a player, plus the chunks of neighbor faces that the player sees across seams.
+ * {@code simulatedSeamChunks} are the seam chunks within simulation distance, where entities and blocks tick.
+ * The square counts only the chunks of the face region of the player, given in chunk coordinates with exclusive
+ * maximums. A large view distance makes the square reach into the regions next to it in storage, which can be the
+ * opposite face, and the chunks there are not across a seam from the player.
+ */
+public record SeamTrackingView(
+	ChunkTrackingView.Positioned base, int regionMinX, int regionMaxX, int regionMinZ, int regionMaxZ, LongSet seamChunks, LongSet simulatedSeamChunks
+) implements ChunkTrackingView {
 	public static final int REFRESH_TICKS = 20;
 
 	/**
-	 * Radius 1 makes the chunk block-ticking. ChunkMap sends a chunk to players only when it reaches that level.
+	 * Radius 1 gives the chunk the block-ticking level. ChunkMap sends a chunk to players only when it reaches that
+	 * level. Entities tick only at the entity-ticking level, which needs radius 2.
 	 */
 	public void addTickets(ServerLevel level) {
 		for (long chunk : this.seamChunks) {
 			level.getChunkSource().addTicketWithRadius(CubeWorldMod.SEAM_TICKET, ChunkPos.unpack(chunk), 1);
+		}
+		for (long chunk : this.simulatedSeamChunks) {
+			level.getChunkSource().addTicketWithRadius(CubeWorldMod.SEAM_SIMULATION_TICKET, ChunkPos.unpack(chunk), 2);
 		}
 	}
 
@@ -32,15 +44,24 @@ public record SeamTrackingView(ChunkTrackingView.Positioned base, LongSet seamCh
 
 	@Override
 	public boolean contains(int chunkX, int chunkZ, boolean includeNeighbors) {
-		return this.base.contains(chunkX, chunkZ, includeNeighbors) || this.seamChunks.contains(ChunkPos.pack(chunkX, chunkZ));
+		return this.inBase(chunkX, chunkZ, includeNeighbors) || this.seamChunks.contains(ChunkPos.pack(chunkX, chunkZ));
+	}
+
+	private boolean inBase(int chunkX, int chunkZ, boolean includeNeighbors) {
+		return chunkX >= this.regionMinX && chunkX < this.regionMaxX && chunkZ >= this.regionMinZ && chunkZ < this.regionMaxZ
+			&& this.base.contains(chunkX, chunkZ, includeNeighbors);
 	}
 
 	@Override
 	public void forEach(Consumer<ChunkPos> consumer) {
-		this.base.forEach(consumer);
+		this.base.forEach(pos -> {
+			if (this.inBase(pos.x(), pos.z(), true)) {
+				consumer.accept(pos);
+			}
+		});
 		for (long chunk : this.seamChunks) {
 			ChunkPos pos = ChunkPos.unpack(chunk);
-			if (!this.base.contains(pos.x(), pos.z())) {
+			if (!this.inBase(pos.x(), pos.z(), true)) {
 				consumer.accept(pos);
 			}
 		}

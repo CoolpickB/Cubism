@@ -1,6 +1,7 @@
 package dev.cubeworld.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
@@ -8,6 +9,8 @@ import dev.cubeworld.gravity.CubePlanet;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.network.CubeNetworking;
+import dev.cubeworld.seam.SeamInteraction;
+import dev.cubeworld.worldgen.SeamLayout;
 import it.unimi.dsi.fastutil.floats.FloatArraySet;
 import it.unimi.dsi.fastutil.floats.FloatArrays;
 import it.unimi.dsi.fastutil.floats.FloatSet;
@@ -21,12 +24,14 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -492,5 +497,50 @@ public abstract class EntityMixin implements GravityEntityAccess {
 		if (this.cubeworld$getFrame() != Direction.DOWN) {
 			cir.setReturnValue(false);
 		}
+	}
+
+	@WrapOperation(method = "pick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;clip(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"))
+	private BlockHitResult cubeworld$pickAcrossSeams(Level level, ClipContext context, Operation<BlockHitResult> original) {
+		SeamLayout layout = SeamLayout.of(level);
+		return layout == null ? original.call(level, context) : SeamInteraction.clip(level, layout, context);
+	}
+
+	/*
+	 * Distances measure across seams: a point or an entity of another face region counts where it shows, next to
+	 * this entity, not where it is stored hundreds of blocks away. Mob targeting, despawning and natural spawning all
+	 * read distances through these methods.
+	 */
+	@ModifyReturnValue(method = "distanceToSqr(DDD)D", at = @At("RETURN"))
+	private double cubeworld$pointDistanceAcrossSeams(
+		double distance, @Local(argsOnly = true, ordinal = 0) double x, @Local(argsOnly = true, ordinal = 1) double y, @Local(argsOnly = true, ordinal = 2) double z
+	) {
+		Vec3 self = this.cubeworld$positionInRegionOf(x, z);
+		return self == null ? distance : self.distanceToSqr(x, y, z);
+	}
+
+	@ModifyReturnValue(method = "distanceToSqr(Lnet/minecraft/world/phys/Vec3;)D", at = @At("RETURN"))
+	private double cubeworld$vectorDistanceAcrossSeams(double distance, @Local(argsOnly = true) Vec3 pos) {
+		Vec3 self = this.cubeworld$positionInRegionOf(pos.x, pos.z);
+		return self == null ? distance : self.distanceToSqr(pos);
+	}
+
+	@ModifyReturnValue(method = "distanceTo(Lnet/minecraft/world/entity/Entity;)F", at = @At("RETURN"))
+	private float cubeworld$entityDistanceAcrossSeams(float distance, @Local(argsOnly = true) Entity entity) {
+		Vec3 self = this.cubeworld$positionInRegionOf(entity.getX(), entity.getZ());
+		return self == null ? distance : (float) self.distanceTo(entity.position());
+	}
+
+	@ModifyReturnValue(method = "closerThan(Lnet/minecraft/world/entity/Entity;D)Z", at = @At("RETURN"))
+	private boolean cubeworld$closerAcrossSeams(boolean closer, @Local(argsOnly = true) Entity other, @Local(argsOnly = true) double distance) {
+		Vec3 self = this.cubeworld$positionInRegionOf(other.getX(), other.getZ());
+		return self == null ? closer : self.closerThan(other.position(), distance);
+	}
+
+	/** This entity moved into the face region of {@code (x, z)}, or null when it is already in that region. */
+	@Unique
+	private @Nullable Vec3 cubeworld$positionInRegionOf(double x, double z) {
+		SeamLayout layout = SeamLayout.of(this.level);
+		int[] m = layout == null ? null : SeamInteraction.regionMotion(layout, this.position.x, this.position.z, x, z);
+		return m == null ? null : SeamInteraction.move(m, this.position);
 	}
 }

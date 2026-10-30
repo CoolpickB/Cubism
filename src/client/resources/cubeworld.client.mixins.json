@@ -5,13 +5,21 @@
 	"client": [
 		"CameraMixin",
 		"ClientChunkCacheMixin",
+		"ClientChunkCacheStorageMixin",
 		"EntityRenderDispatcherMixin",
 		"EntityRenderStateMixin",
 		"LevelExtractorMixin",
 		"LevelRendererMixin",
 		"LocalPlayerMixin",
+		"MinecraftMixin",
 		"ModelBlockRendererMixin",
-		"PresetEditorMixin"
+		"PresetEditorMixin",
+		"RenderSectionRegionMixin",
+		"SectionCompilerMixin",
+		"MultiPlayerGameModeMixin",
+		"RenderSectionAccessor",
+		"RenderSectionMixin",
+		"DebugEntryPositionMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

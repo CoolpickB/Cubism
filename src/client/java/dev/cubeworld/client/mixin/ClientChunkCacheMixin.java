@@ -1,5 +1,6 @@
 package dev.cubeworld.client.mixin;
 
+import dev.cubeworld.client.SeamChunkStorageAccess;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.SeamRenderer;
 import net.minecraft.client.multiplayer.ClientChunkCache;
@@ -17,6 +18,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.lang.invoke.MethodHandles;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -45,16 +47,56 @@ public abstract class ClientChunkCacheMixin {
 		this.storageRadius = Math.max(2, viewRange) + 3;
 	}
 
-	@Inject(method = "updateViewCenter", at = @At("TAIL"))
-	private void cubeworld$updateCenter(int x, int z, CallbackInfo ci) {
+	/**
+	 * Moves chunks between the two stores when the center moves, as on a teleport or a walk across a region. The
+	 * server sends each chunk once, so a chunk that stayed in the wrong store would be lost until it is sent again.
+	 */
+	@Inject(method = "updateViewCenter", at = @At("HEAD"))
+	private void cubeworld$moveChunksOnRecenter(int x, int z, CallbackInfo ci) {
 		this.centerX = x;
 		this.centerZ = z;
+		if (SeamClient.layout == null) {
+			return;
+		}
+		SeamChunkStorageAccess access = this.cubeworld$storage();
+		for (int index = 0; index < access.cubeworld$slotCount(); index++) {
+			LevelChunk chunk = access.cubeworld$detachIfSeam(index, x, z, this.storageRadius);
+			if (chunk != null) {
+				this.seamChunks.put(chunk.getPos().pack(), chunk);
+				SeamRenderer.onChunkMovedToSeam(chunk.getPos());
+				SeamRenderer.onChunkLoaded(chunk.getPos());
+			}
+		}
+		var iterator = this.seamChunks.values().iterator();
+		while (iterator.hasNext()) {
+			LevelChunk chunk = iterator.next();
+			ChunkPos pos = chunk.getPos();
+			if (!this.cubeworld$isSeamChunk(pos.x(), pos.z())) {
+				iterator.remove();
+				SeamRenderer.onChunkMovedToVanilla(pos);
+				access.cubeworld$attach(chunk);
+				this.level.onChunkLoaded(pos);
+			}
+		}
+	}
+
+	/**
+	 * The storage class is private, so neither a shadow nor a MixinExtras handler can name its type. This code runs
+	 * in ClientChunkCache after the merge, so its lookup has private access.
+	 */
+	@Unique
+	private SeamChunkStorageAccess cubeworld$storage() {
+		try {
+			Class<?> type = Class.forName("net.minecraft.client.multiplayer.ClientChunkCache$Storage");
+			return (SeamChunkStorageAccess) MethodHandles.lookup().findGetter(ClientChunkCache.class, "storage", type).invoke((ClientChunkCache) (Object) this);
+		} catch (Throwable e) {
+			throw new IllegalStateException("Could not read the client chunk storage", e);
+		}
 	}
 
 	@Unique
 	private boolean cubeworld$isSeamChunk(int chunkX, int chunkZ) {
-		return SeamClient.layout != null
-			&& (Math.abs(chunkX - this.centerX) > this.storageRadius || Math.abs(chunkZ - this.centerZ) > this.storageRadius);
+		return SeamClient.isSeamChunk(chunkX, chunkZ, this.centerX, this.centerZ, this.storageRadius);
 	}
 
 	@Inject(method = "replaceWithPacketData", at = @At("HEAD"), cancellable = true)
@@ -71,7 +113,13 @@ public abstract class ClientChunkCacheMixin {
 		chunk.replaceWithPacketData(chunkX, chunkZ, data);
 		this.level.onChunkLoaded(pos);
 		SeamRenderer.onChunkLoaded(pos);
+		SeamRenderer.markAcrossSeamsDirty(pos);
 		cir.setReturnValue(chunk);
+	}
+
+	@Inject(method = "replaceWithPacketData", at = @At("RETURN"))
+	private void cubeworld$remeshAcrossSeams(int chunkX, int chunkZ, ClientboundLevelChunkPacketData data, CallbackInfoReturnable<LevelChunk> cir) {
+		SeamRenderer.markAcrossSeamsDirty(new ChunkPos(chunkX, chunkZ));
 	}
 
 	@Inject(method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/LevelChunk;", at = @At("HEAD"), cancellable = true)
