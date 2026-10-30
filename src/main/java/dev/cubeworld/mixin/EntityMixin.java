@@ -164,7 +164,7 @@ public abstract class EntityMixin implements GravityEntityAccess {
 			return;
 		}
 
-		Direction target = CubePlanetMath.stickyGravity(this.position, planet.centerY(), planet.radius(), this.cubeworld$gravity);
+		Direction target = CubePlanetMath.stickyGravity(this.level, this.position, planet.centerY(), planet.radius(), this.cubeworld$gravity);
 		if (target != this.cubeworld$gravity && this.cubeworld$setGravityDirection(target)) {
 			if (this.level.isClientSide()) {
 				CubeNetworking.clientGravitySender.accept(target);

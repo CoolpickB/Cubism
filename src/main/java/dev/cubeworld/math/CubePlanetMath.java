@@ -1,6 +1,8 @@
 package dev.cubeworld.math;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
@@ -51,14 +53,22 @@ public final class CubePlanetMath {
 		return getInnerBedrockRadius(diameterChunks) > 1;
 	}
 
+	/** How far above the surface plane the sky check of {@link #stickyGravity} looks. Matches the generated atmosphere. */
+	public static final int ATMOSPHERE_HEIGHT = 96;
+
 	/**
 	 * The sticky gravity rule (GOALS.md, core model item 6). The feet position decides. The offset uses
 	 * the same block-center convention as {@link #getPyramidOutwardFace}, so the block at index R from the
 	 * center is the first block inside the plane.
 	 *
+	 * <p>Above the plane of its face, an entity is outside the square of every other face, so no other face can
+	 * take it. Below that plane, a face takes the entity when the entity is inside the square of that face and
+	 * the column above the entity, in the frame of that face, is open to the sky. Thus a player flips when the
+	 * player steps out into the open air of the next face, and never in a closed cave.
+	 *
 	 * @return the gravity direction (pointing toward the center)
 	 */
-	public static Direction stickyGravity(Vec3 feet, int centerY, int radius, Direction current) {
+	public static Direction stickyGravity(BlockGetter level, Vec3 feet, int centerY, int radius, Direction current) {
 		double ox = feet.x - 0.5;
 		double oy = feet.y - centerY - 0.5;
 		double oz = feet.z - 0.5;
@@ -66,16 +76,46 @@ public final class CubePlanetMath {
 		if (planeExcess(currentFace, ox, oy, oz, radius) > 0.0) {
 			return current;
 		}
+		BlockPos feetBlock = BlockPos.containing(feet);
+		if (insideSquare(currentFace, ox, oy, oz, radius) && skyOpen(level, feetBlock, currentFace, centerY, radius)) {
+			return current;
+		}
 		Direction best = null;
-		double bestExcess = 0.0;
+		double bestHeight = Double.NEGATIVE_INFINITY;
 		for (Direction face : Direction.values()) {
-			double excess = planeExcess(face, ox, oy, oz, radius);
-			if (excess > bestExcess) {
-				bestExcess = excess;
+			if (face == currentFace || !insideSquare(face, ox, oy, oz, radius)) {
+				continue;
+			}
+			double height = planeExcess(face, ox, oy, oz, radius);
+			if (height > bestHeight && skyOpen(level, feetBlock, face, centerY, radius)) {
+				bestHeight = height;
 				best = face;
 			}
 		}
 		return best == null ? current : best.getOpposite();
+	}
+
+	private static boolean insideSquare(Direction face, double ox, double oy, double oz, int radius) {
+		return switch (face.getAxis()) {
+			case X -> Math.abs(oy) <= radius && Math.abs(oz) <= radius;
+			case Y -> Math.abs(ox) <= radius && Math.abs(oz) <= radius;
+			case Z -> Math.abs(ox) <= radius && Math.abs(oy) <= radius;
+		};
+	}
+
+	/** True when no motion-blocking block is between the feet and the top of the atmosphere of the face. */
+	private static boolean skyOpen(BlockGetter level, BlockPos feetBlock, Direction face, int centerY, int radius) {
+		int axisCoord = face.getAxis().choose(feetBlock.getX(), feetBlock.getY() - centerY, feetBlock.getZ());
+		int distance = axisCoord * face.getAxisDirection().getStep();
+		int steps = radius + ATMOSPHERE_HEIGHT - distance;
+		BlockPos.MutableBlockPos pos = feetBlock.mutable();
+		for (int i = 0; i <= steps; i++) {
+			if (level.getBlockState(pos).isSolid()) {
+				return false;
+			}
+			pos.move(face);
+		}
+		return true;
 	}
 
 	private static double planeExcess(Direction face, double ox, double oy, double oz, int radius) {
