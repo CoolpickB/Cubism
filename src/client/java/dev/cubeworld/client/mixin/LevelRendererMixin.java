@@ -20,11 +20,13 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.state.level.BlockBreakingRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4fc;
+import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -104,6 +106,24 @@ public abstract class LevelRendererMixin {
 		}
 	}
 
+	@WrapOperation(method = "submitBlockDestroyAnimation", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(DDD)V"))
+	private void cubeworld$crackAcrossSeam(
+		PoseStack poseStack, double x, double y, double z, Operation<Void> original,
+		@Local(argsOnly = true) LevelRenderState levelRenderState, @Local BlockBreakingRenderState state
+	) {
+		SeamLayout layout = SeamClient.layout;
+		Vec3 camera = levelRenderState.cameraRenderState.pos;
+		BlockPos pos = state.blockPos();
+		int cameraFace = layout == null ? -1 : SeamInteraction.regionFace(layout, camera.x, camera.z);
+		int blockFace = layout == null ? -1 : SeamInteraction.regionFace(layout, pos.getX(), pos.getZ());
+		if (cameraFace < 0 || blockFace < 0 || cameraFace == blockFace) {
+			original.call(poseStack, x, y, z);
+		} else {
+			SeamRenderer.applyMotion(poseStack, layout.motion(blockFace, cameraFace), camera, false);
+			original.call(poseStack, (double) pos.getX(), (double) pos.getY(), (double) pos.getZ());
+		}
+	}
+
 	@WrapOperation(method = "submitBlockEntities", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;translate(DDD)V"))
 	private void cubeworld$blockEntityAcrossSeam(
 		PoseStack poseStack, double x, double y, double z, Operation<Void> original,
@@ -131,7 +151,11 @@ public abstract class LevelRendererMixin {
 		}
 		poseStack.pushPose();
 		SeamRenderer.applyMotion(poseStack, motion, camera.pos, true);
+		// Name tags and sprites turn to face the camera inside the moved pose, so they get the camera turned back.
+		Quaternionf orientation = new Quaternionf(camera.orientation);
+		camera.orientation.set(SeamRenderer.motionRotation(motion).conjugate().mul(orientation));
 		original.call(dispatcher, state, camera, state.x, state.y, state.z, poseStack, output);
+		camera.orientation.set(orientation);
 		poseStack.popPose();
 	}
 }

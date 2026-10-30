@@ -1,10 +1,13 @@
 package dev.cubeworld.seam;
 
 import com.mojang.math.OctahedralGroup;
+import dev.cubeworld.mixin.EntityAccessor;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -16,6 +19,10 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3i;
 import org.jspecify.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * Lets players and mobs act on what they see across a seam. For blocks, the raycast runs in the region of the player
@@ -151,6 +158,87 @@ public final class SeamInteraction {
 	public static Vec3 turnIntoRegionOf(SeamLayout layout, Vec3 direction, double fromX, double fromZ, double toX, double toZ) {
 		int[] m = regionMotion(layout, fromX, fromZ, toX, toZ);
 		return m == null ? direction : rotate(m, direction);
+	}
+
+	/** The motion from the face region of {@code from} to that of {@code to}, or null when they share a region or one is in none. */
+	public static int @Nullable [] blockMotion(SeamLayout layout, BlockPos from, BlockPos to) {
+		return regionMotion(layout, from.getX() + 0.5, from.getZ() + 0.5, to.getX() + 0.5, to.getZ() + 0.5);
+	}
+
+	public static Direction rotate(int[] m, Direction direction) {
+		Vec3 v = rotate(m, Vec3.atLowerCornerOf(direction.getUnitVec3i()));
+		return Direction.getApproximateNearest(v.x, v.y, v.z);
+	}
+
+	/**
+	 * The horizontal direction that a player faces, in the frame of a block position in another face region, or
+	 * null when the player is in the same region. Where the facing turns vertical, as for a player who looks over an
+	 * edge at the next face, the turned downward direction gives the facing instead.
+	 */
+	public static @Nullable Vec3 placerFacing(Level level, @Nullable Player player, BlockPos pos) {
+		SeamLayout layout = SeamLayout.of(level);
+		int[] m = layout == null || player == null ? null
+			: regionMotion(layout, player.getX(), player.getZ(), pos.getX() + 0.5, pos.getZ() + 0.5);
+		if (m == null) {
+			return null;
+		}
+		Vec3 turned = rotate(m, player.getViewVector(1.0F));
+		if (turned.x * turned.x + turned.z * turned.z < 1.0E-4) {
+			turned = rotate(m, new Vec3(0.0, -1.0, 0.0));
+		}
+		return new Vec3(turned.x, 0.0, turned.z).normalize();
+	}
+
+	/**
+	 * Runs a mob attack with the target moved into the region of the mob, where the seam rendering shows it. So aim,
+	 * fireball direction and lead use the shown position. Afterwards the target moves back with the inverse motion,
+	 * which also keeps a knockback that the attack gave, turned into the real frame. Only the fields move: the target
+	 * does not change entity section or chunk.
+	 */
+	public static void withTargetShown(Entity mob, @Nullable Entity target, Runnable action) {
+		SeamLayout layout = target == null ? null : SeamLayout.of(mob.level());
+		int[] m = layout == null ? null : regionMotion(layout, target.getX(), target.getZ(), mob.getX(), mob.getZ());
+		if (m == null) {
+			action.run();
+			return;
+		}
+		int[] back = layout.motion(regionFace(layout, mob.getX(), mob.getZ()), regionFace(layout, target.getX(), target.getZ()));
+		place(target, m);
+		try {
+			action.run();
+		} finally {
+			place(target, back);
+		}
+	}
+
+	private static void place(Entity entity, int[] m) {
+		EntityAccessor access = (EntityAccessor) entity;
+		AABB box = entity.getBoundingBox();
+		access.cubeworld$setPositionField(move(m, entity.position()));
+		access.cubeworld$setBoundingBoxField(new AABB(move(m, box.getMinPosition()), move(m, box.getMaxPosition())));
+		access.cubeworld$setDeltaMovementField(rotate(m, entity.getDeltaMovement()));
+	}
+
+	/**
+	 * An entity search in a box of the region of {@code (atX, atZ)} that also finds the entities that show in the box
+	 * across a seam. The box moves into each neighbor face region for a second search. The found entities keep their
+	 * stored positions.
+	 */
+	public static <T> List<T> acrossSeams(SeamLayout layout, double atX, double atZ, AABB box, Function<AABB, List<T>> search) {
+		List<T> found = search.apply(box);
+		int face = regionFace(layout, atX, atZ);
+		if (face < 0) {
+			return found;
+		}
+		List<T> all = new ArrayList<>(found);
+		for (int other = 0; other < SeamLayout.FACES.length; other++) {
+			int[] m = layout.motion(face, other);
+			// The opposite face shares no seam.
+			if (other != face && m[4] != -1) {
+				all.addAll(search.apply(new AABB(move(m, box.getMinPosition()), move(m, box.getMaxPosition()))));
+			}
+		}
+		return all;
 	}
 
 	public static int regionFace(SeamLayout layout, double x, double z) {

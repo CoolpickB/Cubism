@@ -4,6 +4,7 @@
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
 		"BlockCollisionsMixin",
+		"BlockItemMixin",
 		"BlockPlaceContextMixin",
 		"BlockScanUtilsMixin",
 		"ChunkGeneratorAccessor",
@@ -24,17 +25,27 @@
 		"RandomStateMixin",
 		"RandomStateAccessor",
 		"ServerGamePacketListenerImplMixin",
+		"ServerLevelMixin",
 		"StructureMixin",
+		"UseOnContextMixin",
 		"VegetationBlockMixin",
 		"WorldGenRegionMixin",
 		"WorldPresetsMixin",
-		"AbstractSkeletonMixin",
+		"AbstractBoatMixin",
 		"LookControlMixin",
 		"PathNavigationAccessor",
 		"PathNavigationMixin",
 		"PathNavigationRegionMixin",
 		"ServerExplosionMixin",
-		"GroundPathNavigationMixin"
+		"GroundPathNavigationMixin",
+		"BlazeAttackGoalMixin",
+		"BreezeShootMixin",
+		"EntityAccessor",
+		"GhastShootFireballGoalMixin",
+		"MoveToTargetSinkMixin",
+		"NearestLivingEntitySensorMixin",
+		"RangedAttackMixin",
+		"TargetSearchMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

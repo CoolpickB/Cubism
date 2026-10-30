@@ -20,7 +20,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -40,21 +39,9 @@ public abstract class ServerExplosionMixin {
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;getEntities(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;")
 	)
 	private List<Entity> cubeworld$entitiesAcrossSeams(ServerLevel level, @Nullable Entity except, AABB box, Operation<List<Entity>> original) {
-		List<Entity> entities = original.call(level, except, box);
 		SeamLayout layout = SeamLayout.of(level);
-		int face = layout == null ? -1 : SeamInteraction.regionFace(layout, this.center.x, this.center.z);
-		if (face < 0) {
-			return entities;
-		}
-		List<Entity> all = new ArrayList<>(entities);
-		for (int other = 0; other < SeamLayout.FACES.length; other++) {
-			int[] m = layout.motion(face, other);
-			// The opposite face shares no seam.
-			if (other != face && m[4] != -1) {
-				all.addAll(original.call(level, except, new AABB(SeamInteraction.move(m, box.getMinPosition()), SeamInteraction.move(m, box.getMaxPosition()))));
-			}
-		}
-		return all;
+		return layout == null ? original.call(level, except, box)
+			: SeamInteraction.acrossSeams(layout, this.center.x, this.center.z, box, area -> original.call(level, except, area));
 	}
 
 	@ModifyExpressionValue(

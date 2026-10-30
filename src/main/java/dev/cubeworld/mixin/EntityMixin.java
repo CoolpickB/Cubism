@@ -58,6 +58,8 @@ import java.util.Optional;
 @Mixin(Entity.class)
 public abstract class EntityMixin implements GravityEntityAccess {
 	@Unique private static final String GRAVITY_KEY = "cubeworld:gravity";
+	/** The same gap as for living entities: no edge pull with ground this close along it. */
+	@Unique private static final double EDGE_GRAVITY_GROUND_GAP = 3.0;
 
 	@Shadow private Level level;
 	@Shadow private Vec3 position;
@@ -88,6 +90,8 @@ public abstract class EntityMixin implements GravityEntityAccess {
 
 	@Unique private Direction cubeworld$gravity = Direction.DOWN;
 	@Unique private boolean cubeworld$gravityKnown;
+	/** Face region where the last fall started, as {@code LivingEntityMixin} keeps it for living entities. */
+	@Unique private int cubeworld$airStartFace = -1;
 
 	@Unique
 	private boolean cubeworld$usesFrame() {
@@ -240,6 +244,43 @@ public abstract class EntityMixin implements GravityEntityAccess {
 			this.setDeltaMovement(this.getDeltaMovement().add(gravity.getStepX() * g, gravity.getStepY() * g, gravity.getStepZ() * g));
 		}
 		ci.cancel();
+	}
+
+	/**
+	 * Items, projectiles, falling blocks and other entities without a living body take their pull from here. Over an
+	 * edge they get the same pull as living entities in {@code LivingEntityMixin}: once they pass into the region of
+	 * another face in the air, they fall along {@link SeamLayout#airGravity}. Without it an arrow bends by a right
+	 * angle at the diagonal.
+	 */
+	@Inject(method = "applyGravity", at = @At("HEAD"), cancellable = true)
+	private void cubeworld$edgeGravity(CallbackInfo ci) {
+		Vec3 pull = this.cubeworld$edgePull();
+		double gravity = this.getGravity();
+		if (pull != null && gravity != 0.0) {
+			this.setDeltaMovement(this.getDeltaMovement().add(pull.scale(gravity)));
+			ci.cancel();
+		}
+	}
+
+	@Override
+	public @Nullable Vec3 cubeworld$edgePull() {
+		SeamLayout layout = SeamLayout.of(this.level);
+		if (layout == null) {
+			return null;
+		}
+		int face = SeamInteraction.regionFace(layout, this.position.x, this.position.z);
+		if (this.onGround() || this.cubeworld$airStartFace < 0) {
+			this.cubeworld$airStartFace = face;
+			return null;
+		}
+		if (face == this.cubeworld$airStartFace) {
+			return null;
+		}
+		Vec3 center = this.getBoundingBox().getCenter();
+		Vec3 direction = layout.airGravity(center.x, center.y, center.z);
+		boolean groundClose = direction != null
+			&& !this.level.noCollision((Entity) (Object) this, this.getBoundingBox().expandTowards(direction.scale(EDGE_GRAVITY_GROUND_GAP)));
+		return groundClose ? null : direction;
 	}
 
 	@Inject(method = "getOnPos(F)Lnet/minecraft/core/BlockPos;", at = @At("HEAD"), cancellable = true)

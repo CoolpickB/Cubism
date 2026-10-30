@@ -25,6 +25,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.List;
+
 @Mixin(Player.class)
 public abstract class PlayerMixin extends LivingEntity {
 	protected PlayerMixin(EntityType<? extends LivingEntity> type, Level level) {
@@ -109,5 +111,22 @@ public abstract class PlayerMixin extends LivingEntity {
 		Vec3 direction = layout == null ? new Vec3(xd, 0.0, zd)
 			: SeamInteraction.turnIntoRegionOf(layout, new Vec3(xd, 0.0, zd), this.getX(), this.getZ(), target.getX(), target.getZ());
 		original.call(target, power, direction.x, direction.z, source, damage, comesFromEffect);
+	}
+
+	// A sweep also hits the entities that show next to the target across a seam.
+	@WrapOperation(method = "doSweepAttack", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;getEntitiesOfClass(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;"))
+	private <T> List<T> cubeworld$sweepAcrossSeams(Level level, Class<T> type, AABB box, Operation<List<T>> original) {
+		SeamLayout layout = SeamLayout.of(level);
+		Vec3 center = box.getCenter();
+		return layout == null ? original.call(level, type, box) : SeamInteraction.acrossSeams(layout, center.x, center.z, box, area -> original.call(level, type, area));
+	}
+
+	// The sweep pushes along the look of the player, a direction of the player region.
+	@WrapOperation(method = "doSweepAttack", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/LivingEntity;knockback(DDDLnet/minecraft/world/damagesource/DamageSource;F)V"))
+	private void cubeworld$sweepKnockbackAcrossSeam(LivingEntity target, double power, double xd, double zd, DamageSource source, float damage, Operation<Void> original) {
+		SeamLayout layout = SeamLayout.of(this.level());
+		Vec3 direction = layout == null ? new Vec3(xd, 0.0, zd)
+			: SeamInteraction.turnIntoRegionOf(layout, new Vec3(xd, 0.0, zd), this.getX(), this.getZ(), target.getX(), target.getZ());
+		original.call(target, power, direction.x, direction.z, source, damage);
 	}
 }

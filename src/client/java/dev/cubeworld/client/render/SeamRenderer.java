@@ -532,9 +532,13 @@ public final class SeamRenderer {
 	 * Moves the pose from the frame of another face to the camera frame. With {@code faceShading}, the normals keep
 	 * the frame of their own face, because the seam terrain keeps the shading that its own face gives it.
 	 */
+	public static Quaternionf motionRotation(int[] m) {
+		return new Quaternionf().setFromNormalized(new Matrix3f(m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]));
+	}
+
 	public static void applyMotion(PoseStack poseStack, int[] m, Vec3 camera, boolean faceShading) {
 		poseStack.translate(m[9] - camera.x, m[10] - camera.y, m[11] - camera.z);
-		Quaternionf rotation = new Quaternionf().setFromNormalized(new Matrix3f(m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]));
+		Quaternionf rotation = motionRotation(m);
 		poseStack.rotate(rotation);
 		if (faceShading) {
 			poseStack.last().normal().rotate(rotation.conjugate());

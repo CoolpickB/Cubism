@@ -9,6 +9,8 @@ import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,8 +45,8 @@ public final class SeamCrossing {
 		List<Entity> crossing = new ArrayList<>();
 		List<TeleportTransition> transitions = new ArrayList<>();
 		for (Entity entity : level.getAllEntities()) {
-			// Vehicles and their passengers would have to cross together. They stay behind for now.
-			if (entity.isPassenger() || entity.isVehicle()) {
+			// A passenger crosses with the vehicle that carries it.
+			if (entity.isPassenger()) {
 				continue;
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();
@@ -60,10 +62,27 @@ public final class SeamCrossing {
 			}
 		}
 		for (int i = 0; i < crossing.size(); i++) {
-			// A path holds block positions of the old region. The mob plans a new one on its next tick.
-			if (crossing.get(i).teleport(transitions.get(i)) instanceof Mob mob) {
-				mob.getNavigation().stop();
+			Entity entity = crossing.get(i);
+			int toFace = layout.faceIndexAt(Mth.floor(transitions.get(i).position().x));
+			// Vanilla moves the passengers by their unturned offset and turns only their yaw. Each passenger gets its
+			// own turned transition after the vehicle, so that a rider keeps its view.
+			List<Entity> passengers = new ArrayList<>();
+			entity.getIndirectPassengers().forEach(passengers::add);
+			List<TeleportTransition> passengerTransitions = new ArrayList<>();
+			for (Entity passenger : passengers) {
+				passengerTransitions.add(transition(level, layout, passenger, toFace).transitionAsPassenger());
 			}
+			stopPath(entity.teleport(transitions.get(i)));
+			for (int j = 0; j < passengers.size(); j++) {
+				stopPath(passengers.get(j).teleport(passengerTransitions.get(j)));
+			}
+		}
+	}
+
+	/** A path holds block positions of the old region. The mob plans a new one on its next tick. */
+	private static void stopPath(@Nullable Entity entity) {
+		if (entity instanceof Mob mob) {
+			mob.getNavigation().stop();
 		}
 	}
 
@@ -82,7 +101,10 @@ public final class SeamCrossing {
 		double halfHeight = entity.getBbHeight() / 2.0;
 		Vec3 center = rotate(m, entity.position().add(0.0, halfHeight, 0.0)).add(m[9], m[10], m[11]);
 		Vec3 look = rotate(m, Vec3.directionFromRotation(entity.getXRot(), entity.getYRot()));
-		float yRot = (float) Math.toDegrees(Math.atan2(-look.x, look.z));
+		// A look along the edge normal turns vertical, where it gives no yaw. The turned downward direction then
+		// points away from the edge, the way the entity moves on.
+		Vec3 heading = look.x * look.x + look.z * look.z < 1.0E-6 ? rotate(m, new Vec3(0.0, -1.0, 0.0)) : look;
+		float yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
 		float xRot = (float) Math.toDegrees(Math.asin(Mth.clamp(-look.y, -1.0, 1.0)));
 		return new TeleportTransition(
 			level, center.subtract(0.0, halfHeight, 0.0), rotate(m, entity.getDeltaMovement()), yRot, xRot, TeleportTransition.DO_NOTHING

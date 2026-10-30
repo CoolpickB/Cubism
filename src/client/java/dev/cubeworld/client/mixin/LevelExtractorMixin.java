@@ -1,6 +1,10 @@
 package dev.cubeworld.client.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.SeamRenderer;
+import dev.cubeworld.seam.SeamInteraction;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -8,6 +12,7 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.extract.LevelExtractor;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -51,5 +56,12 @@ public abstract class LevelExtractorMixin {
 			this.level, this.levelRenderer.entityRenderDispatcher(), camera.position(), deltaTracker.getGameTimeDeltaPartialTick(true), output.entityRenderStates
 		);
 		output.lastEntityRenderStateCount = output.entityRenderStates.size();
+	}
+
+	// The crack of a block across a seam shows next to the camera, not where the block is stored.
+	@WrapOperation(method = "extractBlockDestroyAnimation", at = @At(value = "INVOKE", target = "Lnet/minecraft/core/BlockPos;distToCenterSqr(DDD)D"))
+	private double cubeworld$crackDistanceAcrossSeam(BlockPos pos, double x, double y, double z, Operation<Double> original) {
+		BlockPos shown = SeamClient.layout == null ? null : SeamInteraction.inRegionOf(SeamClient.layout, pos, (int) Math.floor(x));
+		return original.call(shown == null ? pos : shown, x, y, z);
 	}
 }
