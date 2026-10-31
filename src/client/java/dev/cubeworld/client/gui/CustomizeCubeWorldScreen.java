@@ -110,7 +110,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.layout.addTitleHeader(this.title, this.font);
 
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
-		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 0, 20, Component.translatable("selectWorld.enterSeed")));
+		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")));
 		this.seedBox.setMaxLength(64);
 		this.seedBox.setValue(this.seedText);
 		this.seedBox.setResponder(this::onSeedTyped);
@@ -135,6 +135,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 		footer.addChild(Button.builder(CommonComponents.GUI_CANCEL, button -> this.onClose()).width(FOOTER_BUTTON_WIDTH).build());
 		this.layout.visitWidgets(this::addRenderableWidget);
 		this.repositionElements();
+		// The box scrolls to the cursor when the text is set. Start at the left now that the box has its width.
+		this.seedBox.moveCursorToStart(false);
 
 		this.refresh();
 	}
