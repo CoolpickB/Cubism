@@ -510,6 +510,21 @@ public final class SeamRenderer {
 	}
 
 	/**
+	 * Vanilla draws its sections at their storage position, which is right only in the camera face. After a crossing,
+	 * the chunks of the old face stay in the vanilla store until the server moves the chunk center. A block or light
+	 * update in those frames compiles their sections again, and vanilla drew them floating in the new face.
+	 */
+	public static void hideOtherFacesFromVanilla(LevelRenderer levelRenderer, Vec3 cameraPos) {
+		SeamLayout layout = SeamClient.layout;
+		if (layout != null) {
+			int cameraFace = layout.faceIndexAt(Mth.floor(cameraPos.x));
+			levelRenderer.visibleSections().removeIf(
+				section -> layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(section.getSectionNode()))) != cameraFace
+			);
+		}
+	}
+
+	/**
 	 * True when a section of a neighbor face shows in a chunk column of the camera face that the server sends but the
 	 * client does not have yet. The neighbor terrain shows below the ground of the camera face near a seam, and while
 	 * that ground loads, it showed through the hole, or floated with nothing around it.

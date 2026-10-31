@@ -52,8 +52,9 @@ public abstract class LevelRendererMixin {
 	private ChunkSectionsToRender cubeworld$prepareSeams(
 		LevelRenderer self, Matrix4fc modelView, boolean respectTranslucentOrder, Operation<ChunkSectionsToRender> original
 	) {
-		ChunkSectionsToRender vanilla = original.call(self, modelView, respectTranslucentOrder);
 		Vec3 camera = this.levelRenderState.cameraRenderState.pos;
+		SeamRenderer.hideOtherFacesFromVanilla(self, camera);
+		ChunkSectionsToRender vanilla = original.call(self, modelView, respectTranslucentOrder);
 		SeamRenderer.prepareFrame(self, modelView, BlockPos.containing(camera), camera, this.levelRenderState.cameraRenderState.cullFrustum, matrix -> original.call(self, matrix, respectTranslucentOrder));
 		return vanilla;
 	}
