@@ -17,6 +17,7 @@
 		"CompileTaskMixin",
 		"CreateWorldScreenMixin",
 		"ElytraAnimationStateMixin",
+		"EntityHitboxDebugRendererMixin",
 		"EntityRenderDispatcherMixin",
 		"EntityPickMixin",
 		"EntityRendererMixin",
