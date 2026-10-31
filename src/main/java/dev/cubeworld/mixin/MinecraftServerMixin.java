@@ -1,5 +1,6 @@
 package dev.cubeworld.mixin;
 
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.worldgen.CubePregen;
 import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -18,6 +19,8 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.function.BooleanSupplier;
 
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerMixin {
@@ -38,6 +41,9 @@ public abstract class MinecraftServerMixin {
 	@Unique
 	private boolean cubeworld$newWorld;
 
+	@Unique
+	private long cubeworld$tickStart;
+
 	@Shadow
 	public abstract ServerLevel overworld();
 
@@ -47,17 +53,34 @@ public abstract class MinecraftServerMixin {
 	@Shadow
 	protected abstract GlobalPos selectLevelLoadFocusPos();
 
+	@Inject(method = "loadLevel", at = @At("HEAD"))
+	private void cubeworld$traceLoadLevel(CallbackInfo ci) {
+		// A dedicated server has no client to start the trace.
+		LoadTrace.beginIfIdle("server loads the level");
+		LoadTrace.event("server: loadLevel start");
+	}
+
+	@Inject(method = "createLevels", at = @At("HEAD"))
+	private void cubeworld$traceCreateLevels(CallbackInfo ci) {
+		LoadTrace.event("server: createLevels start");
+	}
+
 	/** Spawn is chosen only when the world is new. Pre-generation runs only then. */
 	@Inject(method = "createLevels", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;setInitialSpawn(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/storage/ServerLevelData;ZZLnet/minecraft/server/level/progress/LevelLoadListener;)V"))
 	private void cubeworld$markNewWorld(CallbackInfo ci) {
 		this.cubeworld$newWorld = true;
+		LoadTrace.event("server: new world, choosing the spawn");
 	}
 
 	@Inject(method = "createLevels", at = @At("TAIL"))
 	private void cubeworld$trackProgress(CallbackInfo ci) {
 		SeamLayout layout = SeamLayout.of(this.overworld());
 		if (layout != null) {
-			CubePregen.track(layout, CubeSettings.of(this.overworld().getChunkSource().getGenerator()));
+			CubeSettings settings = CubeSettings.of(this.overworld().getChunkSource().getGenerator());
+			CubePregen.track(layout, settings);
+			LoadTrace.event("server: createLevels done, cube " + settings + ", spawn " + this.selectLevelLoadFocusPos().pos());
+		} else {
+			LoadTrace.event("server: createLevels done, not a cube world");
 		}
 	}
 
@@ -87,7 +110,9 @@ public abstract class MinecraftServerMixin {
 		if (progress != null) {
 			progress.pregenTotal = pregen.total();
 		}
+		LoadTrace.event("server: pre-generation start, " + pregen.total() + " columns");
 		while (!pregen.tick()) {
+			LoadTrace.serverSample(level, "pre-generation", pregen.describe());
 			if (progress != null) {
 				progress.pregenDone = pregen.done();
 			}
@@ -102,6 +127,7 @@ public abstract class MinecraftServerMixin {
 			progress.pregenDone = pregen.total();
 		}
 		this.levelLoadListener.finish(LevelLoadListener.Stage.PREPARE_GLOBAL_SPAWN);
+		LoadTrace.event("server: pre-generation done in " + (Util.getMillis() - start) + " ms");
 		CUBEWORLD$LOGGER.info("Generated {} chunk columns in {} s", pregen.total(), (Util.getMillis() - start) / 1000L);
 	}
 
@@ -111,10 +137,32 @@ public abstract class MinecraftServerMixin {
 		if (progress != null) {
 			progress.poll(this.overworld());
 		}
+		LoadTrace.serverSample(this.overworld(), "initial chunks", null);
+	}
+
+	@Inject(method = "prepareLevels", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/progress/LevelLoadListener;start(Lnet/minecraft/server/level/progress/LevelLoadListener$Stage;I)V"))
+	private void cubeworld$traceInitialChunks(CallbackInfo ci) {
+		LoadTrace.event("server: vanilla initial chunks start");
+	}
+
+	@Inject(method = "prepareLevels", at = @At("TAIL"))
+	private void cubeworld$traceReady(CallbackInfo ci) {
+		LoadTrace.event("server: initial chunks done, server ready");
+	}
+
+	@Inject(method = "tickServer", at = @At("HEAD"))
+	private void cubeworld$traceTickStart(BooleanSupplier haveTime, CallbackInfo ci) {
+		this.cubeworld$tickStart = Util.getNanos();
+	}
+
+	@Inject(method = "tickServer", at = @At("TAIL"))
+	private void cubeworld$traceTickEnd(BooleanSupplier haveTime, CallbackInfo ci) {
+		LoadTrace.serverTick(this.overworld(), Util.getNanos() - this.cubeworld$tickStart);
 	}
 
 	@Inject(method = "stopServer", at = @At("TAIL"))
 	private void cubeworld$stopTracking(CallbackInfo ci) {
 		CubePregen.stopTracking();
+		LoadTrace.end("server stopped");
 	}
 }

@@ -2,6 +2,8 @@ package dev.cubeworld.client.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.cubeworld.client.LoadTraceClient;
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -11,6 +13,8 @@ import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * A move across a seam is too far to interpolate, so vanilla puts the old position on the new one. The entity then
@@ -23,6 +27,17 @@ public abstract class ClientPacketListenerMixin {
 	@Unique private static final double MAX_CROSSING_JUMP = 8.0;
 	/** The carried old position, from the {@code setPos} call to the {@code setOldPosAndRot} call that follows it. */
 	@Unique private static @Nullable Vec3 cubeworld$crossed;
+
+	@Inject(method = "handleLogin", at = @At("TAIL"))
+	private void cubeworld$traceLogin(CallbackInfo ci) {
+		LoadTrace.event("client: login packet handled");
+	}
+
+	/** Vanilla runs the handler again on the main thread. The first run, on the network thread, does not reach the end. */
+	@Inject(method = "handleLevelChunkWithLight", at = @At("TAIL"))
+	private void cubeworld$countChunk(CallbackInfo ci) {
+		LoadTraceClient.CHUNK_PACKETS.incrementAndGet();
+	}
 
 	@WrapOperation(method = "setValuesFromPositionPacket", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;setPos(Lnet/minecraft/world/phys/Vec3;)V"))
 	private static void cubeworld$carryOldPosition(Entity entity, Vec3 pos, Operation<Void> original) {

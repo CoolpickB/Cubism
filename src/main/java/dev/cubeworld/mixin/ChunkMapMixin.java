@@ -2,6 +2,7 @@ package dev.cubeworld.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.sugar.Local;
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.seam.SeamTrackingView;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -24,6 +25,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
@@ -48,6 +50,16 @@ public abstract class ChunkMapMixin {
 	@Shadow
 	private static void dropChunk(ServerPlayer player, ChunkPos pos) {
 		throw new AssertionError();
+	}
+
+	@Inject(method = "scheduleChunkLoad", at = @At("HEAD"))
+	private void cubeworld$countLoad(CallbackInfoReturnable<?> cir) {
+		LoadTrace.LOADS.incrementAndGet();
+	}
+
+	@Inject(method = "save(Lnet/minecraft/world/level/chunk/ChunkAccess;)Z", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/storage/SerializableChunkData;copyOf(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/ChunkAccess;)Lnet/minecraft/world/level/chunk/storage/SerializableChunkData;"))
+	private void cubeworld$countSave(CallbackInfoReturnable<Boolean> cir) {
+		LoadTrace.SAVES.incrementAndGet();
 	}
 
 	@Inject(method = "updateChunkTracking", at = @At("HEAD"), cancellable = true)

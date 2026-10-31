@@ -1,6 +1,7 @@
 package dev.cubeworld.client.gui;
 
 import dev.cubeworld.client.mixin.LevelLoadingScreenAccessor;
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.worldgen.CubePregen;
 import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -43,6 +44,8 @@ public final class CubeLoadingView {
 	private static CubePregen.Progress cachedFor;
 	private static int[][] cells;
 	private static long foldStart;
+	/** Fold of the last frame, for the load trace. */
+	public static float lastFold;
 
 	private CubeLoadingView() {
 	}
@@ -58,6 +61,7 @@ public final class CubeLoadingView {
 		}
 		boolean wholeCube = progress.settings.pregen() == CubeSettings.Pregen.WHOLE_CUBE;
 		float fold = wholeCube ? fold(progress) : 0.0F;
+		lastFold = fold;
 		float halfHeight = wholeCube ? 2.0F * d : h + CubePregen.SPAWN_FACE_MARGIN;
 		float scale = Math.min(CELL_SIZE, Math.max(1, maxHalfHeight) / halfHeight);
 		Quaternionf view = new Quaternionf().slerp(CUBE_VIEW, fold);
@@ -106,6 +110,25 @@ public final class CubeLoadingView {
 		return progress == cachedFor && foldStart != 0L && Util.getMillis() - foldStart < FOLD_MS + HOLD_MS;
 	}
 
+	/** Cells drawn in each status, as {@link LoadTrace#histogram} takes them. */
+	public static int[] shownCounts(CubePregen.Progress progress) {
+		int[] counts = new int[ChunkStatus.getStatusList().size() + 1];
+		if (cachedFor != progress) {
+			return counts;
+		}
+		int faces = progress.settings.pregen() == CubeSettings.Pregen.WHOLE_CUBE ? FACES : FACES - 1;
+		for (int f = 0; f < faces; f++) {
+			int[] table = cells[f];
+			for (int at = 0; at < table.length; at += 3) {
+				if (table[at] >= 0) {
+					ChunkStatus status = progress.get(table[at], table[at + 1], table[at + 2]);
+					counts[status == null ? 0 : status.getIndex() + 1]++;
+				}
+			}
+		}
+		return counts;
+	}
+
 	/** How far the cube is folded, from 0 for the flat cross to 1. The fold starts when the pre-generation is done. */
 	private static float fold(CubePregen.Progress progress) {
 		if (progress.pregenDone < progress.pregenTotal) {
@@ -114,6 +137,7 @@ public final class CubeLoadingView {
 		}
 		if (foldStart == 0L) {
 			foldStart = Util.getMillis();
+			LoadTrace.event("client: visualizer fold starts");
 		}
 		// Faster and faster, so that the faces snap shut at the end.
 		float t = Mth.clamp((Util.getMillis() - foldStart) / (float) FOLD_MS, 0.0F, 1.0F);

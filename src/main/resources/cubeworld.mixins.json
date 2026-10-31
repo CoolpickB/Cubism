@@ -15,6 +15,7 @@
 		"ChunkGeneratorMixin",
 		"ChunkMapMixin",
 		"ChunkMapTrackedEntityMixin",
+		"ChunkStatusTasksMixin",
 		"EntityMixin",
 		"DiskFeatureMixin",
 		"FallenTreeFeatureMixin",

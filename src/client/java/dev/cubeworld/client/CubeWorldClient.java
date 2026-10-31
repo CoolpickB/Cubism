@@ -1,5 +1,6 @@
 package dev.cubeworld.client;
 
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.client.render.CubeSky;
@@ -72,6 +73,7 @@ public class CubeWorldClient implements ClientModInitializer {
 		}
 
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			LoadTrace.end("disconnected");
 			CubePlanetMath.setClientCubeState(false, CubePlanetMath.MIN_DIAMETER_CHUNKS);
 			SeamClient.layout = null;
 			SeamLayout.setClient(null);

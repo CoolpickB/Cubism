@@ -11,6 +11,9 @@ import java.util.Queue;
 
 @Mixin(ChunkMap.class)
 public interface ChunkMapAccessor {
+	@Accessor("visibleChunkMap")
+	Long2ObjectLinkedOpenHashMap<ChunkHolder> cubeworld$visibleChunkMap();
+
 	@Accessor("pendingUnloads")
 	Long2ObjectLinkedOpenHashMap<ChunkHolder> cubeworld$pendingUnloads();
 

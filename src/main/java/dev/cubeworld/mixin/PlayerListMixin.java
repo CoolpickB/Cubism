@@ -3,6 +3,7 @@ package dev.cubeworld.mixin;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,6 +12,8 @@ import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Sounds, block events and level events reach the players in range. A player sees across a seam, so the range check
@@ -19,6 +22,11 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(PlayerList.class)
 public abstract class PlayerListMixin {
+	@Inject(method = "placeNewPlayer", at = @At("TAIL"))
+	private void cubeworld$traceJoin(CallbackInfo ci, @Local(argsOnly = true) ServerPlayer player) {
+		LoadTrace.event("server: player joined at " + player.blockPosition());
+	}
+
 	@WrapOperation(method = "broadcast", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;getX()D"))
 	private double cubeworld$listenerX(ServerPlayer player, Operation<Double> original, @Local(argsOnly = true, ordinal = 0) double x, @Local(argsOnly = true, ordinal = 2) double z) {
 		return cubeworld$listener(player, x, z).x;

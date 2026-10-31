@@ -148,6 +148,12 @@ public final class CubePregen {
 		return this.done;
 	}
 
+	/** State of the queues, for the load trace. */
+	public String describe() {
+		return "pregen done=" + this.done + "/" + this.order.length + " ticketed=" + this.next + " inFlight=" + this.inFlight.size()
+			+ " unloading=" + this.unloading.size() + (this.written == null ? "" : " waitingForDiskWrites");
+	}
+
 	/**
 	 * Adds tickets up to {@link #IN_FLIGHT}, and removes the tickets of ready chunks. A chunk counts as done when it
 	 * is unloaded, which saves it. True when all chunks are done and written to disk.

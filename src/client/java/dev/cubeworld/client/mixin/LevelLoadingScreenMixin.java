@@ -2,7 +2,9 @@ package dev.cubeworld.client.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.cubeworld.client.LoadTraceClient;
 import dev.cubeworld.client.gui.CubeLoadingView;
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.worldgen.CubePregen;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -35,6 +37,25 @@ public abstract class LevelLoadingScreenMixin {
 	@Shadow
 	private LevelLoadingScreen.Reason reason;
 
+	@Shadow
+	private LevelLoadTracker loadTracker;
+
+	@Unique
+	private boolean cubeworld$levelReady;
+
+	@Unique
+	private boolean cubeworld$mayClose;
+
+	@Inject(method = "<init>", at = @At("TAIL"))
+	private void cubeworld$traceOpen(CallbackInfo ci) {
+		LoadTrace.event("client: loading screen opened, reason " + this.reason);
+	}
+
+	@Inject(method = "update", at = @At("TAIL"))
+	private void cubeworld$traceUpdate(CallbackInfo ci) {
+		LoadTrace.event("client: loading screen reused, reason " + this.reason);
+	}
+
 	@WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/LevelLoadingScreen;extractChunksForRendering(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIIILnet/minecraft/server/level/progress/ChunkLoadStatusView;)V"))
 	private void cubeworld$drawCube(
 		GuiGraphicsExtractor graphics, int xCenter, int yCenter, int size, int margin, ChunkLoadStatusView statusView, Operation<Void> original
@@ -43,10 +64,22 @@ public abstract class LevelLoadingScreenMixin {
 		if (progress == null) {
 			this.cubeworld$textShift = 0;
 			original.call(graphics, xCenter, yCenter, size, margin, statusView);
+			cubeworld$traceView("vanilla map", null, statusView);
 			return;
 		}
+		cubeworld$traceView("cube", progress, null);
 		int halfHeight = CubeLoadingView.draw(graphics, progress, xCenter, yCenter, graphics.guiHeight() / 2 - 45);
 		this.cubeworld$textShift = halfHeight - statusView.radius() * 2;
+	}
+
+	@Unique
+	private static void cubeworld$traceView(String view, CubePregen.@Nullable Progress progress, @Nullable ChunkLoadStatusView status) {
+		if (!view.equals(LoadTraceClient.view)) {
+			LoadTrace.event("client: visualizer shows " + view);
+		}
+		LoadTraceClient.view = view;
+		LoadTraceClient.viewProgress = progress;
+		LoadTraceClient.viewStatus = status;
 	}
 
 	@WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;centeredText(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)V"))
@@ -67,11 +100,14 @@ public abstract class LevelLoadingScreenMixin {
 	private float cubeworld$addPregenProgress(float vanilla) {
 		CubePregen.Progress progress = this.cubeworld$pregen();
 		if (progress == null) {
+			LoadTraceClient.bar = vanilla;
 			return vanilla;
 		}
 		int total = progress.pregenTotal;
 		int done = progress.pregenDone;
-		return done < total ? PREGEN_SHARE * done / total : PREGEN_SHARE + (1.0F - PREGEN_SHARE) * vanilla;
+		float bar = done < total ? PREGEN_SHARE * done / total : PREGEN_SHARE + (1.0F - PREGEN_SHARE) * vanilla;
+		LoadTraceClient.bar = bar;
+		return bar;
 	}
 
 	/**
@@ -87,11 +123,22 @@ public abstract class LevelLoadingScreenMixin {
 	@WrapOperation(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/LevelLoadTracker;isLevelReady()Z"))
 	private boolean cubeworld$waitForFold(LevelLoadTracker tracker, Operation<Boolean> original) {
 		CubePregen.Progress progress = this.cubeworld$pregen();
-		return original.call(tracker) && (progress == null || !CubeLoadingView.isFolding(progress));
+		boolean ready = original.call(tracker);
+		boolean mayClose = ready && (progress == null || !CubeLoadingView.isFolding(progress));
+		if (ready && !this.cubeworld$levelReady) {
+			LoadTrace.event("client: vanilla tracker says the level is ready");
+		}
+		if (mayClose && !this.cubeworld$mayClose) {
+			LoadTrace.event("client: loading screen may close");
+		}
+		this.cubeworld$levelReady = ready;
+		this.cubeworld$mayClose = mayClose;
+		return mayClose;
 	}
 
 	@Inject(method = "tick", at = @At("HEAD"))
 	private void cubeworld$watch(CallbackInfo ci) {
+		LoadTraceClient.serverProgress = this.loadTracker.serverProgress();
 		CubePregen.Progress progress = CubePregen.progress();
 		if (progress != null) {
 			progress.watched = true;
@@ -100,6 +147,7 @@ public abstract class LevelLoadingScreenMixin {
 
 	@Inject(method = "onClose", at = @At("HEAD"))
 	private void cubeworld$unwatch(CallbackInfo ci) {
+		LoadTraceClient.loadingScreenClosed();
 		CubePregen.Progress progress = CubePregen.progress();
 		if (progress != null) {
 			progress.watched = false;
