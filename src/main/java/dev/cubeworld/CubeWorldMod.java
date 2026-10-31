@@ -2,8 +2,10 @@ package dev.cubeworld;
 
 import dev.cubeworld.network.CubeNetworking;
 import dev.cubeworld.seam.SeamCrossing;
+import dev.cubeworld.seam.SeamLight;
 import dev.cubeworld.seam.SeamTrackingView;
 import dev.cubeworld.worldgen.CubePregen;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import dev.cubeworld.worldgen.CubeChunkGenerator;
 import net.fabricmc.api.ModInitializer;
@@ -58,6 +60,7 @@ public class CubeWorldMod implements ModInitializer {
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "seam_simulation"), SEAM_SIMULATION_TICKET);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "pregen"), CubePregen.TICKET);
 		CubeNetworking.register();
+		ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> SeamLight.onChunkLoad(level, chunk));
 		ServerTickEvents.END_LEVEL_TICK.register(level -> {
 			SeamCrossing.tick(level);
 			if (level.getGameTime() % SeamTrackingView.REFRESH_TICKS == 0) {
