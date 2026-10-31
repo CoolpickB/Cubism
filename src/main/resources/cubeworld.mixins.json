@@ -6,7 +6,6 @@
 		"BlockCollisionsMixin",
 		"BlockItemMixin",
 		"EntityFluidInteractionMixin",
-		"LongJumpToRandomPosMixin",
 		"BucketItemMixin",
 		"ChunkMapAccessor",
 		"FireStarterItemMixin",
