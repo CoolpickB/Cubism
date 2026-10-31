@@ -6,6 +6,7 @@
 		"BlockCollisionsMixin",
 		"BlockItemMixin",
 		"BucketItemMixin",
+		"ChunkMapAccessor",
 		"FireStarterItemMixin",
 		"ItemMixin",
 		"BlockPlaceContextMixin",

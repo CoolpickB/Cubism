@@ -1,5 +1,6 @@
 package dev.cubeworld.worldgen;
 
+import dev.cubeworld.mixin.ChunkMapAccessor;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.Vec3i;
 import net.minecraft.server.level.ChunkHolder;
@@ -15,6 +16,7 @@ import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Generates the chunks of a new cube world before the first player joins, nearest to the spawn first. It also records
@@ -38,6 +40,9 @@ public final class CubePregen {
 	private final long[] order;
 	private int next;
 	private final Deque<ChunkPos> inFlight = new ArrayDeque<>();
+	/** Ready chunks that have no ticket of this class any more, until they are unloaded. */
+	private final Deque<ChunkPos> unloading = new ArrayDeque<>();
+	private @Nullable CompletableFuture<Void> written;
 	private int done;
 
 	private CubePregen(ServerLevel level, long[] order) {
@@ -143,13 +148,24 @@ public final class CubePregen {
 		return this.done;
 	}
 
-	/** Adds tickets up to {@link #IN_FLIGHT}, and removes the tickets of ready chunks. True when all are generated. */
+	/**
+	 * Adds tickets up to {@link #IN_FLIGHT}, and removes the tickets of ready chunks. A chunk counts as done when it
+	 * is unloaded, which saves it. True when all chunks are done and written to disk.
+	 */
 	public boolean tick() {
 		ServerChunkCache chunks = this.level.getChunkSource();
+		ChunkMapAccessor chunkMap = (ChunkMapAccessor) chunks.chunkMap;
 		this.inFlight.removeIf(pos -> {
 			ChunkHolder holder = chunks.chunkMap.getUpdatingChunkIfPresent(pos.pack());
 			if (holder != null && holder.getTickingChunk() != null) {
 				chunks.removeTicketWithRadius(TICKET, pos, TICKET_RADIUS);
+				this.unloading.add(pos);
+				return true;
+			}
+			return false;
+		});
+		this.unloading.removeIf(pos -> {
+			if (chunks.chunkMap.getUpdatingChunkIfPresent(pos.pack()) == null && !chunkMap.cubeworld$pendingUnloads().containsKey(pos.pack())) {
 				this.done++;
 				return true;
 			}
@@ -165,7 +181,16 @@ public final class CubePregen {
 		if (current != null) {
 			current.poll(this.level);
 		}
-		return this.inFlight.isEmpty() && this.next >= this.order.length;
+		if (!this.inFlight.isEmpty() || !this.unloading.isEmpty() || this.next < this.order.length
+			|| !chunkMap.cubeworld$pendingUnloads().isEmpty() || !chunkMap.cubeworld$unloadQueue().isEmpty() || !chunkMap.cubeworld$toDrop().isEmpty()) {
+			return false;
+		}
+		// Chunks still waiting for their save held the server after this, and the chunk loads of the first player
+		// waited behind them.
+		if (this.written == null) {
+			this.written = chunks.chunkMap.synchronize(false);
+		}
+		return this.written.isDone();
 	}
 
 	/** Highest generation status seen for each chunk column of the cube, by face. Written on the server thread. */

@@ -30,7 +30,7 @@ import java.util.Arrays;
 public final class CubeLoadingView {
 	/** Size of a chunk column in GUI pixels, as on the vanilla map. Smaller only if the view does not fit. */
 	private static final float CELL_SIZE = 2.0F;
-	private static final long FOLD_MS = 1500L;
+	private static final long FOLD_MS = 700L;
 	/** The folded cube stays on the screen this long before the game starts. */
 	private static final long HOLD_MS = 500L;
 	/** Faces of the cross: the spawn face, then the faces at its right, left, top and bottom, then the opposite face below the bottom one. */
@@ -115,8 +115,9 @@ public final class CubeLoadingView {
 		if (foldStart == 0L) {
 			foldStart = Util.getMillis();
 		}
+		// Faster and faster, so that the faces snap shut at the end.
 		float t = Mth.clamp((Util.getMillis() - foldStart) / (float) FOLD_MS, 0.0F, 1.0F);
-		return t * t * (3.0F - 2.0F * t);
+		return t * t;
 	}
 
 	/** Turns face {@code f} of the cross about its edges by {@code angle}. At a right angle, the face is in its place on the cube. */
