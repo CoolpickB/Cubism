@@ -52,8 +52,13 @@ public final class LoadTrace {
 	private static final int STACK_DEPTH = 40;
 
 	private static long lastServerSample;
-	/** Start of the server tick that runs, by {@link Util#getNanos}, or 0 between ticks. */
+	/** Start of the server tick that runs, or end of the last tick while the server thread is between ticks, by {@link Util#getNanos}. */
 	private static volatile long tickStart;
+	/**
+	 * True while the server thread is between ticks. Between ticks it runs queued tasks, such as chunk tasks, until the
+	 * next tick is due. A long stop there is not in any tick time.
+	 */
+	private static volatile boolean betweenTicks;
 	private static volatile @Nullable Thread serverThread;
 	private static @Nullable Thread watchdog;
 	private static int ticks;
@@ -132,6 +137,7 @@ public final class LoadTrace {
 			return;
 		}
 		serverThread = Thread.currentThread();
+		betweenTicks = false;
 		tickStart = Util.getNanos();
 		if (watchdog == null) {
 			watchdog = new Thread(LoadTrace::watch, "Cube World load trace watchdog");
@@ -150,6 +156,7 @@ public final class LoadTrace {
 				break;
 			}
 			long start = tickStart;
+			boolean between = betweenTicks;
 			Thread thread = serverThread;
 			if (start == 0L || thread == null) {
 				continue;
@@ -161,7 +168,7 @@ public final class LoadTrace {
 			long ms = (Util.getNanos() - start) / 1_000_000L;
 			if (ms >= nextDumpMs) {
 				nextDumpMs += STACK_INTERVAL_MS;
-				StringBuilder stack = new StringBuilder("server tick runs for " + ms + " ms, server thread at:");
+				StringBuilder stack = new StringBuilder((between ? "server thread between ticks for " : "server tick runs for ") + ms + " ms, at:");
 				StackTraceElement[] frames = thread.getStackTrace();
 				for (int i = 0; i < Math.min(frames.length, STACK_DEPTH); i++) {
 					stack.append("\n        at ").append(frames[i]);
@@ -176,7 +183,8 @@ public final class LoadTrace {
 
 	/** Records one server tick. Ticks before the first player joins come only from the pre-generation loops. */
 	public static void serverTick(ServerLevel level, long nanos) {
-		tickStart = 0L;
+		betweenTicks = true;
+		tickStart = Util.getNanos();
 		if (out == null) {
 			return;
 		}
