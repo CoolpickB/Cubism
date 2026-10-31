@@ -19,6 +19,7 @@
 		"FallenTreeFeatureMixin",
 		"LakeFeatureMixin",
 		"MultifaceGrowthFeatureMixin",
+		"NaturalSpawnerMixin",
 		"NoiseBasedChunkGeneratorMixin",
 		"CollectingNeighborUpdaterMixin",
 		"CollectingShapeUpdateMixin",
