@@ -111,10 +111,11 @@ public abstract class MinecraftServerMixin {
 			progress.pregenTotal = pregen.total();
 		}
 		LoadTrace.event("server: pre-generation start, " + pregen.total() + " columns");
+		CubePregen.unsyncedWrites = true;
 		while (!pregen.tick()) {
 			LoadTrace.serverSample(level, "pre-generation", pregen.describe());
 			if (progress != null) {
-				progress.pregenDone = pregen.done();
+				progress.pregenDone = pregen.ready();
 			}
 			if (Util.getMillis() - lastLog > 5000L) {
 				lastLog = Util.getMillis();
@@ -123,8 +124,10 @@ public abstract class MinecraftServerMixin {
 			this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
 			this.waitUntilNextTick();
 		}
+		CubePregen.unsyncedWrites = false;
 		if (progress != null) {
 			progress.pregenDone = pregen.total();
+			progress.pregenFinished = true;
 		}
 		this.levelLoadListener.finish(LevelLoadListener.Stage.PREPARE_GLOBAL_SPAWN);
 		LoadTrace.event("server: pre-generation done in " + (Util.getMillis() - start) + " ms");
@@ -153,6 +156,7 @@ public abstract class MinecraftServerMixin {
 	@Inject(method = "tickServer", at = @At("HEAD"))
 	private void cubeworld$traceTickStart(BooleanSupplier haveTime, CallbackInfo ci) {
 		this.cubeworld$tickStart = Util.getNanos();
+		LoadTrace.serverTickStart();
 	}
 
 	@Inject(method = "tickServer", at = @At("TAIL"))

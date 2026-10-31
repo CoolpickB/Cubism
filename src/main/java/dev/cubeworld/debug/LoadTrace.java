@@ -44,7 +44,16 @@ public final class LoadTrace {
 	/** When the trace closes, by {@link Util#getMillis}, or 0 while it runs on. */
 	private static volatile long endAt;
 
+	/** A server tick that runs this long gets the stack of the server thread in the trace, and again every interval after. */
+	private static final long STACK_AFTER_MS = 1000L;
+	private static final long STACK_INTERVAL_MS = 2000L;
+	private static final int STACK_DEPTH = 40;
+
 	private static long lastServerSample;
+	/** Start of the server tick that runs, by {@link Util#getNanos}, or 0 between ticks. */
+	private static volatile long tickStart;
+	private static volatile @Nullable Thread serverThread;
+	private static @Nullable Thread watchdog;
 	private static int ticks;
 	private static long tickNanos;
 	private static long maxTickNanos;
@@ -115,8 +124,57 @@ public final class LoadTrace {
 		}
 	}
 
+	/** Called when a server tick starts. A watchdog thread logs where a long tick spends its time. */
+	public static synchronized void serverTickStart() {
+		if (out == null) {
+			return;
+		}
+		serverThread = Thread.currentThread();
+		tickStart = Util.getNanos();
+		if (watchdog == null) {
+			watchdog = new Thread(LoadTrace::watch, "Cube World load trace watchdog");
+			watchdog.setDaemon(true);
+			watchdog.start();
+		}
+	}
+
+	private static void watch() {
+		long watched = 0L;
+		long nextDumpMs = STACK_AFTER_MS;
+		while (out != null) {
+			try {
+				Thread.sleep(100L);
+			} catch (InterruptedException e) {
+				break;
+			}
+			long start = tickStart;
+			Thread thread = serverThread;
+			if (start == 0L || thread == null) {
+				continue;
+			}
+			if (start != watched) {
+				watched = start;
+				nextDumpMs = STACK_AFTER_MS;
+			}
+			long ms = (Util.getNanos() - start) / 1_000_000L;
+			if (ms >= nextDumpMs) {
+				nextDumpMs += STACK_INTERVAL_MS;
+				StringBuilder stack = new StringBuilder("server tick runs for " + ms + " ms, server thread at:");
+				StackTraceElement[] frames = thread.getStackTrace();
+				for (int i = 0; i < Math.min(frames.length, STACK_DEPTH); i++) {
+					stack.append("\n        at ").append(frames[i]);
+				}
+				event(stack.toString());
+			}
+		}
+		synchronized (LoadTrace.class) {
+			watchdog = null;
+		}
+	}
+
 	/** Records one server tick. Ticks before the first player joins come only from the pre-generation loops. */
 	public static void serverTick(ServerLevel level, long nanos) {
+		tickStart = 0L;
 		if (out == null) {
 			return;
 		}

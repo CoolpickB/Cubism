@@ -131,7 +131,7 @@ public final class CubeLoadingView {
 
 	/** How far the cube is folded, from 0 for the flat cross to 1. The fold starts when the pre-generation is done. */
 	private static float fold(CubePregen.Progress progress) {
-		if (progress.pregenDone < progress.pregenTotal) {
+		if (!progress.pregenFinished) {
 			foldStart = 0L;
 			return 0.0F;
 		}
@@ -163,9 +163,9 @@ public final class CubeLoadingView {
 	private static int[][] mapCells(CubePregen.Progress progress, int d) {
 		SeamLayout layout = progress.layout;
 		Vec3i n = progress.settings.spawnFace().getUnitVec3i();
-		Vec3i a = Arrays.stream(Direction.values()).map(Direction::getUnitVec3i)
-			.filter(axis -> axis.getX() * n.getX() + axis.getY() * n.getY() + axis.getZ() * n.getZ() == 0).findFirst().orElseThrow();
-		Vec3i b = a.cross(n);
+		Vec3i[] axes = CubePregen.viewAxes(progress.settings.spawnFace());
+		Vec3i a = axes[0];
+		Vec3i b = axes[1];
 		float h = d / 2.0F;
 		boolean wholeCube = progress.settings.pregen() == CubeSettings.Pregen.WHOLE_CUBE;
 		int[][] tables = new int[FACES][d * d * 3];

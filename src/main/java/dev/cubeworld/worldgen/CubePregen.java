@@ -2,6 +2,7 @@ package dev.cubeworld.worldgen;
 
 import dev.cubeworld.mixin.ChunkMapAccessor;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerChunkCache;
@@ -43,7 +44,16 @@ public final class CubePregen {
 	/** Ready chunks that have no ticket of this class any more, until they are unloaded. */
 	private final Deque<ChunkPos> unloading = new ArrayDeque<>();
 	private @Nullable CompletableFuture<Void> written;
+	private int ready;
 	private int done;
+
+	/**
+	 * True while pre-generation runs. Region files opened then do not sync each write to the disk. On Windows, vanilla
+	 * syncs every chunk write, and the about 10000 writes of a pre-generation took more than a minute. The writes are
+	 * flushed to the disk when pre-generation ends. The files stay open without the sync until the server closes them,
+	 * as on Linux and macOS, where vanilla does not sync.
+	 */
+	public static volatile boolean unsyncedWrites;
 
 	private CubePregen(ServerLevel level, long[] order) {
 		this.level = level;
@@ -71,7 +81,7 @@ public final class CubePregen {
 		if (settings.pregen() == CubeSettings.Pregen.OFF) {
 			return null;
 		}
-		return new CubePregen(level, columns(layout, settings.pregen(), layout.faceIndexAt(spawn.getMiddleBlockX()), spawn.getMiddleBlockX(), spawn.getMiddleBlockZ()));
+		return new CubePregen(level, columns(layout, settings.pregen(), layout.faceIndexAt(spawn.getMiddleBlockX())));
 	}
 
 	/** Columns that a new world with these settings generates first. */
@@ -81,22 +91,35 @@ public final class CubePregen {
 		}
 		SeamLayout layout = new SeamLayout(settings.diameterChunks());
 		int face = settings.spawnFaceIndex();
-		return columns(layout, settings.pregen(), face, layout.offsetX(face), 0).length;
+		return columns(layout, settings.pregen(), face).length;
 	}
 
 	/**
-	 * Columns of the face regions to generate, nearest to the spawn first. Distance is measured between points of the
-	 * cube surface. For the spawn face, a column is in when its surface point is at most the margin below the plane
-	 * of the spawn face: that is the spawn face itself and a strip of each neighbor face along the shared edge.
+	 * Axes of the loading screen view of a cube with this spawn face: x to the right is {@code a}, y down the screen is
+	 * {@code -b}, and the spawn face looks toward the viewer.
 	 */
-	private static long[] columns(SeamLayout layout, CubeSettings.Pregen pregen, int spawnFace, int spawnX, int spawnZ) {
+	public static Vec3i[] viewAxes(Direction spawnFace) {
+		Vec3i n = spawnFace.getUnitVec3i();
+		Vec3i a = Arrays.stream(Direction.values()).map(Direction::getUnitVec3i)
+			.filter(axis -> axis.getX() * n.getX() + axis.getY() * n.getY() + axis.getZ() * n.getZ() == 0).findFirst().orElseThrow();
+		return new Vec3i[] {a, a.cross(n)};
+	}
+
+	/**
+	 * Columns of the face regions to generate, in rows that snake back and forth like the vanilla loading map. For the
+	 * spawn face, a column is in when its surface point is at most the margin below the plane of the spawn face: that
+	 * is the spawn face itself and a strip of each neighbor face along the shared edge. These columns come first, in
+	 * the rows of the loading screen view with the strips unfolded. The rest of a whole cube follows face by face.
+	 */
+	private static long[] columns(SeamLayout layout, CubeSettings.Pregen pregen, int spawnFace) {
 		int side = layout.spacing / 16;
 		int[] out = new int[3];
-		double[] origin = surfacePoint(layout, spawnFace, spawnX, spawnZ, out);
 		Vec3i normal = SeamLayout.FACES[spawnFace].getUnitVec3i();
-		int minHeight = layout.radius - SPAWN_FACE_MARGIN * 16;
+		Vec3i[] axes = viewAxes(SeamLayout.FACES[spawnFace]);
+		int r = layout.radius;
+		int minHeight = r - SPAWN_FACE_MARGIN * 16;
 		LongArrayList columns = new LongArrayList();
-		LongArrayList distances = new LongArrayList();
+		LongArrayList keys = new LongArrayList();
 		for (int face = 0; face < SeamLayout.FACES.length; face++) {
 			int minX = Math.floorDiv(layout.offsetX(face) - layout.spacing / 2, 16);
 			int minZ = Math.floorDiv(-layout.spacing / 2, 16);
@@ -105,18 +128,34 @@ public final class CubePregen {
 					int chunkX = minX + i;
 					int chunkZ = minZ + j;
 					double[] point = surfacePoint(layout, face, chunkX * 16 + 8, chunkZ * 16 + 8, out);
-					double height = point[0] * normal.getX() + point[1] * normal.getY() + point[2] * normal.getZ();
+					double height = dot(point, normal);
 					if (pregen == CubeSettings.Pregen.SPAWN_FACE && height < minHeight) {
 						continue;
 					}
+					long key;
+					if (height >= minHeight) {
+						// The view unfolds a neighbor face into the plane of the spawn face, past the shared edge. A column
+						// past the edge of its face keeps its own place here, so that it comes with the cells around it.
+						layout.toCube(face, chunkX * 16 + 8, layout.centerY + r, chunkZ * 16 + 8, out);
+						double[] place = {out[0], out[1] - layout.centerY, out[2]};
+						double placeHeight = dot(place, normal);
+						double u = dot(place, axes[0]);
+						double v = dot(place, axes[1]);
+						u += Math.abs(u) >= r ? Math.signum(u) * (r - placeHeight) : 0.0;
+						v += Math.abs(v) >= r ? Math.signum(v) * (r - placeHeight) : 0.0;
+						key = snake(0, Math.floorDiv((int) Math.round(-v), 16), Math.floorDiv((int) Math.round(u), 16));
+					} else {
+						int rank = face == spawnFace ? 0 : SeamLayout.FACES[face] == SeamLayout.FACES[spawnFace].getOpposite() ? 2 : 1;
+						key = snake(1 + rank * SeamLayout.FACES.length + face, j, i);
+					}
 					columns.add(ChunkPos.pack(chunkX, chunkZ));
-					distances.add(Math.round(Math.sqrt(square(point[0] - origin[0]) + square(point[1] - origin[1]) + square(point[2] - origin[2]))));
+					keys.add(key);
 				}
 			}
 		}
 		Integer[] sorted = new Integer[columns.size()];
 		Arrays.setAll(sorted, i -> i);
-		Arrays.sort(sorted, Comparator.comparingLong(distances::getLong));
+		Arrays.sort(sorted, Comparator.comparingLong(keys::getLong));
 		long[] order = new long[sorted.length];
 		for (int i = 0; i < sorted.length; i++) {
 			order[i] = columns.getLong(sorted[i]);
@@ -136,12 +175,24 @@ public final class CubePregen {
 		return new double[] {out[0], out[1] - layout.centerY, out[2]};
 	}
 
-	private static double square(double value) {
-		return value * value;
+	private static double dot(double[] point, Vec3i axis) {
+		return point[0] * axis.getX() + point[1] * axis.getY() + point[2] * axis.getZ();
+	}
+
+	/** Sort key of a cell in a group of rows. Every other row runs backward. Rows and columns are within ±2^19. */
+	private static long snake(int group, int row, int column) {
+		long shiftedRow = row + (1L << 19);
+		long shiftedColumn = column + (1L << 19);
+		return ((long) group << 40) | (shiftedRow << 20) | ((row & 1) == 0 ? shiftedColumn : (1L << 20) - 1 - shiftedColumn);
 	}
 
 	public int total() {
 		return this.order.length;
+	}
+
+	/** Columns that are generated and ready, before their unload and save. */
+	public int ready() {
+		return this.ready;
 	}
 
 	public int done() {
@@ -150,7 +201,7 @@ public final class CubePregen {
 
 	/** State of the queues, for the load trace. */
 	public String describe() {
-		return "pregen done=" + this.done + "/" + this.order.length + " ticketed=" + this.next + " inFlight=" + this.inFlight.size()
+		return "pregen ready=" + this.ready + " done=" + this.done + "/" + this.order.length + " ticketed=" + this.next + " inFlight=" + this.inFlight.size()
 			+ " unloading=" + this.unloading.size() + (this.written == null ? "" : " waitingForDiskWrites");
 	}
 
@@ -166,6 +217,7 @@ public final class CubePregen {
 			if (holder != null && holder.getTickingChunk() != null) {
 				chunks.removeTicketWithRadius(TICKET, pos, TICKET_RADIUS);
 				this.unloading.add(pos);
+				this.ready++;
 				return true;
 			}
 			return false;
@@ -194,7 +246,7 @@ public final class CubePregen {
 		// Chunks still waiting for their save held the server after this, and the chunk loads of the first player
 		// waited behind them.
 		if (this.written == null) {
-			this.written = chunks.chunkMap.synchronize(false);
+			this.written = chunks.chunkMap.synchronize(true);
 		}
 		return this.written.isDone();
 	}
@@ -208,9 +260,11 @@ public final class CubePregen {
 		private final byte[][] status;
 		/** Set by a loading screen in the same game while it shows this progress. The server then polls every tick. */
 		public volatile boolean watched;
-		/** Columns of the pre-generation, for the progress bar. Total is 0 when the world has none. */
+		/** Columns of the pre-generation that are generated, for the progress bar. Total is 0 when the world has none. */
 		public volatile int pregenDone;
 		public volatile int pregenTotal;
+		/** Set when the pre-generated chunks are also saved. The cube on the loading screen folds then. */
+		public volatile boolean pregenFinished;
 		private long lastPoll;
 		private static final long POLL_INTERVAL_MS = 100L;
 
