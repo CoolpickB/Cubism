@@ -26,6 +26,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Lets players and mobs act on what they see across a seam. For blocks, the raycast runs in the region of the player
@@ -35,6 +36,26 @@ import java.util.function.Function;
  */
 public final class SeamInteraction {
 	private SeamInteraction() {}
+
+	/**
+	 * The thread that predicts an item use on the client, else null. In singleplayer the server runs in the same
+	 * process, so a plain flag would also switch the reads of the server thread.
+	 */
+	private static volatile @Nullable Thread predicting;
+
+	/** True on the client thread while it predicts an item use, when client reads and writes go across seams. */
+	public static boolean predicting() {
+		return predicting == Thread.currentThread();
+	}
+
+	public static <T> T predict(Supplier<T> use) {
+		predicting = Thread.currentThread();
+		try {
+			return use.get();
+		} finally {
+			predicting = null;
+		}
+	}
 
 	/**
 	 * The vanilla raycast, except that a block outside the wedge is tested in the frame of its owner face: the ray

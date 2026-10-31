@@ -12,7 +12,12 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Screenshot;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.piston.MovingPistonBlock;
+import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 
 import java.io.File;
 
@@ -28,6 +33,24 @@ public class CubeWorldClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.SeamPayload.TYPE, (payload, context) -> {
 			SeamClient.layout = new SeamLayout(payload.diameterChunks());
 			SeamLayout.setClient(SeamClient.layout);
+		});
+
+		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.MovingBlockPayload.TYPE, (payload, context) -> {
+			ClientLevel level = context.client().level;
+			if (level == null) {
+				return;
+			}
+			BlockPos pos = payload.pos();
+			// A move that the client ran itself already has its moving block. A new one would restart the animation.
+			if (level.getBlockEntity(pos) instanceof PistonMovingBlockEntity own && own.getMovedState() == payload.movedState()
+				&& own.getDirection() == payload.direction() && own.isExtending() == payload.extending()) {
+				return;
+			}
+			// The payload comes before the block update of the same tick.
+			level.setBlock(pos, payload.pistonState(), Block.UPDATE_CLIENTS);
+			level.setBlockEntity(MovingPistonBlock.newMovingBlockEntity(
+				pos, payload.pistonState(), payload.movedState(), payload.direction(), payload.extending(), payload.source()
+			));
 		});
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.EntityGravityPayload.TYPE, (payload, context) -> {

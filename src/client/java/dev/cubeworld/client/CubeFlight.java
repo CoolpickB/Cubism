@@ -28,6 +28,9 @@ public final class CubeFlight {
 	private static final float EASE_TICKS = 8.0F;
 	/** The pitch in the air frame stays this far from straight up or down, where it gives no yaw. */
 	private static final float MAX_PITCH = 89.9F;
+	/** The lean on a seam, in radians, and how far from the seam it starts, in blocks. */
+	private static final double SEAM_LEAN = Math.toRadians(12.0);
+	private static final double SEAM_LEAN_BAND = 9.0;
 
 	private static float weight;
 	private static float weightO;
@@ -95,30 +98,71 @@ public final class CubeFlight {
 	}
 
 	/**
-	 * Turns the look by mouse movement about the up of the air frame, as vanilla turns it about the up of the face.
-	 * Returns false when the frame is the face frame and vanilla can turn the look.
+	 * The frame that the camera leans into near a seam out of flight: its up tips toward the up of each neighbor face
+	 * whose seam is close, up to {@link #SEAM_LEAN} on the seam.
+	 */
+	public static Quaternionf seamLean(Entity entity, float partialTicks) {
+		SeamLayout layout = SeamLayout.of(entity.level());
+		Vec3 p = entity.getPosition(partialTicks);
+		if (layout == null || !layout.inRegion(Mth.floor(p.x), Mth.floor(p.z))) {
+			return new Quaternionf();
+		}
+		// Relative to the center of the cube, in the frame of the face, as in SeamLayout.crossingFace.
+		double x = p.x - layout.offsetX(layout.faceIndexAt(Mth.floor(p.x))) - 0.5;
+		double y = p.y + entity.getBbHeight() / 2.0 - layout.centerY - 0.5;
+		double z = p.z - 0.5;
+		double tipX = Math.signum(x) * leanTip(y, x);
+		double tipZ = Math.signum(z) * leanTip(y, z);
+		if (tipX == 0.0 && tipZ == 0.0) {
+			return new Quaternionf();
+		}
+		Vector3f up = new Vector3f((float) tipX, 1.0F, (float) tipZ).normalize();
+		return new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F, up.x, up.y, up.z);
+	}
+
+	/** The tangent of the lean toward the seam between the up axis and one side axis, by the distance to it. */
+	private static double leanTip(double up, double side) {
+		double distance = Math.max((up - Math.abs(side)) / Math.sqrt(2.0), 0.0);
+		double t = Math.max(1.0 - distance / SEAM_LEAN_BAND, 0.0);
+		return Math.tan(SEAM_LEAN) * t * t * (3.0 - 2.0 * t);
+	}
+
+	/**
+	 * Turns the look by mouse movement about the up of the frame the camera stands in: the air frame in flight, the
+	 * lean near a seam. Vanilla turns about the up of the face, which the camera does not show there, so a move to the
+	 * right turned the view sideways, and at a pitch of 90 it did nothing. Returns false when the camera stands in the
+	 * face frame and vanilla can turn the look.
 	 */
 	public static boolean turn(LocalPlayer player, double xo, double yo) {
 		Quaternionf frame = frame(player, 1.0F);
 		if (isIdentity(frame)) {
+			frame = seamLean(player, 1.0F);
+		}
+		if (isIdentity(frame)) {
 			return false;
 		}
-		// The mouse handler turns the player every frame, also by nothing. The look through the air frame and back
-		// changes by a rounding error each time, which adds up to a slow drift.
+		// The mouse handler turns the player every frame, also by nothing. The look through the frame and back changes
+		// by a rounding error each time, which adds up to a slow drift.
 		if (xo == 0.0 && yo == 0.0) {
 			return true;
 		}
-		float[] angles = anglesIn(frame, player.getYRot(), player.getXRot());
-		float yRot = angles[0] + (float) xo * 0.15F;
-		float xRot = Mth.clamp(angles[1] + (float) yo * 0.15F, -MAX_PITCH, MAX_PITCH);
-		Vector3f look = frame.transform(look(yRot, xRot));
+		float yawChange = (float) xo * 0.15F;
+		float pitchChange = (float) yo * 0.15F;
+		Vector3f look = turnIn(frame, player.getYRot(), player.getXRot(), yawChange, pitchChange);
+		Vector3f oldLook = turnIn(frame, player.yRotO, player.xRotO, yawChange, pitchChange);
 		float newYRot = yaw(look, player.getYRot());
-		float newXRot = pitch(look);
-		player.yRotO += newYRot - player.getYRot();
-		player.xRotO += newXRot - player.getXRot();
 		player.setYRot(newYRot);
-		player.setXRot(newXRot);
+		player.setXRot(pitch(look));
+		// The last look turns the same way, as vanilla adds the change to both. Past straight down or up of the face, the
+		// yaw flips, and a change added to the old angles would point the old look elsewhere.
+		player.yRotO = yaw(oldLook, newYRot);
+		player.xRotO = pitch(oldLook);
 		return true;
+	}
+
+	private static Vector3f turnIn(Quaternionf frame, float yRot, float xRot, float yawChange, float pitchChange) {
+		float[] angles = anglesIn(frame, yRot, xRot);
+		return frame.transform(look(angles[0] + yawChange, Mth.clamp(angles[1] + pitchChange, -MAX_PITCH, MAX_PITCH)));
 	}
 
 	/**

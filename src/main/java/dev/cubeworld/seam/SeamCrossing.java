@@ -111,6 +111,20 @@ public final class SeamCrossing {
 		return !player.isPassenger() && (player.isFallFlying() || player.getAbilities().flying);
 	}
 
+	/**
+	 * The eye of a flying player as the client camera shows it: along the up of the air, about the center of the body.
+	 * The crosshair starts there, so rays of the server that must hit the same block start there too.
+	 */
+	public static Vec3 flightEye(Player player, Vec3 vanillaEye) {
+		SeamLayout layout = SeamLayout.of(player.level());
+		if (layout == null || !flies(player)) {
+			return vanillaEye;
+		}
+		Vec3 center = player.position().add(0.0, player.getBbHeight() / 2.0, 0.0);
+		Vec3 gravity = layout.airGravity(center.x, center.y, center.z);
+		return gravity == null ? vanillaEye : center.subtract(gravity.scale(player.getEyeHeight() - player.getBbHeight() / 2.0));
+	}
+
 	/** Where a crossing to another face puts an entity: its position, velocity and look in the region of that face. */
 	public record Turned(Vec3 position, Vec3 velocity, float yRot, float xRot) {}
 

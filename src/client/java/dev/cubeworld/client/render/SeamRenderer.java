@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import dev.cubeworld.client.mixin.LevelExtractorAccessor;
 import dev.cubeworld.client.mixin.RenderSectionAccessor;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.culling.Frustum;
@@ -137,7 +138,7 @@ public final class SeamRenderer {
 	 * only one corner still reaches along the edges from it, into other sections of the owner face. The guard stops
 	 * the marks from bouncing back across the seam.
 	 */
-	public static void markAcrossSeamDirty(int sectionX, int sectionY, int sectionZ) {
+	public static void markAcrossSeamDirty(int sectionX, int sectionY, int sectionZ, boolean playerChanged) {
 		SeamLayout layout = SeamClient.layout;
 		if (layout == null || markingAcross) {
 			return;
@@ -150,9 +151,17 @@ public final class SeamRenderer {
 		}
 		markingAcross = true;
 		try {
+			LevelExtractorAccessor extractor = (LevelExtractorAccessor) Minecraft.getInstance().levelExtractor;
 			for (int[] range : ranges) {
-				if (range != null) {
-					Minecraft.getInstance().levelExtractor.setSectionRangeDirty(range[0], range[1], range[2], range[3], range[4], range[5]);
+				if (range == null) {
+					continue;
+				}
+				for (int x = range[0]; x <= range[3]; x++) {
+					for (int y = range[1]; y <= range[4]; y++) {
+						for (int z = range[2]; z <= range[5]; z++) {
+							extractor.cubeworld$setSectionDirty(x, y, z, playerChanged);
+						}
+					}
 				}
 			}
 		} finally {
@@ -370,10 +379,16 @@ public final class SeamRenderer {
 		}
 	}
 
-	public static void markDirty(int sectionX, int sectionY, int sectionZ) {
+	public static void markDirty(int sectionX, int sectionY, int sectionZ, boolean urgent) {
 		long node = SectionPos.asLong(sectionX, sectionY, sectionZ);
 		if (sections.containsKey(node)) {
-			dirtySections.add(node);
+			// While chunks load, light updates keep hundreds of sections in the queue. A changed block would wait
+			// behind them, so its section goes first.
+			if (urgent) {
+				dirtySections.addAndMoveToFirst(node);
+			} else {
+				dirtySections.add(node);
+			}
 		} else if (chunks.contains(ChunkPos.pack(sectionX, sectionZ))) {
 			// A block placed in an empty section gives the section its first geometry.
 			pendingChunks.add(ChunkPos.pack(sectionX, sectionZ));

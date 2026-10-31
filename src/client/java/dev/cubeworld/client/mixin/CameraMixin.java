@@ -42,9 +42,6 @@ public abstract class CameraMixin {
 	@Unique private static final float SMOOTH_TICKS = 8.0F;
 	/** A seam crossing moves the entity less than this far from where the face motion puts it, in blocks. */
 	@Unique private static final double SEAM_TURN_MAX_JUMP = 8.0;
-	/** The lean on a seam, in radians, and how far from the seam it starts, in blocks. */
-	@Unique private static final double SEAM_LEAN = Math.toRadians(12.0);
-	@Unique private static final double SEAM_LEAN_BAND = 9.0;
 
 	@Shadow @Final private static Vector3fc FORWARDS;
 	@Shadow @Final private static Vector3fc UP;
@@ -115,7 +112,7 @@ public abstract class CameraMixin {
 	private Quaternionf cubeworld$airTurn(float partialTicks) {
 		Quaternionf air = this.cubeworld$air;
 		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
-			air = this.cubeworld$seamLean(partialTicks);
+			air = CubeFlight.seamLean(this.entity, partialTicks);
 		}
 		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
 			return new Quaternionf();
@@ -124,38 +121,6 @@ public abstract class CameraMixin {
 		float xRot = this.entity.getViewXRot(partialTicks);
 		float[] angles = CubeFlight.anglesIn(air, yRot, xRot);
 		return new Quaternionf(air).mul(cubeworld$view(angles[0], angles[1])).mul(cubeworld$view(yRot, xRot).conjugate());
-	}
-
-	/**
-	 * The frame that the camera leans into near a seam: its up tips toward the up of each neighbor face whose seam is
-	 * close, up to {@link #SEAM_LEAN} on the seam.
-	 */
-	@Unique
-	private Quaternionf cubeworld$seamLean(float partialTicks) {
-		SeamLayout layout = SeamLayout.of(this.entity.level());
-		Vec3 p = this.entity.getPosition(partialTicks);
-		if (layout == null || !layout.inRegion(Mth.floor(p.x), Mth.floor(p.z))) {
-			return new Quaternionf();
-		}
-		// Relative to the center of the cube, in the frame of the face, as in SeamLayout.crossingFace.
-		double x = p.x - layout.offsetX(layout.faceIndexAt(Mth.floor(p.x))) - 0.5;
-		double y = p.y + this.entity.getBbHeight() / 2.0 - layout.centerY - 0.5;
-		double z = p.z - 0.5;
-		double tipX = Math.signum(x) * cubeworld$leanTip(y, x);
-		double tipZ = Math.signum(z) * cubeworld$leanTip(y, z);
-		if (tipX == 0.0 && tipZ == 0.0) {
-			return new Quaternionf();
-		}
-		Vector3f up = new Vector3f((float) tipX, 1.0F, (float) tipZ).normalize();
-		return new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F, up.x, up.y, up.z);
-	}
-
-	/** The tangent of the lean toward the seam between the up axis and one side axis, by the distance to it. */
-	@Unique
-	private static double cubeworld$leanTip(double up, double side) {
-		double distance = Math.max((up - Math.abs(side)) / Math.sqrt(2.0), 0.0);
-		double t = Math.max(1.0 - distance / SEAM_LEAN_BAND, 0.0);
-		return Math.tan(SEAM_LEAN) * t * t * (3.0 - 2.0 * t);
 	}
 
 	/**

@@ -19,6 +19,7 @@ import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -29,11 +30,29 @@ public abstract class LevelExtractorMixin {
 	@Shadow @Final private LevelRenderer levelRenderer;
 	@Shadow private ClientLevel level;
 
+	/**
+	 * True while a block change marks sections dirty. Seam sections rebuild those first, because a light update can
+	 * wait but a changed block shows at once. A piston block that moves onto the next face is a block entity there,
+	 * and it showed only after the rebuild, when its move was over.
+	 */
+	@Unique private boolean cubeworld$blockChanging;
+
+	@Inject(method = {"blockChanged", "setBlocksDirty"}, at = @At("HEAD"))
+	private void cubeworld$startBlockChange(CallbackInfo ci) {
+		this.cubeworld$blockChanging = true;
+	}
+
+	@Inject(method = {"blockChanged", "setBlocksDirty"}, at = @At("RETURN"))
+	private void cubeworld$endBlockChange(CallbackInfo ci) {
+		this.cubeworld$blockChanging = false;
+	}
+
 	/** Block and light changes in seam sections reach this method too, but vanilla only knows its own view area. */
 	@Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
 	private void cubeworld$markSeamDirty(int sectionX, int sectionY, int sectionZ, boolean playerChanged, CallbackInfo ci) {
-		SeamRenderer.markDirty(sectionX, sectionY, sectionZ);
-		SeamRenderer.markAcrossSeamDirty(sectionX, sectionY, sectionZ);
+		boolean urgent = playerChanged || this.cubeworld$blockChanging;
+		SeamRenderer.markDirty(sectionX, sectionY, sectionZ, urgent);
+		SeamRenderer.markAcrossSeamDirty(sectionX, sectionY, sectionZ, urgent);
 	}
 
 	@Inject(method = "extractVisibleBlockEntities", at = @At("TAIL"))

@@ -26,7 +26,7 @@ import java.util.Map;
 /**
  * An explosion next to a seam hurts and pushes the entities that show across it. Positions of those entities move
  * into the region of the explosion, and the push turns back into the region of each entity. Blocks across the seam
- * are not destroyed.
+ * break through the server reads and writes of {@link LevelMixin}.
  */
 @Mixin(ServerExplosion.class)
 public abstract class ServerExplosionMixin {

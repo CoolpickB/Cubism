@@ -3,6 +3,7 @@
 	"package": "dev.cubeworld.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"AvatarRendererMixin",
 		"AtmosphericFogEnvironmentMixin",
 		"BlockModelLighterMixin",
 		"CameraMixin",
@@ -11,6 +12,7 @@
 		"ClientPacketListenerMixin",
 		"ClientAvatarStateMixin",
 		"ClientChunkCacheMixin",
+		"ClientLevelMixin",
 		"ClientChunkCacheStorageMixin",
 		"ElytraAnimationStateMixin",
 		"EntityRenderDispatcherMixin",
@@ -19,6 +21,7 @@
 		"IndigoAoCalculatorMixin",
 		"IndigoRendererMixin",
 		"EntityRenderStateMixin",
+		"LevelExtractorAccessor",
 		"LevelExtractorMixin",
 		"LightingMixin",
 		"LevelRendererMixin",
