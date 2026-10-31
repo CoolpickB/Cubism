@@ -27,6 +27,9 @@ public abstract class LevelLoadingScreenMixin {
 	@Unique
 	private int cubeworld$textShift;
 
+	@Unique
+	private static final float PREGEN_SHARE = 0.9F;
+
 	@Shadow
 	private LevelLoadingScreen.Reason reason;
 
@@ -41,10 +44,8 @@ public abstract class LevelLoadingScreenMixin {
 			original.call(graphics, xCenter, yCenter, size, margin, statusView);
 			return;
 		}
-		int vanillaHalfHeight = statusView.radius() * 2 + 1;
-		int halfHeight = Math.max(vanillaHalfHeight, Math.min(CubeLoadingView.MAX_HALF_HEIGHT, graphics.guiHeight() / 2 - 45));
-		this.cubeworld$textShift = halfHeight - vanillaHalfHeight;
-		CubeLoadingView.draw(graphics, progress, xCenter, yCenter, halfHeight);
+		int halfHeight = CubeLoadingView.draw(graphics, progress, xCenter, yCenter, graphics.guiHeight() / 2 - 45);
+		this.cubeworld$textShift = halfHeight - statusView.radius() * 2;
 	}
 
 	@WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;centeredText(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)V"))
@@ -55,6 +56,21 @@ public abstract class LevelLoadingScreenMixin {
 	@ModifyArg(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/LevelLoadingScreen;drawProgressBar(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIIIF)V"), index = 2)
 	private int cubeworld$raiseProgressBar(int top) {
 		return top - this.cubeworld$textShift;
+	}
+
+	/**
+	 * The vanilla tracker counts the chunks of the spawn area from the start of their stage. Pre-generation comes
+	 * before that stage, so it has its own share of the bar.
+	 */
+	@ModifyArg(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/LevelLoadingScreen;drawProgressBar(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIIIF)V"), index = 5)
+	private float cubeworld$addPregenProgress(float vanilla) {
+		CubePregen.Progress progress = this.reason == LevelLoadingScreen.Reason.OTHER ? CubePregen.progress() : null;
+		int total = progress == null ? 0 : progress.pregenTotal;
+		if (total == 0) {
+			return vanilla;
+		}
+		int done = progress.pregenDone;
+		return done < total ? PREGEN_SHARE * done / total : PREGEN_SHARE + (1.0F - PREGEN_SHARE) * vanilla;
 	}
 
 	@Inject(method = "tick", at = @At("HEAD"))

@@ -80,9 +80,17 @@ public abstract class MinecraftServerMixin {
 		CUBEWORLD$LOGGER.info("Generating {} chunk columns of the cube before the first player joins", pregen.total());
 		long start = Util.getMillis();
 		long lastLog = start;
-		this.levelLoadListener.start(LevelLoadListener.Stage.LOAD_INITIAL_CHUNKS, pregen.total());
+		// The vanilla tracker does not count this stage. It only makes the loading screen show the progress bar, and the
+		// screen fills the bar from the counts in Progress. LOAD_INITIAL_CHUNKS here pushed the bar past its end.
+		this.levelLoadListener.start(LevelLoadListener.Stage.PREPARE_GLOBAL_SPAWN, pregen.total());
+		CubePregen.Progress progress = CubePregen.progress();
+		if (progress != null) {
+			progress.pregenTotal = pregen.total();
+		}
 		while (!pregen.tick()) {
-			this.levelLoadListener.update(LevelLoadListener.Stage.LOAD_INITIAL_CHUNKS, pregen.done(), pregen.total());
+			if (progress != null) {
+				progress.pregenDone = pregen.done();
+			}
 			if (Util.getMillis() - lastLog > 5000L) {
 				lastLog = Util.getMillis();
 				CUBEWORLD$LOGGER.info("Generated {} of {} chunk columns", pregen.done(), pregen.total());
@@ -90,7 +98,10 @@ public abstract class MinecraftServerMixin {
 			this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
 			this.waitUntilNextTick();
 		}
-		this.levelLoadListener.finish(LevelLoadListener.Stage.LOAD_INITIAL_CHUNKS);
+		if (progress != null) {
+			progress.pregenDone = pregen.total();
+		}
+		this.levelLoadListener.finish(LevelLoadListener.Stage.PREPARE_GLOBAL_SPAWN);
 		CUBEWORLD$LOGGER.info("Generated {} chunk columns in {} s", pregen.total(), (Util.getMillis() - start) / 1000L);
 	}
 
