@@ -6,6 +6,7 @@ import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
+import net.minecraft.util.Util;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jspecify.annotations.Nullable;
@@ -161,6 +162,8 @@ public final class CubePregen {
 		private final byte[][] status;
 		/** Set by a loading screen in the same game while it shows this progress. The server then polls every tick. */
 		public volatile boolean watched;
+		private long lastPoll;
+		private static final long POLL_INTERVAL_MS = 100L;
 
 		private Progress(SeamLayout layout, Direction spawnFace) {
 			this.layout = layout;
@@ -169,8 +172,16 @@ public final class CubePregen {
 			this.status = new byte[SeamLayout.FACES.length][this.side * this.side];
 		}
 
-		/** Reads the status of every column that has a chunk holder. */
+		/**
+		 * Reads the status of every column that has a chunk holder. It runs on the server thread, between the chunk
+		 * tasks of that thread, so it runs only for a watching screen and not more often than the screen can show.
+		 */
 		public void poll(ServerLevel level) {
+			long now = Util.getMillis();
+			if (!this.watched || now - this.lastPoll < POLL_INTERVAL_MS) {
+				return;
+			}
+			this.lastPoll = now;
 			ServerChunkCache chunks = level.getChunkSource();
 			int minZ = Math.floorDiv(-this.layout.spacing / 2, 16);
 			for (int face = 0; face < this.status.length; face++) {
