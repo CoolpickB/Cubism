@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -241,8 +243,16 @@ public final class LoadTrace {
 		return line.append(']').toString();
 	}
 
+	/** Heap in use, and the total count and time of garbage collections since the JVM started. */
 	public static String memory() {
 		Runtime runtime = Runtime.getRuntime();
-		return "mem=" + (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024) + "/" + runtime.maxMemory() / (1024 * 1024) + "MB";
+		long collections = 0L;
+		long collectionMs = 0L;
+		for (GarbageCollectorMXBean collector : ManagementFactory.getGarbageCollectorMXBeans()) {
+			collections += Math.max(collector.getCollectionCount(), 0L);
+			collectionMs += Math.max(collector.getCollectionTime(), 0L);
+		}
+		return "mem=" + (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024) + "/" + runtime.maxMemory() / (1024 * 1024) + "MB"
+			+ " gc=" + collections + "/" + collectionMs + "ms";
 	}
 }
