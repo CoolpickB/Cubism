@@ -28,6 +28,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.joml.Vector4f;
+import org.joml.Vector4fc;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -35,6 +36,9 @@ import org.jspecify.annotations.Nullable;
  * walks each view ray through the shell. Every bit of air on the ray has the vanilla sky and fog color of the time
  * that the sun gives it there, so the sky over a neighbor face shows the day or night of that face. Where the ray
  * leaves the shell, space with its stars shows through.
+ *
+ * <p>Vanilla tints the fog with the sunrise and sunset glow when the camera looks toward the sun. That look changes
+ * with the face the camera is on, so here each bit of air gets the glow toward the sun on its own horizon.
  *
  * <p>The colors come from a table of the vanilla timeline over one day, sampled each frame at the camera, so biome
  * and weather change them as in vanilla. All state here is used on the render thread only.
@@ -71,7 +75,6 @@ public final class CubeSky {
 	private static boolean active;
 	private static final Matrix4f FRAME = new Matrix4f();
 	private static final Vector3f SUN = new Vector3f();
-	private static final Vector3f SUN_IN_FACE = new Vector3f();
 	private static float radius;
 	private static float starMax;
 	private static float moonBrightness;
@@ -90,11 +93,6 @@ public final class CubeSky {
 		return moonBrightness;
 	}
 
-	/** The direction toward the sun in the frame of the camera face, from the last frame. */
-	public static Vector3fc sunInFace() {
-		return SUN_IN_FACE;
-	}
-
 	public static float starMax() {
 		return starMax;
 	}
@@ -109,7 +107,7 @@ public final class CubeSky {
 		}
 		DynamicTexture texture = table;
 		if (texture == null) {
-			texture = new DynamicTexture(() -> "Cube sky colors", TABLE_SIZE, 2, false);
+			texture = new DynamicTexture(() -> "Cube sky colors", TABLE_SIZE, 3, false);
 			table = texture;
 		}
 		float maxStars = 0.0F;
@@ -119,8 +117,10 @@ public final class CubeSky {
 			Vector3fc sky = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, camera, null));
 			Vector3fc fog = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, camera, null));
 			float stars = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.STAR_BRIGHTNESS, camera, null));
+			Vector4fc glow = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, camera, null));
 			texture.getPixels().setPixel(i, 0, ARGB.colorFromFloat(stars, sky.x(), sky.y(), sky.z()));
 			texture.getPixels().setPixel(i, 1, ARGB.colorFromFloat(1.0F, fog.x(), fog.y(), fog.z()));
+			texture.getPixels().setPixel(i, 2, ARGB.colorFromFloat(glow.w(), glow.x(), glow.y(), glow.z()));
 			maxStars = Math.max(maxStars, stars);
 			maxSky = Math.max(maxSky, Math.max(sky.x(), Math.max(sky.y(), sky.z())));
 		}
@@ -149,12 +149,6 @@ public final class CubeSky {
 		));
 		double[] sun = CubeTime.sunDirection(ticks);
 		SUN.set(sun[0], sun[1], sun[2]);
-		// The transpose of the face rotation turns a cube direction into the face frame.
-		SUN_IN_FACE.set(
-			m[0] * SUN.x + m[3] * SUN.y + m[6] * SUN.z,
-			m[1] * SUN.x + m[4] * SUN.y + m[7] * SUN.z,
-			m[2] * SUN.x + m[5] * SUN.y + m[8] * SUN.z
-		);
 
 		Vector3fc cameraSky = level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, camera, null);
 		float daylight = Math.max(cameraSky.x(), Math.max(cameraSky.y(), cameraSky.z())) / maxSky;

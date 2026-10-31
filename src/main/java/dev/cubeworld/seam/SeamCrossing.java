@@ -28,7 +28,7 @@ public final class SeamCrossing {
 	 * How far past the diagonal the center of an entity must be before it crosses, in blocks. Under the gravity of
 	 * either face, the rounded edge slopes down to the diagonal, so an entity in that valley moves across it often.
 	 */
-	private static final double MARGIN = 1.0;
+	public static final double MARGIN = 1.0;
 	/**
 	 * Past this distance an entity crosses without ground under it. Otherwise a fall that goes deep past the diagonal
 	 * could leave the entity on a slope with no floor in the new frame, held by the gravity of the wrong face.
@@ -49,8 +49,9 @@ public final class SeamCrossing {
 		List<Entity> crossing = new ArrayList<>();
 		List<TeleportTransition> transitions = new ArrayList<>();
 		for (Entity entity : level.getAllEntities()) {
-			// A passenger crosses with the vehicle that carries it.
-			if (entity.isPassenger()) {
+			// A passenger crosses with the vehicle that carries it. A player in flight crosses on its own client, which
+			// the server follows when the movement arrives: a crossing from here would pull a fast glider back.
+			if (entity.isPassenger() || entity instanceof Player player && flies(player)) {
 				continue;
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();
@@ -105,7 +106,20 @@ public final class SeamCrossing {
 		return level.noBlockCollision(entity, box) && !level.noBlockCollision(entity, box.move(0.0, -GROUND_DEPTH, 0.0));
 	}
 
+	/** True when the player flies with an elytra or in creative or spectator mode, which uses the frame of the air. */
+	public static boolean flies(Player player) {
+		return !player.isPassenger() && (player.isFallFlying() || player.getAbilities().flying);
+	}
+
+	/** Where a crossing to another face puts an entity: its position, velocity and look in the region of that face. */
+	public record Turned(Vec3 position, Vec3 velocity, float yRot, float xRot) {}
+
 	private static TeleportTransition transition(ServerLevel level, SeamLayout layout, Entity entity, int toFace) {
+		Turned turned = turned(layout, entity, toFace);
+		return new TeleportTransition(level, turned.position(), turned.velocity(), turned.yRot(), turned.xRot(), TeleportTransition.DO_NOTHING);
+	}
+
+	public static Turned turned(SeamLayout layout, Entity entity, int toFace) {
 		int[] m = layout.motion(layout.faceIndexAt(Mth.floor(entity.getX())), toFace);
 		// The body turns about its center, so the entity stands upright in the new frame at the same place.
 		double halfHeight = entity.getBbHeight() / 2.0;
@@ -135,9 +149,7 @@ public final class SeamCrossing {
 			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
 			xRot = entity.getXRot();
 		}
-		return new TeleportTransition(
-			level, center.subtract(0.0, halfHeight, 0.0), rotate(m, entity.getDeltaMovement()), yRot, xRot, TeleportTransition.DO_NOTHING
-		);
+		return new Turned(center.subtract(0.0, halfHeight, 0.0), rotate(m, entity.getDeltaMovement()), yRot, xRot);
 	}
 
 	private static Vec3 rotate(int[] m, Vec3 v) {

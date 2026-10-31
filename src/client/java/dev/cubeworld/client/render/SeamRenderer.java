@@ -125,12 +125,16 @@ public final class SeamRenderer {
 	}
 
 	private static boolean markingAcross;
+	private static final int[][] NO_RANGES = new int[0][];
+	private static final Long2ObjectMap<int[][]> acrossRanges = new Long2ObjectOpenHashMap<>();
 
 	/**
 	 * Marks the sections across the seam of a dirty section dirty too, because they mesh against its blocks and
 	 * light. Only a section that its wedge boundary passes through has such sections. The part of the section
 	 * outside its wedge, grown by one block, maps to a box in each owner face. That box can span three sections per
-	 * axis, so every section in the range of the corners is marked, not only the corner sections. The guard stops
+	 * axis, so every section in its range is marked. The diagonal planes cut the part outside the wedge, so its
+	 * extent comes from all blocks on the surface of the grown section, not from the corners alone: a part that holds
+	 * only one corner still reaches along the edges from it, into other sections of the owner face. The guard stops
 	 * the marks from bouncing back across the seam.
 	 */
 	public static void markAcrossSeamDirty(int sectionX, int sectionY, int sectionZ) {
@@ -138,33 +142,10 @@ public final class SeamRenderer {
 		if (layout == null || markingAcross) {
 			return;
 		}
-		int minX = SectionPos.sectionToBlockCoord(sectionX) - 1;
-		int minY = SectionPos.sectionToBlockCoord(sectionY) - 1;
-		int minZ = SectionPos.sectionToBlockCoord(sectionZ) - 1;
-		int[] owner = new int[3];
-		// Per owner face: min and max section coordinates on each axis.
-		int[][] ranges = new int[SeamLayout.FACES.length][];
-		int outsideCorners = 0;
-		for (int corner = 0; corner < 8; corner++) {
-			int x = minX + ((corner & 1) != 0 ? 17 : 0);
-			int y = minY + ((corner & 2) != 0 ? 17 : 0);
-			int z = minZ + ((corner & 4) != 0 ? 17 : 0);
-			if (!layout.insideWedge(x, y, z) && layout.ownerStorage(x, y, z, owner)) {
-				outsideCorners++;
-				int face = layout.faceIndexAt(owner[0]);
-				int[] range = ranges[face];
-				if (range == null) {
-					range = ranges[face] = new int[] {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-				}
-				for (int axis = 0; axis < 3; axis++) {
-					int section = SectionPos.blockToSectionCoord(owner[axis]);
-					range[axis] = Math.min(range[axis], section);
-					range[axis + 3] = Math.max(range[axis + 3], section);
-				}
-			}
-		}
-		if (outsideCorners == 0 || outsideCorners == 8 && !layout.insideWedge(minX + 9, minY + 9, minZ + 9)) {
-			// No corner is across a seam, or the whole section is outside its wedge and draws nothing.
+		// Light updates mark the same sections many times while chunks load, and the ranges depend only on the
+		// position of the section, so each section works them out once.
+		int[][] ranges = acrossRanges.computeIfAbsent(SectionPos.asLong(sectionX, sectionY, sectionZ), node -> rangesAcross(layout, sectionX, sectionY, sectionZ));
+		if (ranges.length == 0) {
 			return;
 		}
 		markingAcross = true;
@@ -177,6 +158,52 @@ public final class SeamRenderer {
 		} finally {
 			markingAcross = false;
 		}
+	}
+
+	/** Per owner face, the min and max section coordinates on each axis, or no ranges for a section with none. */
+	private static int[][] rangesAcross(SeamLayout layout, int sectionX, int sectionY, int sectionZ) {
+		int minX = SectionPos.sectionToBlockCoord(sectionX) - 1;
+		int minY = SectionPos.sectionToBlockCoord(sectionY) - 1;
+		int minZ = SectionPos.sectionToBlockCoord(sectionZ) - 1;
+		int[] owner = new int[3];
+		int outsideCorners = 0;
+		for (int corner = 0; corner < 8; corner++) {
+			if (outside(layout, minX + ((corner & 1) != 0 ? 17 : 0), minY + ((corner & 2) != 0 ? 17 : 0), minZ + ((corner & 4) != 0 ? 17 : 0), owner)) {
+				outsideCorners++;
+			}
+		}
+		// The wedge and the box are convex, so with all corners inside the wedge the whole box is. With all corners
+		// and the center outside, the whole section is outside its wedge and draws nothing.
+		if (outsideCorners == 0 || outsideCorners == 8 && outside(layout, minX + 9, minY + 9, minZ + 9, owner)) {
+			return NO_RANGES;
+		}
+		int[][] ranges = new int[SeamLayout.FACES.length][];
+		for (int dx = 0; dx <= 17; dx++) {
+			for (int dy = 0; dy <= 17; dy++) {
+				boolean side = dx == 0 || dx == 17 || dy == 0 || dy == 17;
+				for (int dz = 0; dz <= 17; dz += side ? 1 : 17) {
+					if (!outside(layout, minX + dx, minY + dy, minZ + dz, owner)) {
+						continue;
+					}
+					int face = layout.faceIndexAt(owner[0]);
+					int[] range = ranges[face];
+					if (range == null) {
+						range = ranges[face] = new int[] {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+					}
+					for (int axis = 0; axis < 3; axis++) {
+						int section = SectionPos.blockToSectionCoord(owner[axis]);
+						range[axis] = Math.min(range[axis], section);
+						range[axis + 3] = Math.max(range[axis + 3], section);
+					}
+				}
+			}
+		}
+		return ranges;
+	}
+
+	/** True when a storage position is outside its wedge, with the position of the real block in {@code owner}. */
+	private static boolean outside(SeamLayout layout, int x, int y, int z, int[] owner) {
+		return layout.ownerStorage(x, y, z, owner) && (owner[0] != x || owner[1] != y || owner[2] != z);
 	}
 
 	public static void onChunkUnloaded(ChunkPos pos) {
@@ -380,6 +407,7 @@ public final class SeamRenderer {
 	/** Forgets all chunks. Called when the client leaves the level. */
 	public static void clear() {
 		reset();
+		acrossRanges.clear();
 		chunks.clear();
 		pendingChunks.clear();
 	}
@@ -469,15 +497,24 @@ public final class SeamRenderer {
 	/**
 	 * Adds the block entities of seam sections, such as chests and signs, which vanilla draws apart from the
 	 * terrain. Vanilla culls a block entity by its distance to the dispatcher camera, so the dispatcher gets the
-	 * camera in the frame of each face for its block entities.
+	 * camera in the frame of each face for its block entities. The kept and bridged meshes of a crossing bring their
+	 * block entities too, or banners and signs vanish while the terrain around them shows.
 	 */
 	public static void extractBlockEntities(BlockEntityRenderDispatcher dispatcher, Vec3 cameraPos, float partialTicks, List<BlockEntityRenderState> out) {
 		blockEntityMotions.clear();
 		SeamLayout layout = SeamClient.layout;
-		if (layout == null || sections.isEmpty()) {
+		if (layout == null || sections.isEmpty() && adopted.isEmpty() && bridging.isEmpty()) {
 			return;
 		}
 		int cameraFace = layout.faceIndexAt(Mth.floor(cameraPos.x));
+		for (SectionRenderDispatcher.RenderSection section : bridging.keySet()) {
+			for (BlockEntity blockEntity : section.getSectionMesh().getRenderableBlockEntities()) {
+				BlockEntityRenderState state = dispatcher.tryExtractRenderState(blockEntity, partialTicks, null, false);
+				if (state != null) {
+					out.add(state);
+				}
+			}
+		}
 		try {
 			for (int face = 0; face < SeamLayout.FACES.length; face++) {
 				if (face == cameraFace) {
@@ -485,15 +522,17 @@ public final class SeamRenderer {
 				}
 				int[] toCamera = layout.motion(face, cameraFace);
 				dispatcher.prepare(SeamInteraction.move(layout.motion(cameraFace, face), cameraPos));
-				for (SeamSection section : sections.values()) {
-					if (layout.faceIndexAt(section.storageOrigin.getX()) != face) {
-						continue;
-					}
-					for (BlockEntity blockEntity : section.getSectionMesh().getRenderableBlockEntities()) {
-						BlockEntityRenderState state = dispatcher.tryExtractRenderState(blockEntity, partialTicks, null, false);
-						if (state != null) {
-							out.add(state);
-							blockEntityMotions.put(state, toCamera);
+				for (Long2ObjectMap<SeamSection> store : List.of(sections, adopted)) {
+					for (SeamSection section : store.values()) {
+						if (layout.faceIndexAt(section.storageOrigin.getX()) != face) {
+							continue;
+						}
+						for (BlockEntity blockEntity : section.getSectionMesh().getRenderableBlockEntities()) {
+							BlockEntityRenderState state = dispatcher.tryExtractRenderState(blockEntity, partialTicks, null, false);
+							if (state != null) {
+								out.add(state);
+								blockEntityMotions.put(state, toCamera);
+							}
 						}
 					}
 				}

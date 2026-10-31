@@ -69,8 +69,28 @@ public abstract class ServerLevelMixin {
 		return this.cubeworld$viewer(player, pos).z;
 	}
 
+	// Particles and explosions reach players across a seam in the same way.
+	@WrapOperation(
+		method = "sendParticles(Lnet/minecraft/server/level/ServerPlayer;ZDDDLnet/minecraft/network/protocol/Packet;)Z",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;blockPosition()Lnet/minecraft/core/BlockPos;")
+	)
+	private BlockPos cubeworld$particleViewer(
+		ServerPlayer player, Operation<BlockPos> original, @Local(argsOnly = true, ordinal = 0) double x, @Local(argsOnly = true, ordinal = 2) double z
+	) {
+		return BlockPos.containing(this.cubeworld$viewer(player, x, z));
+	}
+
+	@WrapOperation(method = "explode", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;distanceToSqr(Lnet/minecraft/world/phys/Vec3;)D"))
+	private double cubeworld$explosionViewer(ServerPlayer player, Vec3 center, Operation<Double> original) {
+		return this.cubeworld$viewer(player, center.x, center.z).distanceToSqr(center);
+	}
+
 	private Vec3 cubeworld$viewer(ServerPlayer player, BlockPos pos) {
+		return this.cubeworld$viewer(player, pos.getX() + 0.5, pos.getZ() + 0.5);
+	}
+
+	private Vec3 cubeworld$viewer(ServerPlayer player, double x, double z) {
 		SeamLayout layout = SeamLayout.of((ServerLevel) (Object) this);
-		return layout == null ? player.position() : SeamInteraction.intoRegionOf(layout, player.position(), pos.getX() + 0.5, pos.getZ() + 0.5);
+		return layout == null ? player.position() : SeamInteraction.intoRegionOf(layout, player.position(), x, z);
 	}
 }

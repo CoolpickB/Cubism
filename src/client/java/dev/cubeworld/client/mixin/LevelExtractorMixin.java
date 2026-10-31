@@ -2,11 +2,13 @@ package dev.cubeworld.client.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.SeamRenderer;
 import dev.cubeworld.seam.SeamInteraction;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -48,6 +50,17 @@ public abstract class LevelExtractorMixin {
 		if (SeamRenderer.inOtherRegion(entity, camX, camZ)) {
 			cir.setReturnValue(false);
 		}
+	}
+
+	/**
+	 * Vanilla hides an entity until the section it stands in is compiled. After a crossing, the section of the player
+	 * waits for a compile in the new region, and the player would vanish for those frames.
+	 */
+	@WrapOperation(method = "isEntityVisible", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;isSectionCompiledAndVisible(Lnet/minecraft/core/BlockPos;J)Z"))
+	private boolean cubeworld$showPlayerWhileCompiling(
+		LevelRenderer renderer, BlockPos pos, long chunkFadeDuration, Operation<Boolean> original, @Local(argsOnly = true) Entity entity
+	) {
+		return original.call(renderer, pos, chunkFadeDuration) || SeamClient.layout != null && entity == Minecraft.getInstance().player;
 	}
 
 	@Inject(method = "extractVisibleEntities", at = @At("TAIL"))

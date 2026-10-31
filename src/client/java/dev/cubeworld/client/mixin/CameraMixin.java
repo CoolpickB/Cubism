@@ -1,9 +1,12 @@
 package dev.cubeworld.client.mixin;
 
+import dev.cubeworld.client.CubeFlight;
+import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -27,12 +30,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>In a seam world the frame never changes, but an entity that crosses a seam moves to another face region and
  * its view turns with the face motion. The camera then starts from the old view, carried over by the motion, and
  * turns to the new view in the same way, about the center of the entity.
+ *
+ * <p>In flight the camera stands upright in the air frame of {@link CubeFlight}, which tilts over the edges. The
+ * frame turns with the face motion at a crossing, so the seam turn is then near zero.
+ *
+ * <p>Out of flight the camera leans a little toward the next face near a seam between two wedges, on the surface and
+ * underground. The lean is a roll about the look, so the crosshair stays where vanilla aims.
  */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
 	@Unique private static final float SMOOTH_TICKS = 8.0F;
 	/** A seam crossing moves the entity less than this far from where the face motion puts it, in blocks. */
 	@Unique private static final double SEAM_TURN_MAX_JUMP = 8.0;
+	/** The lean on a seam, in radians, and how far from the seam it starts, in blocks. */
+	@Unique private static final double SEAM_LEAN = Math.toRadians(12.0);
+	@Unique private static final double SEAM_LEAN_BAND = 9.0;
 
 	@Shadow @Final private static Vector3fc FORWARDS;
 	@Shadow @Final private static Vector3fc UP;
@@ -54,20 +66,29 @@ public abstract class CameraMixin {
 	@Unique private final Quaternionf cubeworld$correction = new Quaternionf();
 	@Unique private float cubeworld$flipTime;
 	@Unique private final Quaternionf cubeworld$frameRotation = new Quaternionf();
+	/** The frame rotation without the turn into the air frame or the lean, which roll the view but not the eye. */
+	@Unique private final Quaternionf cubeworld$eyeFrame = new Quaternionf();
 	/** Turns the eye about the center of the entity during a seam turn. It eases to identity with the correction. */
 	@Unique private final Quaternionf cubeworld$eyeCorrection = new Quaternionf();
 	@Unique private int cubeworld$lastFace = -1;
 	@Unique private Vec3 cubeworld$lastPosition = Vec3.ZERO;
+	/** The air frame of {@link CubeFlight} in this frame and the last one. */
+	@Unique private Quaternionf cubeworld$air = new Quaternionf();
+	@Unique private Quaternionf cubeworld$lastAir = new Quaternionf();
 
 	@Inject(method = "alignWithEntity", at = @At("HEAD"))
 	private void cubeworld$updateFrameRotation(float partialTicks, CallbackInfo ci) {
 		Direction frame = this.entity instanceof GravityEntityAccess access ? access.cubeworld$getFrame() : Direction.DOWN;
 		float now = this.entity.tickCount + partialTicks;
+		this.cubeworld$lastAir = this.cubeworld$air;
+		this.cubeworld$air = CubeFlight.frame(this.entity, partialTicks);
+		Quaternionf airTurn = this.cubeworld$airTurn(partialTicks);
 		if (this.entity != this.cubeworld$lastEntity) {
 			this.cubeworld$lastEntity = this.entity;
 			this.cubeworld$correction.identity();
 			this.cubeworld$eyeCorrection.identity();
 			this.cubeworld$lastFace = -1;
+			this.cubeworld$lastAir = this.cubeworld$air;
 		} else if (frame != this.cubeworld$lastFrame) {
 			// Start from the rotation on screen, also when the last turn is not complete.
 			Quaternionf shown = this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(this.cubeworld$lastFrame));
@@ -75,8 +96,66 @@ public abstract class CameraMixin {
 			this.cubeworld$flipTime = now;
 		}
 		this.cubeworld$lastFrame = frame;
-		this.cubeworld$turnAcrossSeam(partialTicks, now);
-		this.cubeworld$frameRotation.set(this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(frame)));
+		this.cubeworld$turnAcrossSeam(partialTicks, now, airTurn);
+		this.cubeworld$frameRotation.set(this.cubeworld$smoothedCorrection(now).mul(airTurn).mul(CubePlanetMath.getCameraRotation(frame)));
+		this.cubeworld$eyeFrame.set(this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(frame)));
+		SeamClient.lightFrame.set(this.cubeworld$smoothedCorrection(now).mul(this.cubeworld$air));
+	}
+
+	@Unique
+	private static Quaternionf cubeworld$view(float yRot, float xRot) {
+		return new Quaternionf().rotationYXZ((float) Math.PI - yRot * Mth.DEG_TO_RAD, -xRot * Mth.DEG_TO_RAD, 0.0F);
+	}
+
+	/**
+	 * The turn from the view of vanilla to the view upright in the air frame. Both look the same way, so it is a
+	 * roll about the look.
+	 */
+	@Unique
+	private Quaternionf cubeworld$airTurn(float partialTicks) {
+		Quaternionf air = this.cubeworld$air;
+		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
+			air = this.cubeworld$seamLean(partialTicks);
+		}
+		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
+			return new Quaternionf();
+		}
+		float yRot = this.entity.getViewYRot(partialTicks);
+		float xRot = this.entity.getViewXRot(partialTicks);
+		float[] angles = CubeFlight.anglesIn(air, yRot, xRot);
+		return new Quaternionf(air).mul(cubeworld$view(angles[0], angles[1])).mul(cubeworld$view(yRot, xRot).conjugate());
+	}
+
+	/**
+	 * The frame that the camera leans into near a seam: its up tips toward the up of each neighbor face whose seam is
+	 * close, up to {@link #SEAM_LEAN} on the seam.
+	 */
+	@Unique
+	private Quaternionf cubeworld$seamLean(float partialTicks) {
+		SeamLayout layout = SeamLayout.of(this.entity.level());
+		Vec3 p = this.entity.getPosition(partialTicks);
+		if (layout == null || !layout.inRegion(Mth.floor(p.x), Mth.floor(p.z))) {
+			return new Quaternionf();
+		}
+		// Relative to the center of the cube, in the frame of the face, as in SeamLayout.crossingFace.
+		double x = p.x - layout.offsetX(layout.faceIndexAt(Mth.floor(p.x))) - 0.5;
+		double y = p.y + this.entity.getBbHeight() / 2.0 - layout.centerY - 0.5;
+		double z = p.z - 0.5;
+		double tipX = Math.signum(x) * cubeworld$leanTip(y, x);
+		double tipZ = Math.signum(z) * cubeworld$leanTip(y, z);
+		if (tipX == 0.0 && tipZ == 0.0) {
+			return new Quaternionf();
+		}
+		Vector3f up = new Vector3f((float) tipX, 1.0F, (float) tipZ).normalize();
+		return new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F, up.x, up.y, up.z);
+	}
+
+	/** The tangent of the lean toward the seam between the up axis and one side axis, by the distance to it. */
+	@Unique
+	private static double cubeworld$leanTip(double up, double side) {
+		double distance = Math.max((up - Math.abs(side)) / Math.sqrt(2.0), 0.0);
+		double t = Math.max(1.0 - distance / SEAM_LEAN_BAND, 0.0);
+		return Math.tan(SEAM_LEAN) * t * t * (3.0 - 2.0 * t);
 	}
 
 	/**
@@ -84,7 +163,7 @@ public abstract class CameraMixin {
 	 * last position. A teleport by command also changes the region, but lands elsewhere, and gets no turn.
 	 */
 	@Unique
-	private void cubeworld$turnAcrossSeam(float partialTicks, float now) {
+	private void cubeworld$turnAcrossSeam(float partialTicks, float now, Quaternionf airTurn) {
 		SeamLayout layout = SeamLayout.of(this.entity.level());
 		Vec3 position = this.entity.getPosition(partialTicks);
 		int face = layout != null && layout.inRegion(Mth.floor(position.x), Mth.floor(position.z)) ? layout.faceIndexAt(Mth.floor(position.x)) : -1;
@@ -100,11 +179,15 @@ public abstract class CameraMixin {
 				Quaternionf motion = new Quaternionf().setFromNormalized(new Matrix3f(m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]));
 				// The camera rotation still holds the last frame, with any turn in progress.
 				Quaternionf shown = new Quaternionf(motion).mul(this.rotation);
-				Quaternionf view = new Quaternionf().rotationYXZ(
-					(float) Math.PI - this.entity.getViewYRot(partialTicks) * Mth.DEG_TO_RAD, -this.entity.getViewXRot(partialTicks) * Mth.DEG_TO_RAD, 0.0F
-				);
+				float yRot = this.entity.getViewYRot(partialTicks);
+				float xRot = this.entity.getViewXRot(partialTicks);
+				// The front view of vanilla looks back at the entity, and the last rotation holds that view.
+				boolean mirrored = Minecraft.getInstance().options.getCameraType().isMirrored();
+				Quaternionf view = new Quaternionf(airTurn).mul(mirrored ? cubeworld$view(yRot + 180.0F, -xRot) : cubeworld$view(yRot, xRot));
 				this.cubeworld$correction.set(shown.mul(view.conjugate()));
-				this.cubeworld$eyeCorrection.set(motion.mul(this.cubeworld$smoothed(this.cubeworld$eyeCorrection, now)));
+				// The eye stands along the air frame. The correction keeps it where the motion carries the last eye.
+				this.cubeworld$eyeCorrection.set(motion.mul(this.cubeworld$smoothed(this.cubeworld$eyeCorrection, now))
+					.mul(this.cubeworld$lastAir).mul(new Quaternionf(this.cubeworld$air).conjugate()));
 				this.cubeworld$flipTime = now;
 			}
 		}
@@ -143,10 +226,7 @@ public abstract class CameraMixin {
 
 	@Inject(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setPosition(DDD)V", shift = At.Shift.AFTER))
 	private void cubeworld$placeEyeInFrame(float partialTicks, CallbackInfo ci) {
-		if (!this.cubeworld$isTurned()) {
-			return;
-		}
-		Quaternionf eyeTurn = this.cubeworld$smoothed(this.cubeworld$eyeCorrection, this.entity.tickCount + partialTicks);
+		Quaternionf eyeTurn = this.cubeworld$smoothed(this.cubeworld$eyeCorrection, this.entity.tickCount + partialTicks).mul(this.cubeworld$air);
 		if (Math.abs(eyeTurn.x) > 1.0E-6F || Math.abs(eyeTurn.y) > 1.0E-6F || Math.abs(eyeTurn.z) > 1.0E-6F) {
 			float halfHeight = this.entity.getBbHeight() / 2.0F;
 			Vector3f eye = eyeTurn.transform(new Vector3f(0.0F, Mth.lerp(partialTicks, this.eyeHeightOld, this.eyeHeight) - halfHeight, 0.0F));
@@ -154,8 +234,12 @@ public abstract class CameraMixin {
 			this.setPosition(position.x + eye.x, position.y + halfHeight + eye.y, position.z + eye.z);
 			return;
 		}
+		Quaternionf eyeFrame = this.cubeworld$eyeFrame;
+		if (Math.abs(eyeFrame.x) < 1.0E-6F && Math.abs(eyeFrame.y) < 1.0E-6F && Math.abs(eyeFrame.z) < 1.0E-6F) {
+			return;
+		}
 		Vector3f eye = new Vector3f(0.0F, Mth.lerp(partialTicks, this.eyeHeightOld, this.eyeHeight), 0.0F);
-		this.cubeworld$frameRotation.transform(eye);
+		eyeFrame.transform(eye);
 		this.setPosition(
 			Mth.lerp(partialTicks, this.entity.xo, this.entity.getX()) + eye.x,
 			Mth.lerp(partialTicks, this.entity.yo, this.entity.getY()) + eye.y,

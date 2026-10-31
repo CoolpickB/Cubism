@@ -10,7 +10,7 @@
 //   ColorModulator: x the cube radius, y the brightest stars of the day.
 //   ModelOffset: the direction toward the sun in the cube frame.
 // Sampler0 holds the vanilla colors over one day: row 0 the sky color with the star brightness in alpha, row 1 the
-// fog color.
+// fog color, row 2 the sunrise and sunset glow with its strength in alpha.
 uniform sampler2D Sampler0;
 
 layout(location = 0) in vec3 faceDirection;
@@ -42,9 +42,9 @@ void main() {
     vec3 sun = ModelOffset;
     vec3 sunMotion = cross(AXIS, sun);
 
-    // The fog color of vanilla at the camera has extra tints, such as sunrise when the camera looks at the sun, which
-    // also go onto the fog of the other times.
-    vec3 fogTint = FogColor.rgb - texture(Sampler0, vec2(TextureMat[3].w / DAY, 0.75)).rgb;
+    // The fog color of vanilla at the camera has extra tints, such as the blend toward the sky at a short render
+    // distance, which also go onto the fog of the other times.
+    vec3 fogTint = FogColor.rgb - texture(Sampler0, vec2(TextureMat[3].w / DAY, 0.5)).rgb;
 
     vec3 q0 = camera - clamp(camera, -inner, inner);
     float ground = min(-48.0, length(q0) - EDGE - 16.0);
@@ -74,8 +74,14 @@ void main() {
         // The local time is the vanilla time with the same height of the sun over this bit of air.
         float rise = acos(clamp(dot(sun, normal) / SUN_REACH, -1.0, 1.0)) / PI * 12000.0;
         float ticks = dot(sunMotion, normal) >= 0.0 ? 6000.0 - rise : 6000.0 + rise;
-        vec4 sky = texture(Sampler0, vec2(ticks / DAY, 0.25));
-        vec3 fog = max(texture(Sampler0, vec2(ticks / DAY, 0.75)).rgb + fogTint, 0.0);
+        vec4 sky = texture(Sampler0, vec2(ticks / DAY, 1.0 / 6.0));
+        vec3 fog = texture(Sampler0, vec2(ticks / DAY, 0.5)).rgb;
+        // Vanilla tints the fog with the glow by how much the view looks toward the sun along the horizon. Here that
+        // is the horizon of the surface under this bit of air.
+        vec4 glow = texture(Sampler0, vec2(ticks / DAY, 5.0 / 6.0));
+        vec3 sunAlong = sun - normal * dot(sun, normal);
+        float toSun = dot(sunAlong, sunAlong) > 1.0E-8 ? max(dot(direction, normalize(sunAlong)), 0.0) : 0.0;
+        fog = max(mix(fog, glow.rgb, toSun * glow.a) + fogTint, 0.0);
         // Vanilla draws the sky as a disc 16 blocks over the camera, faded into the fog by distance, so the sky turns
         // to fog toward the horizon. Here the horizon is that of the surface under this bit of air, so the haze bends
         // over the edges with the air.

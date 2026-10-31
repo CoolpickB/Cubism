@@ -2,7 +2,9 @@ package dev.cubeworld.client.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.cubeworld.client.CubeFlight;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.seam.SeamInteraction;
@@ -39,6 +41,44 @@ public abstract class LocalPlayerMixin extends LivingEntity {
 	@Inject(method = "move", at = @At("HEAD"))
 	private void cubeworld$rememberPosition(MoverType moverType, Vec3 delta, CallbackInfo ci) {
 		this.cubeworld$positionBeforeMove = this.position();
+	}
+
+	/** Inside the air frame of {@link CubeFlight}, the move of vanilla still collides in the face frame. */
+	@WrapMethod(method = "move")
+	private void cubeworld$moveFromAirFrame(MoverType moverType, Vec3 delta, Operation<Void> original) {
+		if (CubeFlight.inFrame()) {
+			CubeFlight.moveInFaceFrame((LocalPlayer) (Object) this, delta, turned -> original.call(moverType, turned));
+		} else {
+			original.call(moverType, delta);
+		}
+	}
+
+	// Creative flight goes up and down along the up of the air frame.
+	@WrapOperation(method = "aiStep", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/phys/Vec3;add(DDD)Lnet/minecraft/world/phys/Vec3;"))
+	private Vec3 cubeworld$flyUpInAirFrame(Vec3 velocity, double x, double y, double z, Operation<Vec3> original) {
+		Vec3 change = CubeFlight.upInFrame((LocalPlayer) (Object) this, new Vec3(x, y, z));
+		return original.call(velocity, change.x, change.y, change.z);
+	}
+
+	@Inject(method = "aiStep", at = @At("TAIL"))
+	private void cubeworld$tickFlight(CallbackInfo ci) {
+		CubeFlight.tick((LocalPlayer) (Object) this);
+	}
+
+	// The pick starts at the eye that the camera shows, which stands along the air frame in flight.
+	@WrapOperation(
+		method = "pick(Lnet/minecraft/world/entity/Entity;DDF)Lnet/minecraft/world/phys/HitResult;",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getEyePosition(F)Lnet/minecraft/world/phys/Vec3;")
+	)
+	private static Vec3 cubeworld$pickFromShownEye(Entity camera, float partialTicks, Operation<Vec3> original) {
+		return CubeFlight.eyePosition(camera, partialTicks, original.call(camera, partialTicks));
+	}
+
+	@Override
+	public void turn(double xo, double yo) {
+		if (!CubeFlight.turn((LocalPlayer) (Object) this, xo, yo)) {
+			super.turn(xo, yo);
+		}
 	}
 
 	// View bobbing and step sounds use the walked distance, which must be horizontal in the local frame.

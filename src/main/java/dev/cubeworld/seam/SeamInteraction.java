@@ -5,12 +5,15 @@ import dev.cubeworld.mixin.EntityAccessor;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
@@ -118,6 +121,23 @@ public final class SeamInteraction {
 			return pos;
 		}
 		return new BlockPos(owner[0], owner[1], owner[2]);
+	}
+
+	/** The owner position of a storage position when the chunk of the owner is loaded, else null. */
+	public static @Nullable BlockPos loadedOwner(ServerLevel level, SeamLayout layout, BlockPos pos) {
+		BlockPos owner = owner(layout, pos);
+		return owner == pos || level.getChunkSource().getChunkNow(SectionPos.blockToSectionCoord(owner.getX()), SectionPos.blockToSectionCoord(owner.getZ())) != null
+			? owner
+			: null;
+	}
+
+	/**
+	 * The real block for a storage position, read from the owner face outside the wedge. While the owner chunk is not
+	 * loaded, this gives a barrier, so that nothing falls or flows into the cleared space next to the wedge.
+	 */
+	public static BlockState stateAcrossSeam(ServerLevel level, SeamLayout layout, BlockPos pos) {
+		BlockPos owner = loadedOwner(level, layout, pos);
+		return owner == null ? Blocks.BARRIER.defaultBlockState() : level.getBlockState(owner);
 	}
 
 	/** The block rotation of the face motion between two faces, for shapes that turn about the block center. */

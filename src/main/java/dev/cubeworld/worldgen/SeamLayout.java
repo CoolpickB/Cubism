@@ -213,6 +213,12 @@ public final class SeamLayout {
 	 * points to the nearest point of the core box, the cube that the rounded edges are rounded about. Above the flat
 	 * part of a face that is straight down. Over an edge it turns about the edge, and over a corner it points to the
 	 * corner, so the field is continuous across the diagonals and a jump off an edge arcs onto the next face.
+	 *
+	 * <p>Inside the core box the pull turns toward the nearest face of the box, by the inverse square of the distance to
+	 * each face. On a seam between two wedges it is half way between the two faces, at the top of the core it is
+	 * straight down, and deep in a wedge away from the seams it is close to straight down. A fixed band around the
+	 * seams would not do: at the top of the core the field must be straight down, also next to a seam, so the turn
+	 * must narrow toward the edges of the core box, as the turn over an edge does above them.
 	 */
 	public @Nullable Vec3 airGravity(double x, double y, double z) {
 		int bx = Mth.floor(x);
@@ -224,13 +230,32 @@ public final class SeamLayout {
 		double cy = y - this.centerY - 0.5;
 		double cz = z - 0.5;
 		if (Math.abs(cx) <= core && Math.abs(cz) <= core) {
-			return null;
+			return Math.abs(cy) < core ? coreGravity(cx, cy, cz, core) : null;
 		}
 		double dx = cx - Math.clamp(cx, -core, core);
 		double dy = cy - Math.clamp(cy, -core, core);
 		double dz = cz - Math.clamp(cz, -core, core);
 		double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
 		return length < 1.0E-6 ? null : new Vec3(-dx / length, -dy / length, -dz / length);
+	}
+
+	private static @Nullable Vec3 coreGravity(double x, double y, double z, double core) {
+		double gx = corePull(x, core);
+		double gy = corePull(y, core);
+		double gz = corePull(z, core);
+		// Close to straight down is straight down, which saves the callers the turn on most of a wedge.
+		if (gy > 0.0 && gx * gx + gz * gz < 1.0E-6 * gy * gy) {
+			return null;
+		}
+		double length = Math.sqrt(gx * gx + gy * gy + gz * gz);
+		return length < 1.0E-12 ? null : new Vec3(-gx / length, -gy / length, -gz / length);
+	}
+
+	/** The pull along one axis toward the two faces of the core box on it, which cancel at the center. */
+	private static double corePull(double p, double core) {
+		double toPositive = core - p;
+		double toNegative = core + p;
+		return 1.0 / (toPositive * toPositive) - 1.0 / (toNegative * toNegative);
 	}
 
 	public static int indexOf(Direction face) {

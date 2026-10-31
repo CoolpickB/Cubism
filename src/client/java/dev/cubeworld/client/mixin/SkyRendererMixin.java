@@ -18,6 +18,7 @@ import net.minecraft.world.level.dimension.DimensionType;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3fc;
+import org.joml.Vector4fc;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -120,25 +121,14 @@ public abstract class SkyRendererMixin {
 		}
 	}
 
-	/** The glow of sunrise and sunset stands on the horizon below the sun. Vanilla puts it due east or due west. */
-	@WrapOperation(
-		method = "renderSunriseAndSunset",
-		at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;rotateDegrees(Lcom/mojang/math/Axis;F)V", ordinal = 0)
-	)
-	private void cubeworld$glowTowardSun(PoseStack poseStack, Axis axis, float degrees, Operation<Void> original) {
-		Matrix3f celestial = cubeworld$celestial;
-		if (celestial != null) {
-			// Column 1 is the sun direction. Without this turn the glow is at -X.
-			poseStack.rotate(Axis.YP, (float) Math.atan2(celestial.m12(), -celestial.m10()));
+	/**
+	 * Vanilla draws the glow of sunrise and sunset as a fan on the horizon of the camera face, which jumps to the next
+	 * face at a crossing. The air of {@link CubeSky} draws the glow over each part of the air.
+	 */
+	@WrapOperation(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SkyRenderer;renderSunriseAndSunset(Lcom/mojang/renderpearl/api/commands/RenderPass;Lcom/mojang/blaze3d/vertex/PoseStack;FLorg/joml/Vector4fc;)V"))
+	private void cubeworld$skipGlowFan(SkyRenderer renderer, RenderPass renderPass, PoseStack poseStack, float sunAngle, Vector4fc color, Operation<Void> original) {
+		if (cubeworld$celestial == null || !CubeSky.active()) {
+			original.call(renderer, renderPass, poseStack, sunAngle, color);
 		}
-		original.call(poseStack, axis, degrees);
-	}
-
-	@WrapOperation(
-		method = "renderSunriseAndSunset",
-		at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;rotateDegrees(Lcom/mojang/math/Axis;F)V", ordinal = 1)
-	)
-	private void cubeworld$glowSide(PoseStack poseStack, Axis axis, float degrees, Operation<Void> original) {
-		original.call(poseStack, axis, cubeworld$celestial == null ? degrees : 90.0F);
 	}
 }
