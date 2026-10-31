@@ -57,7 +57,7 @@ public abstract class MinecraftServerMixin {
 	private void cubeworld$trackProgress(CallbackInfo ci) {
 		SeamLayout layout = SeamLayout.of(this.overworld());
 		if (layout != null) {
-			CubePregen.track(layout);
+			CubePregen.track(layout, CubeSettings.of(this.overworld().getChunkSource().getGenerator()).spawnFace());
 		}
 	}
 

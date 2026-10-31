@@ -73,7 +73,10 @@ public class CustomizeCubeWorldScreen extends Screen {
 				(Direction face) -> Component.translatable("cubeworld.customize.face." + face.getSerializedName()), this.spawnFace
 			)
 			.withValues(SeamLayout.FACES)
-			.create(0, 0, WIDTH, 20, Component.translatable("cubeworld.customize.spawn_face"), (button, face) -> this.spawnFace = face));
+			.create(0, 0, WIDTH, 20, Component.translatable("cubeworld.customize.spawn_face"), (button, face) -> {
+				this.spawnFace = face;
+				this.refreshPregenLabel();
+			}));
 		content.addChild(slider(
 			0, PREGEN_STEPS - 1, pregenStep(this.pregenRadius),
 			step -> pregenText(pregenRadius(step)),
@@ -134,10 +137,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		if (this.pregenLabel == null) {
 			return;
 		}
-		int faceSide = CubePregen.faceSideChunks(this.diameterChunks);
-		int columns = this.pregenRadius == CubeSettings.PREGEN_WHOLE_CUBE
-			? SeamLayout.FACES.length * faceSide * faceSide
-			: Math.min(SeamLayout.FACES.length * faceSide * faceSide, (int) Math.round(Math.PI * this.pregenRadius * this.pregenRadius));
+		int columns = CubePregen.count(new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregenRadius));
 		this.pregenLabel.setMessage(this.pregenRadius == 0
 			? Component.translatable("cubeworld.customize.pregen.none")
 			: Component.translatable("cubeworld.customize.pregen.columns", columns));

@@ -1,6 +1,7 @@
 package dev.cubeworld.worldgen;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
@@ -37,14 +38,9 @@ public final class CubePregen {
 		this.order = order;
 	}
 
-	/** Chunk columns along one side of a face region. The region holds the wedge up to the top of the atmosphere. */
-	public static int faceSideChunks(int diameterChunks) {
-		return new SeamLayout(diameterChunks).spacing / 16;
-	}
-
 	/** Starts recording the chunk status of a seam level for the loading screen. */
-	public static void track(SeamLayout layout) {
-		progress = new Progress(layout);
+	public static void track(SeamLayout layout, Direction spawnFace) {
+		progress = new Progress(layout, spawnFace);
 	}
 
 	public static void stopTracking() {
@@ -60,10 +56,25 @@ public final class CubePregen {
 		if (settings.pregenRadius() == 0) {
 			return null;
 		}
+		return new CubePregen(level, columns(layout, settings.pregenRadius(), layout.faceIndexAt(spawn.getMiddleBlockX()), spawn.getMiddleBlockX(), spawn.getMiddleBlockZ()));
+	}
+
+	/** Columns that a new world with these settings generates first, if the spawn is at the center of its face. */
+	public static int count(CubeSettings settings) {
+		if (settings.pregenRadius() == 0) {
+			return 0;
+		}
+		SeamLayout layout = new SeamLayout(settings.diameterChunks());
+		int face = settings.spawnFaceIndex();
+		return columns(layout, settings.pregenRadius(), face, layout.offsetX(face), 0).length;
+	}
+
+	/** Columns within the radius of a spawn position, nearest first. Distance is measured between points of the cube surface. */
+	private static long[] columns(SeamLayout layout, int radius, int spawnFace, int spawnX, int spawnZ) {
 		int side = layout.spacing / 16;
 		int[] out = new int[3];
-		double[] origin = surfacePoint(layout, layout.faceIndexAt(spawn.getMiddleBlockX()), spawn.getMiddleBlockX(), spawn.getMiddleBlockZ(), out);
-		double reach = settings.pregenRadius() == CubeSettings.PREGEN_WHOLE_CUBE ? Double.MAX_VALUE : settings.pregenRadius() * 16.0;
+		double[] origin = surfacePoint(layout, spawnFace, spawnX, spawnZ, out);
+		double reach = radius == CubeSettings.PREGEN_WHOLE_CUBE ? Double.MAX_VALUE : radius * 16.0;
 		LongArrayList columns = new LongArrayList();
 		LongArrayList distances = new LongArrayList();
 		for (int face = 0; face < SeamLayout.FACES.length; face++) {
@@ -89,7 +100,7 @@ public final class CubePregen {
 		for (int i = 0; i < sorted.length; i++) {
 			order[i] = columns.getLong(sorted[i]);
 		}
-		return new CubePregen(level, order);
+		return order;
 	}
 
 	/**
@@ -144,14 +155,16 @@ public final class CubePregen {
 	/** Highest generation status seen for each chunk column of the cube, by face. Written on the server thread. */
 	public static final class Progress {
 		public final SeamLayout layout;
+		public final Direction spawnFace;
 		public final int side;
 		/** {@link ChunkStatus#getIndex} plus one, 0 for a column that has not started. */
 		private final byte[][] status;
 		/** Set by a loading screen in the same game while it shows this progress. The server then polls every tick. */
 		public volatile boolean watched;
 
-		private Progress(SeamLayout layout) {
+		private Progress(SeamLayout layout, Direction spawnFace) {
 			this.layout = layout;
+			this.spawnFace = spawnFace;
 			this.side = layout.spacing / 16;
 			this.status = new byte[SeamLayout.FACES.length][this.side * this.side];
 		}

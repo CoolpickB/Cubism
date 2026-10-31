@@ -22,6 +22,8 @@
 		"IndigoRendererMixin",
 		"EntityRenderStateMixin",
 		"LevelExtractorAccessor",
+		"LevelLoadingScreenAccessor",
+		"LevelLoadingScreenMixin",
 		"LevelExtractorMixin",
 		"LightingMixin",
 		"LevelRendererMixin",
