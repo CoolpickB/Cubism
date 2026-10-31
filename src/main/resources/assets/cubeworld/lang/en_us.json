@@ -10,9 +10,10 @@
   "cubeworld.customize.face.south": "South",
   "cubeworld.customize.face.east": "East",
   "cubeworld.customize.face.west": "West",
-  "cubeworld.customize.pregen.off": "Pre-generate: Off",
-  "cubeworld.customize.pregen.radius": "Pre-generate: %s Chunks Around Spawn",
-  "cubeworld.customize.pregen.whole": "Pre-generate: Whole Cube",
+  "cubeworld.customize.pregen": "Pre-generate",
+  "cubeworld.customize.pregen.off": "Off",
+  "cubeworld.customize.pregen.spawn_face": "Spawn Face",
+  "cubeworld.customize.pregen.whole_cube": "Whole Cube",
   "cubeworld.customize.pregen.none": "Chunks generate as you explore",
   "cubeworld.customize.pregen.columns": "About %s chunk columns before you join"
 }

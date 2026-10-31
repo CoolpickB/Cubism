@@ -28,16 +28,13 @@ import java.util.function.IntFunction;
 /** Sets the {@link CubeSettings} of a new seam world. Done writes them into the overworld generator of the world. */
 public class CustomizeCubeWorldScreen extends Screen {
 	private static final int WIDTH = 310;
-	/** Steps of the pre-generation slider: off, then radii of {@link #PREGEN_STEP} chunks, then the whole cube. */
-	private static final int PREGEN_STEP = 4;
-	private static final int PREGEN_STEPS = CubeSettings.MAX_PREGEN_RADIUS / PREGEN_STEP + 2;
 
 	private final CreateWorldScreen parent;
 	private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
 	private int diameterChunks;
 	private int edgeRounding;
 	private Direction spawnFace;
-	private int pregenRadius;
+	private CubeSettings.Pregen pregen;
 	private StringWidget pregenLabel;
 
 	public CustomizeCubeWorldScreen(CreateWorldScreen parent, WorldCreationContext context) {
@@ -47,7 +44,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.diameterChunks = settings.diameterChunks();
 		this.edgeRounding = settings.edgeRounding();
 		this.spawnFace = settings.spawnFace();
-		this.pregenRadius = settings.pregenRadius();
+		this.pregen = settings.pregen();
 	}
 
 	@Override
@@ -77,14 +74,14 @@ public class CustomizeCubeWorldScreen extends Screen {
 				this.spawnFace = face;
 				this.refreshPregenLabel();
 			}));
-		content.addChild(slider(
-			0, PREGEN_STEPS - 1, pregenStep(this.pregenRadius),
-			step -> pregenText(pregenRadius(step)),
-			step -> {
-				this.pregenRadius = pregenRadius(step);
+		content.addChild(CycleButton.builder(
+				(CubeSettings.Pregen pregen) -> Component.translatable("cubeworld.customize.pregen." + pregen.getSerializedName()), this.pregen
+			)
+			.withValues(CubeSettings.Pregen.values())
+			.create(0, 0, WIDTH, 20, Component.translatable("cubeworld.customize.pregen"), (button, pregen) -> {
+				this.pregen = pregen;
 				this.refreshPregenLabel();
-			}
-		));
+			}));
 		this.pregenLabel = content.addChild(new StringWidget(WIDTH, 12, Component.empty(), this.font));
 		this.refreshPregenLabel();
 
@@ -116,35 +113,18 @@ public class CustomizeCubeWorldScreen extends Screen {
 		};
 	}
 
-	private static int pregenRadius(int step) {
-		return step == PREGEN_STEPS - 1 ? CubeSettings.PREGEN_WHOLE_CUBE : step * PREGEN_STEP;
-	}
-
-	private static int pregenStep(int radius) {
-		return radius == CubeSettings.PREGEN_WHOLE_CUBE ? PREGEN_STEPS - 1 : Mth.clamp(Math.round((float) radius / PREGEN_STEP), 0, PREGEN_STEPS - 2);
-	}
-
-	private static Component pregenText(int radius) {
-		if (radius == 0) {
-			return Component.translatable("cubeworld.customize.pregen.off");
-		}
-		return radius == CubeSettings.PREGEN_WHOLE_CUBE
-			? Component.translatable("cubeworld.customize.pregen.whole")
-			: Component.translatable("cubeworld.customize.pregen.radius", radius);
-	}
-
 	private void refreshPregenLabel() {
 		if (this.pregenLabel == null) {
 			return;
 		}
-		int columns = CubePregen.count(new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregenRadius));
-		this.pregenLabel.setMessage(this.pregenRadius == 0
+		int columns = CubePregen.count(new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen));
+		this.pregenLabel.setMessage(this.pregen == CubeSettings.Pregen.OFF
 			? Component.translatable("cubeworld.customize.pregen.none")
 			: Component.translatable("cubeworld.customize.pregen.columns", columns));
 	}
 
 	private void applySettings() {
-		CubeSettings settings = new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregenRadius);
+		CubeSettings settings = new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen);
 		this.parent.getUiState().updateDimensions((registryAccess, dimensions) -> {
 			ChunkGenerator old = dimensions.overworld();
 			if (!(old instanceof NoiseBasedChunkGenerator noise)) {

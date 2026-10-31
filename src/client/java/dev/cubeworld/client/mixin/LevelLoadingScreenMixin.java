@@ -7,8 +7,10 @@ import dev.cubeworld.worldgen.CubePregen;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
+import net.minecraft.client.multiplayer.LevelLoadTracker;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.progress.ChunkLoadStatusView;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -18,8 +20,8 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * In a cube world of this game, the loading screen draws a corner of the cube in place of the square map around the
- * spawn. The progress comes from the integrated server, so a world on another server keeps the vanilla map.
+ * While a new cube world of this game pre-generates, the loading screen draws the cube in place of the square map
+ * around the spawn. The progress comes from the integrated server, so a world on another server keeps the vanilla map.
  */
 @Mixin(LevelLoadingScreen.class)
 public abstract class LevelLoadingScreenMixin {
@@ -37,8 +39,7 @@ public abstract class LevelLoadingScreenMixin {
 	private void cubeworld$drawCube(
 		GuiGraphicsExtractor graphics, int xCenter, int yCenter, int size, int margin, ChunkLoadStatusView statusView, Operation<Void> original
 	) {
-		// Portal travel loads another dimension, or the overworld around a portal, so it keeps the vanilla map.
-		CubePregen.Progress progress = this.reason == LevelLoadingScreen.Reason.OTHER ? CubePregen.progress() : null;
+		CubePregen.Progress progress = this.cubeworld$pregen();
 		if (progress == null) {
 			this.cubeworld$textShift = 0;
 			original.call(graphics, xCenter, yCenter, size, margin, statusView);
@@ -64,13 +65,29 @@ public abstract class LevelLoadingScreenMixin {
 	 */
 	@ModifyArg(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/LevelLoadingScreen;drawProgressBar(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIIIF)V"), index = 5)
 	private float cubeworld$addPregenProgress(float vanilla) {
-		CubePregen.Progress progress = this.reason == LevelLoadingScreen.Reason.OTHER ? CubePregen.progress() : null;
-		int total = progress == null ? 0 : progress.pregenTotal;
-		if (total == 0) {
+		CubePregen.Progress progress = this.cubeworld$pregen();
+		if (progress == null) {
 			return vanilla;
 		}
+		int total = progress.pregenTotal;
 		int done = progress.pregenDone;
 		return done < total ? PREGEN_SHARE * done / total : PREGEN_SHARE + (1.0F - PREGEN_SHARE) * vanilla;
+	}
+
+	/**
+	 * The pre-generation of a new cube world in this game, or null. Portal travel loads another dimension, or the
+	 * overworld around a portal, and a world without pre-generation loads only the spawn area: those keep the vanilla map.
+	 */
+	@Unique
+	private CubePregen.@Nullable Progress cubeworld$pregen() {
+		CubePregen.Progress progress = this.reason == LevelLoadingScreen.Reason.OTHER ? CubePregen.progress() : null;
+		return progress != null && progress.pregenTotal > 0 ? progress : null;
+	}
+
+	@WrapOperation(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/LevelLoadTracker;isLevelReady()Z"))
+	private boolean cubeworld$waitForFold(LevelLoadTracker tracker, Operation<Boolean> original) {
+		CubePregen.Progress progress = this.cubeworld$pregen();
+		return original.call(tracker) && (progress == null || !CubeLoadingView.isFolding(progress));
 	}
 
 	@Inject(method = "tick", at = @At("HEAD"))

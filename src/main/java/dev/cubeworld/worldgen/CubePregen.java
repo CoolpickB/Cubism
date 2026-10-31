@@ -1,7 +1,7 @@
 package dev.cubeworld.worldgen;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-import net.minecraft.core.Direction;
+import net.minecraft.core.Vec3i;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
@@ -45,9 +45,12 @@ public final class CubePregen {
 		this.order = order;
 	}
 
+	/** Chunks past each edge of the spawn face that {@link CubeSettings.Pregen#SPAWN_FACE} also generates. */
+	public static final int SPAWN_FACE_MARGIN = 4;
+
 	/** Starts recording the chunk status of a seam level for the loading screen. */
-	public static void track(SeamLayout layout, Direction spawnFace) {
-		progress = new Progress(layout, spawnFace);
+	public static void track(SeamLayout layout, CubeSettings settings) {
+		progress = new Progress(layout, settings);
 	}
 
 	public static void stopTracking() {
@@ -60,28 +63,33 @@ public final class CubePregen {
 
 	/** The pre-generation that the settings ask for, or null for none. */
 	public static @Nullable CubePregen start(ServerLevel level, SeamLayout layout, CubeSettings settings, ChunkPos spawn) {
-		if (settings.pregenRadius() == 0) {
+		if (settings.pregen() == CubeSettings.Pregen.OFF) {
 			return null;
 		}
-		return new CubePregen(level, columns(layout, settings.pregenRadius(), layout.faceIndexAt(spawn.getMiddleBlockX()), spawn.getMiddleBlockX(), spawn.getMiddleBlockZ()));
+		return new CubePregen(level, columns(layout, settings.pregen(), layout.faceIndexAt(spawn.getMiddleBlockX()), spawn.getMiddleBlockX(), spawn.getMiddleBlockZ()));
 	}
 
-	/** Columns that a new world with these settings generates first, if the spawn is at the center of its face. */
+	/** Columns that a new world with these settings generates first. */
 	public static int count(CubeSettings settings) {
-		if (settings.pregenRadius() == 0) {
+		if (settings.pregen() == CubeSettings.Pregen.OFF) {
 			return 0;
 		}
 		SeamLayout layout = new SeamLayout(settings.diameterChunks());
 		int face = settings.spawnFaceIndex();
-		return columns(layout, settings.pregenRadius(), face, layout.offsetX(face), 0).length;
+		return columns(layout, settings.pregen(), face, layout.offsetX(face), 0).length;
 	}
 
-	/** Columns within the radius of a spawn position, nearest first. Distance is measured between points of the cube surface. */
-	private static long[] columns(SeamLayout layout, int radius, int spawnFace, int spawnX, int spawnZ) {
+	/**
+	 * Columns of the face regions to generate, nearest to the spawn first. Distance is measured between points of the
+	 * cube surface. For the spawn face, a column is in when its surface point is at most the margin below the plane
+	 * of the spawn face: that is the spawn face itself and a strip of each neighbor face along the shared edge.
+	 */
+	private static long[] columns(SeamLayout layout, CubeSettings.Pregen pregen, int spawnFace, int spawnX, int spawnZ) {
 		int side = layout.spacing / 16;
 		int[] out = new int[3];
 		double[] origin = surfacePoint(layout, spawnFace, spawnX, spawnZ, out);
-		double reach = radius == CubeSettings.PREGEN_WHOLE_CUBE ? Double.MAX_VALUE : radius * 16.0;
+		Vec3i normal = SeamLayout.FACES[spawnFace].getUnitVec3i();
+		int minHeight = layout.radius - SPAWN_FACE_MARGIN * 16;
 		LongArrayList columns = new LongArrayList();
 		LongArrayList distances = new LongArrayList();
 		for (int face = 0; face < SeamLayout.FACES.length; face++) {
@@ -92,11 +100,12 @@ public final class CubePregen {
 					int chunkX = minX + i;
 					int chunkZ = minZ + j;
 					double[] point = surfacePoint(layout, face, chunkX * 16 + 8, chunkZ * 16 + 8, out);
-					double distance = Math.sqrt(square(point[0] - origin[0]) + square(point[1] - origin[1]) + square(point[2] - origin[2]));
-					if (distance <= reach) {
-						columns.add(ChunkPos.pack(chunkX, chunkZ));
-						distances.add(Math.round(distance));
+					double height = point[0] * normal.getX() + point[1] * normal.getY() + point[2] * normal.getZ();
+					if (pregen == CubeSettings.Pregen.SPAWN_FACE && height < minHeight) {
+						continue;
 					}
+					columns.add(ChunkPos.pack(chunkX, chunkZ));
+					distances.add(Math.round(Math.sqrt(square(point[0] - origin[0]) + square(point[1] - origin[1]) + square(point[2] - origin[2]))));
 				}
 			}
 		}
@@ -111,7 +120,7 @@ public final class CubePregen {
 	}
 
 	/**
-	 * Point on the cube surface under a storage column, in cube coordinates. A column past the edge of its face, in
+	 * Point on the cube surface under a storage column, in cube coordinates relative to the cube center. A column past the edge of its face, in
 	 * the atmosphere of the wedge, takes the nearest point of the face, so that it generates with the edge.
 	 */
 	private static double[] surfacePoint(SeamLayout layout, int face, int sx, int sz, int[] out) {
@@ -119,7 +128,7 @@ public final class CubePregen {
 		int x = Math.clamp(sx - layout.offsetX(face), -r, r);
 		int z = Math.clamp(sz, -r, r);
 		layout.toCube(face, layout.offsetX(face) + x, layout.centerY + r, z, out);
-		return new double[] {out[0], out[1], out[2]};
+		return new double[] {out[0], out[1] - layout.centerY, out[2]};
 	}
 
 	private static double square(double value) {
@@ -162,7 +171,7 @@ public final class CubePregen {
 	/** Highest generation status seen for each chunk column of the cube, by face. Written on the server thread. */
 	public static final class Progress {
 		public final SeamLayout layout;
-		public final Direction spawnFace;
+		public final CubeSettings settings;
 		public final int side;
 		/** {@link ChunkStatus#getIndex} plus one, 0 for a column that has not started. */
 		private final byte[][] status;
@@ -174,9 +183,9 @@ public final class CubePregen {
 		private long lastPoll;
 		private static final long POLL_INTERVAL_MS = 100L;
 
-		private Progress(SeamLayout layout, Direction spawnFace) {
+		private Progress(SeamLayout layout, CubeSettings settings) {
 			this.layout = layout;
-			this.spawnFace = spawnFace;
+			this.settings = settings;
 			this.side = layout.spacing / 16;
 			this.status = new byte[SeamLayout.FACES.length][this.side * this.side];
 		}
