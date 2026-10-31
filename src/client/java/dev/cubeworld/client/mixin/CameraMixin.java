@@ -7,6 +7,9 @@ import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -132,6 +135,13 @@ public abstract class CameraMixin {
 		SeamLayout layout = SeamLayout.of(this.entity.level());
 		Vec3 position = this.entity.getPosition(partialTicks);
 		int face = layout != null && layout.inRegion(Mth.floor(position.x), Mth.floor(position.z)) ? layout.faceIndexAt(Mth.floor(position.x)) : -1;
+		if (face >= 0 && this.cubeworld$lastFace >= 0 && face != this.cubeworld$lastFace && this.entity instanceof LocalPlayer player
+			&& player.level() instanceof ClientLevel level) {
+			// The chunks of the old face stay in the vanilla store until the server moves the chunk center, a few ticks
+			// later. With a large view distance the vanilla view area of the new face reaches into the old region, and
+			// vanilla drew the old terrain there unturned, floating in the sky. The center moves before this frame.
+			level.getChunkSource().updateViewCenter(SectionPos.blockToSectionCoord(player.getX()), SectionPos.blockToSectionCoord(player.getZ()));
+		}
 		if (face >= 0 && this.cubeworld$lastFace >= 0 && face != this.cubeworld$lastFace) {
 			int[] m = layout.motion(this.cubeworld$lastFace, face);
 			Vec3 last = this.cubeworld$lastPosition;
