@@ -22,13 +22,14 @@ import java.util.Set;
 
 /**
  * The biomes that the world can have, each with a check box. A checked biome is required: a seed search goes on until
- * it finds a seed with all of them. A biome that the shown seed has is in white, one that it lacks is in gray.
+ * it finds a seed with all of them. A biome that the shown seed has is in white with a green mark, one that it lacks is in gray.
  */
 final class BiomeFilterList extends ObjectSelectionList<BiomeFilterList.Entry> {
 	private static final Identifier CHECKBOX = Identifier.withDefaultNamespace("widget/checkbox");
 	private static final Identifier CHECKBOX_SELECTED = Identifier.withDefaultNamespace("widget/checkbox_selected");
 	private static final int PRESENT_COLOR = 0xFFFFFFFF;
-	private static final int ABSENT_COLOR = 0xFF808080;
+	private static final int ABSENT_COLOR = 0xFF707070;
+	private static final int HAS_MARK_COLOR = 0xFF55AA55;
 	private static final Component IN_SEED = Component.translatable("cubeworld.customize.biome.present");
 	private static final Component NOT_IN_SEED = Component.translatable("cubeworld.customize.biome.absent");
 
@@ -87,6 +88,10 @@ final class BiomeFilterList extends ObjectSelectionList<BiomeFilterList.Entry> {
 			Set<Holder<Biome>> present = BiomeFilterList.this.present;
 			boolean has = present != null && present.contains(this.biome);
 			graphics.text(font, this.name, x, y - 4, present == null || has ? PRESENT_COLOR : ABSENT_COLOR);
+			if (has) {
+				int right = this.getContentRight() - 6;
+				graphics.fill(right - 4, y - 2, right, y + 2, HAS_MARK_COLOR);
+			}
 			if (hovered && present != null) {
 				graphics.setTooltipForNextFrame(has ? IN_SEED : NOT_IN_SEED, mouseX, mouseY);
 			}
