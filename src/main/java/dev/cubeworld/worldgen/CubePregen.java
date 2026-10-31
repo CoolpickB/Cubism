@@ -21,8 +21,14 @@ import java.util.Deque;
  * the generation status of every chunk column of the cube, which the loading screen of the same game draws.
  */
 public final class CubePregen {
-	/** Holds a chunk at full status until it is generated. The ticket is removed then, and the chunk unloads. */
+	/**
+	 * Holds a chunk at block ticking level until it is ready, and its neighbors at full status. The ticket is removed
+	 * then, and the chunks unload. Vanilla does the post-processing of generation, the shape updates of fluids and
+	 * plants, only when a chunk starts to tick. At full level that work stays in the chunk and runs when a player first
+	 * comes near, which makes the first visit slow.
+	 */
 	public static final TicketType TICKET = new TicketType(0L, TicketType.FLAG_LOADING);
+	private static final int TICKET_RADIUS = 1;
 	/** Chunks with a ticket at one time. More keeps the worker threads busy, but holds more chunks in memory. */
 	private static final int IN_FLIGHT = 192;
 
@@ -128,13 +134,13 @@ public final class CubePregen {
 		return this.done;
 	}
 
-	/** Adds tickets up to {@link #IN_FLIGHT}, removes the tickets of generated chunks, and unloads them. True when all are generated. */
+	/** Adds tickets up to {@link #IN_FLIGHT}, and removes the tickets of ready chunks. True when all are generated. */
 	public boolean tick() {
 		ServerChunkCache chunks = this.level.getChunkSource();
 		this.inFlight.removeIf(pos -> {
 			ChunkHolder holder = chunks.chunkMap.getUpdatingChunkIfPresent(pos.pack());
-			if (holder != null && holder.getLatestStatus() == ChunkStatus.FULL) {
-				chunks.removeTicketWithRadius(TICKET, pos, 0);
+			if (holder != null && holder.getTickingChunk() != null) {
+				chunks.removeTicketWithRadius(TICKET, pos, TICKET_RADIUS);
 				this.done++;
 				return true;
 			}
@@ -142,7 +148,7 @@ public final class CubePregen {
 		});
 		while (this.inFlight.size() < IN_FLIGHT && this.next < this.order.length) {
 			ChunkPos pos = ChunkPos.unpack(this.order[this.next++]);
-			chunks.addTicketWithRadius(TICKET, pos, 0);
+			chunks.addTicketWithRadius(TICKET, pos, TICKET_RADIUS);
 			this.inFlight.add(pos);
 		}
 		chunks.tick(() -> true, false);
@@ -162,6 +168,9 @@ public final class CubePregen {
 		private final byte[][] status;
 		/** Set by a loading screen in the same game while it shows this progress. The server then polls every tick. */
 		public volatile boolean watched;
+		/** Columns of the pre-generation, for the progress bar. Total is 0 when the world has none. */
+		public volatile int pregenDone;
+		public volatile int pregenTotal;
 		private long lastPoll;
 		private static final long POLL_INTERVAL_MS = 100L;
 
