@@ -60,10 +60,6 @@ public class CubeWorldMod implements ModInitializer {
 		CubeNetworking.register();
 		ServerTickEvents.END_LEVEL_TICK.register(level -> {
 			SeamCrossing.tick(level);
-			CubePregen.Progress progress = CubePregen.progress();
-			if (progress != null && level == level.getServer().overworld()) {
-				progress.poll(level);
-			}
 			if (level.getGameTime() % SeamTrackingView.REFRESH_TICKS == 0) {
 				SeamTrackingView.refreshTickets(level);
 			}

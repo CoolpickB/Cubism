@@ -54,7 +54,9 @@ public abstract class BlockCollisionsMixin {
 			|| !layout.ownerStorage(pos.getX(), pos.getY(), pos.getZ(), this.owner)) {
 			return original.call(chunk, pos);
 		}
-		BlockGetter ownerChunk = this.collisionGetter.getChunkForCollisions(
+		// The layout is set only for a Level. Its getChunkForCollisions waits on the server thread until a chunk that
+		// still generates is done: a mob spawn check near a seam stopped the server for seconds after the player joined.
+		BlockGetter ownerChunk = ((Level) this.collisionGetter).getChunkSource().getChunkNow(
 			SectionPos.blockToSectionCoord(this.owner[0]), SectionPos.blockToSectionCoord(this.owner[2])
 		);
 		if (ownerChunk == null) {

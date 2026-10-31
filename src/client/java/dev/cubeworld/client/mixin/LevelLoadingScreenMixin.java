@@ -137,20 +137,17 @@ public abstract class LevelLoadingScreenMixin {
 	}
 
 	@Inject(method = "tick", at = @At("HEAD"))
-	private void cubeworld$watch(CallbackInfo ci) {
+	private void cubeworld$poll(CallbackInfo ci) {
 		LoadTraceClient.serverProgress = this.loadTracker.serverProgress();
 		CubePregen.Progress progress = CubePregen.progress();
 		if (progress != null) {
-			progress.watched = true;
+			progress.poll();
 		}
 	}
 
 	@Inject(method = "onClose", at = @At("HEAD"))
-	private void cubeworld$unwatch(CallbackInfo ci) {
+	private void cubeworld$traceClose(CallbackInfo ci) {
 		LoadTraceClient.loadingScreenClosed();
-		CubePregen.Progress progress = CubePregen.progress();
-		if (progress != null) {
-			progress.watched = false;
-		}
 	}
+
 }

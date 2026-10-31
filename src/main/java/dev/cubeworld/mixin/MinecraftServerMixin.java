@@ -70,6 +70,12 @@ public abstract class MinecraftServerMixin {
 	private void cubeworld$markNewWorld(CallbackInfo ci) {
 		this.cubeworld$newWorld = true;
 		LoadTrace.event("server: new world, choosing the spawn");
+		// The loading screen shows the cube already while the spawn search generates its first chunks.
+		SeamLayout layout = SeamLayout.of(this.overworld());
+		if (layout != null) {
+			CubeSettings settings = CubeSettings.of(this.overworld().getChunkSource().getGenerator());
+			CubePregen.track(this.overworld(), layout, settings).pregenTotal = CubePregen.count(settings);
+		}
 	}
 
 	@Inject(method = "createLevels", at = @At("TAIL"))
@@ -77,7 +83,6 @@ public abstract class MinecraftServerMixin {
 		SeamLayout layout = SeamLayout.of(this.overworld());
 		if (layout != null) {
 			CubeSettings settings = CubeSettings.of(this.overworld().getChunkSource().getGenerator());
-			CubePregen.track(layout, settings);
 			LoadTrace.event("server: createLevels done, cube " + settings + ", spawn " + this.selectLevelLoadFocusPos().pos());
 		} else {
 			LoadTrace.event("server: createLevels done, not a cube world");
@@ -136,10 +141,6 @@ public abstract class MinecraftServerMixin {
 
 	@Inject(method = "prepareLevels", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;waitUntilNextTick()V"))
 	private void cubeworld$pollInitialChunks(CallbackInfo ci) {
-		CubePregen.Progress progress = CubePregen.progress();
-		if (progress != null) {
-			progress.poll(this.overworld());
-		}
 		LoadTrace.serverSample(this.overworld(), "initial chunks", null);
 	}
 

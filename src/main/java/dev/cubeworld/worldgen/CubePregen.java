@@ -63,9 +63,11 @@ public final class CubePregen {
 	/** Chunks past each edge of the spawn face that {@link CubeSettings.Pregen#SPAWN_FACE} also generates. */
 	public static final int SPAWN_FACE_MARGIN = 4;
 
-	/** Starts recording the chunk status of a seam level for the loading screen. */
-	public static void track(SeamLayout layout, CubeSettings settings) {
-		progress = new Progress(layout, settings);
+	/** Starts recording the chunk status of a new seam level for the loading screen. */
+	public static Progress track(ServerLevel level, SeamLayout layout, CubeSettings settings) {
+		Progress tracked = new Progress(level, layout, settings);
+		progress = tracked;
+		return tracked;
 	}
 
 	public static void stopTracking() {
@@ -106,10 +108,10 @@ public final class CubePregen {
 	}
 
 	/**
-	 * Columns of the face regions to generate, in rows that snake back and forth like the vanilla loading map. For the
-	 * spawn face, a column is in when its surface point is at most the margin below the plane of the spawn face: that
-	 * is the spawn face itself and a strip of each neighbor face along the shared edge. These columns come first, in
-	 * the rows of the loading screen view with the strips unfolded. The rest of a whole cube follows face by face.
+	 * Columns of the face regions to generate, in a square spiral out from the middle like the vanilla loading map. For
+	 * the spawn face, a column is in when its surface point is at most the margin below the plane of the spawn face:
+	 * that is the spawn face itself and a strip of each neighbor face along the shared edge. These columns come first,
+	 * in a spiral over the loading screen view with the strips unfolded. The rest of a whole cube follows face by face.
 	 */
 	private static long[] columns(SeamLayout layout, CubeSettings.Pregen pregen, int spawnFace) {
 		int side = layout.spacing / 16;
@@ -143,10 +145,10 @@ public final class CubePregen {
 						double v = dot(place, axes[1]);
 						u += Math.abs(u) >= r ? Math.signum(u) * (r - placeHeight) : 0.0;
 						v += Math.abs(v) >= r ? Math.signum(v) * (r - placeHeight) : 0.0;
-						key = snake(0, Math.floorDiv((int) Math.round(-v), 16), Math.floorDiv((int) Math.round(u), 16));
+						key = spiral(0, Math.floorDiv((int) Math.round(u), 16), Math.floorDiv((int) Math.round(-v), 16));
 					} else {
 						int rank = face == spawnFace ? 0 : SeamLayout.FACES[face] == SeamLayout.FACES[spawnFace].getOpposite() ? 2 : 1;
-						key = snake(1 + rank * SeamLayout.FACES.length + face, j, i);
+						key = spiral(1 + rank * SeamLayout.FACES.length + face, i - side / 2, j - side / 2);
 					}
 					columns.add(ChunkPos.pack(chunkX, chunkZ));
 					keys.add(key);
@@ -179,11 +181,17 @@ public final class CubePregen {
 		return point[0] * axis.getX() + point[1] * axis.getY() + point[2] * axis.getZ();
 	}
 
-	/** Sort key of a cell in a group of rows. Every other row runs backward. Rows and columns are within ±2^19. */
-	private static long snake(int group, int row, int column) {
-		long shiftedRow = row + (1L << 19);
-		long shiftedColumn = column + (1L << 19);
-		return ((long) group << 40) | (shiftedRow << 20) | ((row & 1) == 0 ? shiftedColumn : (1L << 20) - 1 - shiftedColumn);
+	/**
+	 * Sort key of cell ({@code x}, {@code y}) in a group, with the middle of the group between cells -1 and 0. Cells go
+	 * by square ring out from the middle, and around each ring clockwise on the screen from the top.
+	 */
+	private static long spiral(int group, int x, int y) {
+		int dx = 2 * x + 1;
+		int dy = 2 * y + 1;
+		long ring = Math.max(Math.abs(dx), Math.abs(dy));
+		double angle = Math.atan2(dx, -dy);
+		long turn = Math.round((angle < 0.0 ? angle + 2.0 * Math.PI : angle) / (2.0 * Math.PI) * ((1 << 20) - 1));
+		return ((long) group << 40) | (ring << 20) | turn;
 	}
 
 	public int total() {
@@ -235,10 +243,6 @@ public final class CubePregen {
 			this.inFlight.add(pos);
 		}
 		chunks.tick(() -> true, false);
-		Progress current = progress;
-		if (current != null) {
-			current.poll(this.level);
-		}
 		if (!this.inFlight.isEmpty() || !this.unloading.isEmpty() || this.next < this.order.length
 			|| !chunkMap.cubeworld$pendingUnloads().isEmpty() || !chunkMap.cubeworld$unloadQueue().isEmpty() || !chunkMap.cubeworld$toDrop().isEmpty()) {
 			return false;
@@ -251,15 +255,14 @@ public final class CubePregen {
 		return this.written.isDone();
 	}
 
-	/** Highest generation status seen for each chunk column of the cube, by face. Written on the server thread. */
+	/** Highest generation status seen for each chunk column of the cube, by face. */
 	public static final class Progress {
+		private final ServerLevel level;
 		public final SeamLayout layout;
 		public final CubeSettings settings;
 		public final int side;
 		/** {@link ChunkStatus#getIndex} plus one, 0 for a column that has not started. */
 		private final byte[][] status;
-		/** Set by a loading screen in the same game while it shows this progress. The server then polls every tick. */
-		public volatile boolean watched;
 		/** Columns of the pre-generation that are generated, for the progress bar. Total is 0 when the world has none. */
 		public volatile int pregenDone;
 		public volatile int pregenTotal;
@@ -268,7 +271,8 @@ public final class CubePregen {
 		private long lastPoll;
 		private static final long POLL_INTERVAL_MS = 100L;
 
-		private Progress(SeamLayout layout, CubeSettings settings) {
+		private Progress(ServerLevel level, SeamLayout layout, CubeSettings settings) {
+			this.level = level;
 			this.layout = layout;
 			this.settings = settings;
 			this.side = layout.spacing / 16;
@@ -276,24 +280,24 @@ public final class CubePregen {
 		}
 
 		/**
-		 * Reads the status of every column that has a chunk holder. It runs on the server thread, between the chunk
-		 * tasks of that thread, so it runs only for a watching screen and not more often than the screen can show.
+		 * Reads the status of every column that has a chunk holder. The loading screen calls it on the render thread.
+		 * It reads the chunk holders that the server shows to other threads, as the vanilla loading map does, so it
+		 * also runs while the server thread waits for chunks, as in the spawn search.
 		 */
-		public void poll(ServerLevel level) {
+		public void poll() {
 			long now = Util.getMillis();
-			if (!this.watched || now - this.lastPoll < POLL_INTERVAL_MS) {
+			if (now - this.lastPoll < POLL_INTERVAL_MS) {
 				return;
 			}
 			this.lastPoll = now;
-			ServerChunkCache chunks = level.getChunkSource();
+			ServerChunkCache chunks = this.level.getChunkSource();
 			int minZ = Math.floorDiv(-this.layout.spacing / 2, 16);
 			for (int face = 0; face < this.status.length; face++) {
 				int minX = Math.floorDiv(this.layout.offsetX(face) - this.layout.spacing / 2, 16);
 				byte[] faceStatus = this.status[face];
 				for (int i = 0; i < this.side; i++) {
 					for (int j = 0; j < this.side; j++) {
-						ChunkHolder holder = chunks.chunkMap.getUpdatingChunkIfPresent(ChunkPos.pack(minX + i, minZ + j));
-						ChunkStatus latest = holder == null ? null : holder.getLatestStatus();
+						ChunkStatus latest = chunks.chunkMap.getLatestStatus(ChunkPos.pack(minX + i, minZ + j));
 						if (latest != null) {
 							int index = i * this.side + j;
 							faceStatus[index] = (byte) Math.max(faceStatus[index], latest.getIndex() + 1);
