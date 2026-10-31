@@ -16,6 +16,10 @@ public final class SeamClient {
 	 * flight, and the turn that eases out after a crossing. Set by the camera each frame. Render thread only.
 	 */
 	public static final Quaternionf lightFrame = new Quaternionf();
+	/** The chunk center and view radius that the server last gave the client chunk cache. */
+	public static volatile int viewCenterX;
+	public static volatile int viewCenterZ;
+	public static volatile int serverViewRadius;
 
 	private SeamClient() {}
 

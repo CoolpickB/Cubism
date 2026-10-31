@@ -45,6 +45,7 @@ public abstract class ClientChunkCacheMixin {
 	@Inject(method = "updateViewRadius", at = @At("TAIL"))
 	private void cubeworld$updateRadius(int viewRange, CallbackInfo ci) {
 		this.storageRadius = Math.max(2, viewRange) + 3;
+		SeamClient.serverViewRadius = viewRange;
 	}
 
 	/**
@@ -55,6 +56,8 @@ public abstract class ClientChunkCacheMixin {
 	private void cubeworld$moveChunksOnRecenter(int x, int z, CallbackInfo ci) {
 		this.centerX = x;
 		this.centerZ = z;
+		SeamClient.viewCenterX = x;
+		SeamClient.viewCenterZ = z;
 		if (SeamClient.layout == null) {
 			return;
 		}

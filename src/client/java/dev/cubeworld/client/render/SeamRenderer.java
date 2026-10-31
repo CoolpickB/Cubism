@@ -27,12 +27,14 @@ import net.minecraft.client.renderer.chunk.RenderRegionCache;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
@@ -487,7 +489,11 @@ public final class SeamRenderer {
 				}
 				for (Long2ObjectMap<SeamSection> store : List.of(sections, adopted)) {
 					for (SeamSection section : store.values()) {
-						if (layout.faceIndexAt(section.storageOrigin.getX()) == face && frustum.isVisible(shownBox(shown, section.storageOrigin))) {
+						if (layout.faceIndexAt(section.storageOrigin.getX()) != face) {
+							continue;
+						}
+						AABB box = shownBox(shown, section.storageOrigin);
+						if (frustum.isVisible(box) && (store == adopted || face == cameraFace || !groundMissing(level, layout, cameraFace, box))) {
 							section.virtualOrigin = section.storageOrigin.subtract(transform.cameraInFace).offset(cameraBlock);
 							visible.add(section);
 						}
@@ -501,6 +507,33 @@ public final class SeamRenderer {
 			visible.clear();
 			visible.addAll(vanillaVisible);
 		}
+	}
+
+	/**
+	 * True when a section of a neighbor face shows in a chunk column of the camera face that the server sends but the
+	 * client does not have yet. The neighbor terrain shows below the ground of the camera face near a seam, and while
+	 * that ground loads, it showed through the hole, or floated with nothing around it.
+	 */
+	private static boolean groundMissing(ClientLevel level, SeamLayout layout, int cameraFace, AABB box) {
+		// The view radius of the player on the server is its requested render distance, capped by the server. One
+		// chunk less leaves out the edge of the square, where the chunks may never come.
+		int radius = Math.clamp(Minecraft.getInstance().options.renderDistance().get(), 2, Math.max(2, SeamClient.serverViewRadius)) - 1;
+		int minX = SectionPos.blockToSectionCoord(Mth.floor(box.minX + 0.5));
+		int maxX = SectionPos.blockToSectionCoord(Mth.floor(box.maxX - 0.5));
+		int minZ = SectionPos.blockToSectionCoord(Mth.floor(box.minZ + 0.5));
+		int maxZ = SectionPos.blockToSectionCoord(Mth.floor(box.maxZ - 0.5));
+		for (int x = minX; x <= maxX; x++) {
+			if (layout.faceIndexAt(SectionPos.sectionToBlockCoord(x, 8)) != cameraFace) {
+				continue;
+			}
+			for (int z = minZ; z <= maxZ; z++) {
+				if (ChunkTrackingView.isInViewDistance(SeamClient.viewCenterX, SeamClient.viewCenterZ, radius, x, z)
+					&& level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false) == null) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/** The box of a section where it shows in the camera face, for the motion {@code m} into that face. */
