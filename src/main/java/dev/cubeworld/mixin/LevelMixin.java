@@ -119,9 +119,25 @@ public abstract class LevelMixin implements CubeTimeLevel, BlockAndLightGetter {
 		return SeamStates.turn(layout, this.getBlockState(owner), layout.faceIndexAt(owner.getX()), layout.faceIndexAt(pos.getX()));
 	}
 
+	/**
+	 * Fluids read across the seam on the client too. The player moves and swims on its own client, and the camera fog
+	 * and the water sounds come from there. With the cleared air, a player who swam over the diagonal left the water
+	 * and fell through the seam.
+	 */
 	@ModifyReturnValue(method = "getFluidState", at = @At("RETURN"))
 	private FluidState cubeworld$fluidAcrossSeam(FluidState fluid, @Local(argsOnly = true) BlockPos pos) {
-		return this.cubeworld$loadedOwner(pos) == null ? fluid : this.getBlockState(pos).getFluidState();
+		if (this.cubeworld$loadedOwner(pos) != null) {
+			return this.getBlockState(pos).getFluidState();
+		}
+		BlockPos owner = this.cubeworld$clientOwner(pos);
+		return owner == null ? fluid : this.getBlockState(owner).getFluidState();
+	}
+
+	/** The owner position of a position outside its wedge on the client, when its chunk is loaded, else null. */
+	@Unique
+	private @Nullable BlockPos cubeworld$clientOwner(BlockPos pos) {
+		Level level = (Level) (Object) this;
+		return level.isClientSide() ? this.cubeworld$loadedOwner(SeamLayout.of(level), pos) : null;
 	}
 
 	/**
@@ -207,7 +223,11 @@ public abstract class LevelMixin implements CubeTimeLevel, BlockAndLightGetter {
 	/** The owner position of a position outside its wedge on the server, when its chunk is loaded, else null. */
 	@Unique
 	private @Nullable BlockPos cubeworld$loadedOwner(BlockPos pos) {
-		SeamLayout layout = this.cubeworld$seams();
+		return this.cubeworld$loadedOwner(this.cubeworld$seams(), pos);
+	}
+
+	@Unique
+	private @Nullable BlockPos cubeworld$loadedOwner(@Nullable SeamLayout layout, BlockPos pos) {
 		if (layout == null || cubeworld$surelyInside(layout, pos)) {
 			return null;
 		}

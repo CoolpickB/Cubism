@@ -5,6 +5,7 @@
 	"mixins": [
 		"BlockCollisionsMixin",
 		"BlockItemMixin",
+		"EntityFluidInteractionMixin",
 		"LongJumpToRandomPosMixin",
 		"BucketItemMixin",
 		"ChunkMapAccessor",

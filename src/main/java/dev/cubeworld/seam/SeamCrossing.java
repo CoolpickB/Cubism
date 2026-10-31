@@ -98,12 +98,14 @@ public final class SeamCrossing {
 	}
 
 	/**
-	 * True when the entity at the new feet position is free of blocks and has ground under it in the new frame.
-	 * Without the ground, a jump over the diagonal would cross, fall in the new gravity and cross back.
+	 * True when the entity at the new feet position is free of blocks and has ground under it or a fluid around it in
+	 * the new frame. Without the ground, a jump over the diagonal would cross, fall in the new gravity and cross back.
+	 * A swimmer has no ground, and before the fluid counted it crossed only at the forced margin.
 	 */
 	private static boolean landsOn(ServerLevel level, Entity entity, Vec3 feet) {
 		AABB box = entity.getBoundingBox().move(feet.subtract(entity.position()));
-		return level.noBlockCollision(entity, box) && !level.noBlockCollision(entity, box.move(0.0, -GROUND_DEPTH, 0.0));
+		return level.noBlockCollision(entity, box)
+			&& (!level.noBlockCollision(entity, box.move(0.0, -GROUND_DEPTH, 0.0)) || level.containsAnyLiquid(box));
 	}
 
 	/** True when the player flies with an elytra or in creative or spectator mode, which uses the frame of the air. */
