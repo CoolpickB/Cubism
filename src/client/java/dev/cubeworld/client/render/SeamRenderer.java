@@ -671,6 +671,18 @@ public final class SeamRenderer {
 		}
 	}
 
+	/**
+	 * Cancels the turn of the level lights for an entity or block entity, so it keeps the shade that the up of its own
+	 * face gives it, as terrain does. The lights turn with the up that the camera shows, see {@link SeamClient#lightFrame},
+	 * which the held item needs. Right after the camera crossed a seam, that up is still the up of the old face, and the
+	 * entities of the new face were lit from the side until the turn eased out.
+	 */
+	public static void keepOwnLight(PoseStack poseStack) {
+		if (SeamClient.layout != null) {
+			poseStack.last().normal().rotateLocal(SeamClient.lightFrame);
+		}
+	}
+
 	/** The motion into the camera frame for a block entity state of a seam section, or null for a vanilla state. */
 	public static int @Nullable [] blockEntityMotion(BlockEntityRenderState state) {
 		return blockEntityMotions.get(state);

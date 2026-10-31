@@ -141,6 +141,7 @@ public abstract class LevelRendererMixin {
 			SeamRenderer.applyMotion(poseStack, motion, levelRenderState.cameraRenderState.pos, true);
 			original.call(poseStack, (double) pos.getX(), (double) pos.getY(), (double) pos.getZ());
 		}
+		SeamRenderer.keepOwnLight(poseStack);
 	}
 
 	@WrapOperation(method = "submitEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;submit(Lnet/minecraft/client/renderer/entity/state/EntityRenderState;Lnet/minecraft/client/renderer/state/level/CameraRenderState;DDDLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;)V"))
@@ -150,11 +151,15 @@ public abstract class LevelRendererMixin {
 	) {
 		int[] motion = SeamRenderer.entityMotion(state);
 		if (motion == null) {
+			poseStack.pushPose();
+			SeamRenderer.keepOwnLight(poseStack);
 			original.call(dispatcher, state, camera, x, y, z, poseStack, output);
+			poseStack.popPose();
 			return;
 		}
 		poseStack.pushPose();
 		SeamRenderer.applyMotion(poseStack, motion, camera.pos, true);
+		SeamRenderer.keepOwnLight(poseStack);
 		// Name tags and sprites turn to face the camera inside the moved pose, so they get the camera turned back.
 		Quaternionf orientation = new Quaternionf(camera.orientation);
 		camera.orientation.set(SeamRenderer.motionRotation(motion).conjugate().mul(orientation));
