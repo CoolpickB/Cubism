@@ -44,9 +44,11 @@ import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Draws the chunks of neighbor faces that the server sends across seams. Each neighbor face G is drawn with the
@@ -87,6 +89,12 @@ public final class SeamRenderer {
 	private static final Map<EntityRenderState, int[]> entityMotions = new IdentityHashMap<>();
 
 	private SeamRenderer() {}
+
+	/**
+	 * The section position each compiled mesh was made for. Weak keys, so a mesh leaves the map when it is released.
+	 * Workers add entries while the render thread reads them.
+	 */
+	public static final Map<CompiledSectionMesh, Long> COMPILED_FOR = Collections.synchronizedMap(new WeakHashMap<>());
 
 	public static void onChunkLoaded(ChunkPos pos) {
 		chunks.add(pos.pack());
