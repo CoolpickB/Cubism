@@ -1,6 +1,8 @@
 package dev.cubeworld.mixin;
 
 import dev.cubeworld.CubeWorldMod;
+import dev.cubeworld.math.CubePlanetMath;
+import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
 import dev.cubeworld.worldgen.SeamRandomState;
 import net.minecraft.core.HolderLookup;
@@ -25,7 +27,9 @@ public abstract class ChunkGeneratorMixin {
 		CallbackInfoReturnable<ChunkGeneratorStructureState> cir
 	) {
 		if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
-			SeamLayout layout = new SeamLayout(CubeWorldMod.SEAM_DIAMETER_CHUNKS);
+			CubeSettings settings = CubeSettings.of(generator);
+			CubePlanetMath.setEdgeRounding(settings.edgeRounding());
+			SeamLayout layout = new SeamLayout(settings.diameterChunks());
 			SeamLayout.setActive(layout);
 			((SeamRandomState) (Object) randomState).cubeworld$enableSeams(layout);
 		}

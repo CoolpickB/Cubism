@@ -1,9 +1,18 @@
 {
-	"generator.cubeworld.cube": "Cube World",
-	"cubeworld.customize.title": "Customize Cube World",
-	"cubeworld.customize.diameter": "Cube Diameter: %s Chunks (%s Blocks)",
-	"cubeworld.customize.center": "Planet Core Center: (0, %s, 0)",
-	"cubeworld.customize.core.solid": "Bedrock Core: 3x3x3 Solid Core (Inverse Pyramid Tips Meet)",
-	"cubeworld.customize.core.hollow": "Bedrock Core: %sx%sx%s Hollow Shell (%sx%sx%s Void Core)",
-	"cubeworld.customize.surface_bounds": "Cube Vertical Span: Y = %s (Bottom Face) to Y = 64 (Top Face)"
+  "generator.cubeworld.cube": "Cube World",
+  "cubeworld.customize.title": "Customize Cube World",
+  "cubeworld.customize.diameter": "Cube Size: %s Chunks (%s Blocks)",
+  "cubeworld.customize.edge_rounding": "Edge Rounding: %s Blocks",
+  "cubeworld.customize.spawn_face": "Spawn Face",
+  "cubeworld.customize.face.up": "Up",
+  "cubeworld.customize.face.down": "Down",
+  "cubeworld.customize.face.north": "North",
+  "cubeworld.customize.face.south": "South",
+  "cubeworld.customize.face.east": "East",
+  "cubeworld.customize.face.west": "West",
+  "cubeworld.customize.pregen.off": "Pre-generate: Off",
+  "cubeworld.customize.pregen.radius": "Pre-generate: %s Chunks Around Spawn",
+  "cubeworld.customize.pregen.whole": "Pre-generate: Whole Cube",
+  "cubeworld.customize.pregen.none": "Chunks generate as you explore",
+  "cubeworld.customize.pregen.columns": "About %s chunk columns before you join"
 }

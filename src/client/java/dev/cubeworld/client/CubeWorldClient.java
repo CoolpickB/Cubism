@@ -31,6 +31,7 @@ public class CubeWorldClient implements ClientModInitializer {
 			CubePlanetMath.setClientCubeState(true, payload.diameterChunks()));
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.SeamPayload.TYPE, (payload, context) -> {
+			CubePlanetMath.setEdgeRounding(payload.edgeRounding());
 			SeamClient.layout = new SeamLayout(payload.diameterChunks());
 			SeamLayout.setClient(SeamClient.layout);
 		});

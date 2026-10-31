@@ -4,6 +4,7 @@ import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.gravity.CubePlanet;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.worldgen.CubeChunkGenerator;
+import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
@@ -49,11 +50,12 @@ public final class CubeNetworking {
 		}
 	}
 
-	/** Tells the client that the level stores the cube in seam regions. */
-	public record SeamPayload(int diameterChunks) implements CustomPacketPayload {
+	/** Tells the client that the level stores the cube in seam regions, and the shape of the cube. */
+	public record SeamPayload(int diameterChunks, int edgeRounding) implements CustomPacketPayload {
 		public static final Type<SeamPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(CubeWorldMod.MOD_ID, "seam"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, SeamPayload> CODEC = StreamCodec.composite(
 			ByteBufCodecs.VAR_INT, SeamPayload::diameterChunks,
+			ByteBufCodecs.VAR_INT, SeamPayload::edgeRounding,
 			SeamPayload::new
 		);
 
@@ -167,7 +169,8 @@ public final class CubeNetworking {
 				sender.sendPacket(payloadFor(handler.player));
 			}
 			if (SeamLayout.of(server.overworld()) != null) {
-				sender.sendPacket(new SeamPayload(CubeWorldMod.SEAM_DIAMETER_CHUNKS));
+				CubeSettings settings = CubeSettings.of(server.overworld().getChunkSource().getGenerator());
+				sender.sendPacket(new SeamPayload(settings.diameterChunks(), settings.edgeRounding()));
 			}
 		});
 

@@ -4,22 +4,29 @@ import com.google.common.base.Suppliers;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import dev.cubeworld.CubeWorldMod;
+import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.SpawnTargetPoint;
 import net.minecraft.world.level.levelgen.densityfunction.DensitySamplerSet;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -27,6 +34,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -36,7 +44,42 @@ import java.util.function.Supplier;
  * cleared, because it belongs to other faces.
  */
 @Mixin(NoiseBasedChunkGenerator.class)
-public abstract class NoiseBasedChunkGeneratorMixin {
+public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Holder {
+	@Shadow
+	@Final
+	@Mutable
+	public static MapCodec<NoiseBasedChunkGenerator> CODEC;
+
+	@Unique
+	private @Nullable CubeSettings cubeworld$settings;
+
+	/**
+	 * The vanilla codec, with the cube settings as an optional field. The chunk generator registry takes the codec
+	 * from this field after the class is initialized, so the registry gets this one.
+	 */
+	@Inject(method = "<clinit>", at = @At("TAIL"))
+	private static void cubeworld$codecWithSettings(CallbackInfo ci) {
+		CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
+			BiomeSource.CODEC.fieldOf("biome_source").forGetter(ChunkGenerator::getBiomeSource),
+			NoiseGeneratorSettings.CODEC.fieldOf("settings").forGetter(NoiseBasedChunkGenerator::generatorSettings),
+			CubeSettings.CODEC.optionalFieldOf("cubeworld").forGetter(g -> Optional.ofNullable(((CubeSettings.Holder) (Object) g).cubeworld$settings()))
+		).apply(i, i.stable((biomes, settings, cube) -> {
+			NoiseBasedChunkGenerator generator = new NoiseBasedChunkGenerator(biomes, settings);
+			((CubeSettings.Holder) (Object) generator).cubeworld$setSettings(cube.orElse(null));
+			return generator;
+		})));
+	}
+
+	@Override
+	public @Nullable CubeSettings cubeworld$settings() {
+		return this.cubeworld$settings;
+	}
+
+	@Override
+	public void cubeworld$setSettings(@Nullable CubeSettings settings) {
+		this.cubeworld$settings = settings;
+	}
+
 	@Shadow
 	@Final
 	@Mutable
@@ -68,8 +111,8 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
 	/**
 	 * Vanilla searches up to 2048 blocks from the origin for land, which leads into other face regions and the space
-	 * between wedges. Here the search stays near the center of the UP face, so that the player spawns on top of the
-	 * cube, away from the mountain rims of the edges. The fitness is the vanilla one.
+	 * between wedges. Here the search stays near the center of the spawn face, away from the mountain rims of the
+	 * edges. The fitness is the vanilla one.
 	 */
 	@WrapOperation(
 		method = "getOrigin",
@@ -81,18 +124,19 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 			return original.call(targets, samplers);
 		}
 		int limit = layout.radius / 2;
-		BlockPos best = BlockPos.ZERO;
+		int offset = layout.offsetX(CubeSettings.of((ChunkGenerator) (Object) this).spawnFaceIndex());
+		BlockPos best = new BlockPos(offset, 0, 0);
 		long bestFitness = Long.MAX_VALUE;
 		for (int x = -limit; x <= limit; x += 16) {
 			for (int z = -limit; z <= limit; z += 16) {
 				long fitness = Long.MAX_VALUE;
 				for (SpawnTargetPoint target : targets) {
-					fitness = Math.min(fitness, target.sampleFitness(samplers, x, 0, z));
+					fitness = Math.min(fitness, target.sampleFitness(samplers, offset + x, 0, z));
 				}
 				fitness = fitness * 2048L * 2048L + (long) x * x + (long) z * z;
 				if (fitness < bestFitness) {
 					bestFitness = fitness;
-					best = new BlockPos(x, 0, z);
+					best = new BlockPos(offset + x, 0, z);
 				}
 			}
 		}

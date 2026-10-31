@@ -27,6 +27,7 @@
 		"InstantNeighborUpdaterMixin",
 		"FlowingFluidMixin",
 		"LivingEntityMixin",
+		"MinecraftServerMixin",
 		"MobMixin",
 		"OreFeatureMixin",
 		"PlayerListMixin",

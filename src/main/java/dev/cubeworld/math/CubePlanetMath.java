@@ -153,7 +153,7 @@ public final class CubePlanetMath {
 	public static final int MIN_EDGE_ROUNDING = 2;
 	public static final int MAX_EDGE_ROUNDING = 96;
 	public static final int DEFAULT_EDGE_ROUNDING = 16;
-	/** Radius of the cube edges and corners that terrain height is measured from. The server sets it from its config. */
+	/** Radius of the cube edges and corners that terrain height is measured from. It comes from the {@code CubeSettings} of the world: the server sets it when the level starts, a client when it joins. */
 	private static volatile int edgeRounding = DEFAULT_EDGE_ROUNDING;
 
 	public static int edgeRounding() {
