@@ -5,6 +5,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
@@ -79,6 +80,10 @@ public final class CubeStructureMap {
 		return set.value().structures().stream().anyMatch(entry -> biomes.stream().anyMatch(biome -> entry.structure().value().biomes().contains(biome)));
 	}
 
+	private static List<Holder<Biome>> caveOnly(List<Holder<Biome>> biomes) {
+		return biomes.stream().filter(biome -> biome.is(Biomes.DEEP_DARK) || biome.is(Biomes.LUSH_CAVES) || biome.is(Biomes.DRIPSTONE_CAVES)).toList();
+	}
+
 	/** Called for a chunk where a set can place a structure. Returns true when the set needs no more chunks. */
 	private interface Hit {
 		boolean accept(Holder<StructureSet> set, int[] cubePoint);
@@ -97,8 +102,9 @@ public final class CubeStructureMap {
 			int center = layout.offsetX(face);
 			for (int chunkX = Math.floorDiv(center - r, 16); chunkX <= Math.floorDiv(center + r, 16); chunkX++) {
 				for (int chunkZ = Math.floorDiv(-r, 16); chunkZ <= Math.floorDiv(r, 16); chunkZ++) {
-					int x = chunkX * 16 + 8;
-					int z = chunkZ * 16 + 8;
+					// Where a jigsaw structure starts: the corner of the chunk with the lowest x and z.
+					int x = chunkX * 16;
+					int z = chunkZ * 16;
 					if (Math.abs(x - center) > r || Math.abs(z) > r) {
 						continue;
 					}
@@ -112,8 +118,10 @@ public final class CubeStructureMap {
 							biome = sampler.surfaceBiomeAt(cube3[0], cube3[1], cube3[2]);
 						}
 						Holder<Biome> here = biome;
-						// A structure of a cave biome, such as an ancient city, has no surface biome that fits it.
-						if ((fits(set, List.of(here)) || fits(set, sampler.caveBiomesBelow(cube3, SeamLayout.FACES[face].getUnitVec3i()))) && hit.accept(set, cube3)) {
+						// A structure of a cave biome, such as an ancient city, has no surface biome that fits it. Only the cave
+						// biomes count: the ground under most spots has the same plain biome as the surface, which would let
+						// every structure of that biome pass where the surface biome does not fit.
+						if ((fits(set, List.of(here)) || fits(set, caveOnly(sampler.caveBiomesBelow(cube3, SeamLayout.FACES[face].getUnitVec3i())))) && hit.accept(set, cube3)) {
 							remaining.remove(set);
 						}
 					}
