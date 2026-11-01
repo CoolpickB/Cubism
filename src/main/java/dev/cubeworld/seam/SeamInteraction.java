@@ -15,6 +15,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -157,8 +158,14 @@ public final class SeamInteraction {
 	 * loaded, this gives a barrier, so that nothing falls or flows into the cleared space next to the wedge.
 	 */
 	public static BlockState stateAcrossSeam(ServerLevel level, SeamLayout layout, BlockPos pos) {
-		BlockPos owner = loadedOwner(level, layout, pos);
-		return owner == null ? Blocks.BARRIER.defaultBlockState() : level.getBlockState(owner);
+		BlockPos owner = owner(layout, pos);
+		if (level.isOutsideBuildHeight(owner)) {
+			return level.getBlockState(owner);
+		}
+		// Level.getBlockState waits for a chunk that is not full yet. Fluid in a chunk that finishes generating reads
+		// the chunks around it, and the wait held the server thread for 5 s while they generated.
+		LevelChunk chunk = level.getChunkSource().getChunkNow(SectionPos.blockToSectionCoord(owner.getX()), SectionPos.blockToSectionCoord(owner.getZ()));
+		return chunk == null ? Blocks.BARRIER.defaultBlockState() : chunk.getBlockState(owner);
 	}
 
 	/** The block rotation of the face motion between two faces, for shapes that turn about the block center. */
