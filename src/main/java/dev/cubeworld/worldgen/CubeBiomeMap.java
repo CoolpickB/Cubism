@@ -52,6 +52,8 @@ public final class CubeBiomeMap {
 	/** The climate of one seed. Making it builds every noise of the seed, so a search makes one for each seed it tries. */
 	public static final class Sampler {
 		private final MultiNoiseBiomeSource biomes;
+		private final RandomState randomState;
+		private final long seed;
 		private final Climate.Sampler climate;
 		private final int radius;
 		private final int centerY;
@@ -62,6 +64,7 @@ public final class CubeBiomeMap {
 			HolderGetter<NormalNoise> noises, NoiseGeneratorSettings settings, MultiNoiseBiomeSource biomes, CubeSettings cube, long seed
 		) {
 			this.biomes = biomes;
+			this.seed = seed;
 			this.radius = CubePlanetMath.getRadiusBlocks(cube.diameterChunks());
 			this.centerY = CubePlanetMath.getCenterY(cube.diameterChunks());
 			this.innerBedrockRadius = CubePlanetMath.getInnerBedrockRadius(cube.diameterChunks());
@@ -70,7 +73,21 @@ public final class CubeBiomeMap {
 				noises, seed, settings.useLegacyRandomSource(), settings.defaultBlock(), settings.seaLevel(),
 				CubeDensityFunctions.rewriteRouter(settings.noiseRouter(), this.centerY, this.radius, this.innerBedrockRadius)
 			);
+			this.randomState = state;
 			this.climate = state.createClimateSampler(SamplerContext.EMPTY_UNCACHED);
+		}
+
+		public RandomState randomState() {
+			return this.randomState;
+		}
+
+		public long seed() {
+			return this.seed;
+		}
+
+		/** The surface biome at a block position of the level, in cube coordinates with the cube centered on its center height. */
+		public Holder<Biome> surfaceBiomeAt(int x, int y, int z) {
+			return this.surfaceBiome(new int[] {x, y, z});
 		}
 
 		/**

@@ -2,22 +2,26 @@ package dev.cubeworld.client.gui;
 
 import dev.cubeworld.worldgen.CubeBiomeMap;
 import dev.cubeworld.worldgen.CubeSettings;
+import dev.cubeworld.worldgen.CubeStructureMap;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.layouts.HeaderAndFooterLayout;
 import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
@@ -26,48 +30,53 @@ import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import org.jspecify.annotations.Nullable;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
 /**
- * Customizes a new cube world. The left side shows the biomes of the seed on a cube that turns. The right side lists
- * every biome: the seed has the white ones and lacks the gray ones. A search tries random seeds until one has every
- * checked biome. A preset checks a set of biomes and starts a search. Done writes the seed and the {@link CubeSettings}
- * into the world.
+ * Customizes a new cube world, laid out like the Superflat screen. The middle shows the biomes of the seed on a cube
+ * that turns. The left list has every biome and the right list every structure: the seed has the white ones and lacks
+ * the gray ones. A search tries random seeds until one has everything that is checked. A preset checks a set of
+ * biomes and structures and starts a search. Done writes the seed and the {@link CubeSettings} into the world.
  */
 public class CustomizeCubeWorldScreen extends Screen {
 	/** Cells along each face edge for the preview, and for the quick test of each seed in a search. */
 	private static final int PREVIEW_CELLS = 64;
 	private static final int SEARCH_CELLS = 24;
-	private static final int MAX_WIDTH = 460;
-	private static final int GAP = 8;
-	private static final int SEARCH_BUTTON_WIDTH = 72;
-	private static final int FOOTER_BUTTON_WIDTH = 100;
+	private static final int GAP = 4;
+	private static final int SEARCH_BUTTON_WIDTH = 64;
+	private static final float SIDE_SHARE = 0.32F;
+	private static final Identifier LIST_BACKGROUND = Identifier.withDefaultNamespace("textures/gui/menu_list_background.png");
 
-	private static final List<Preset> PRESETS = List.of(
-		new Preset("custom"),
-		new Preset("every_climate", "desert", "jungle", "snowy_plains", "savanna", "taiga"),
-		new Preset("mushroom_island", "mushroom_fields"),
-		new Preset("frozen", "ice_spikes", "frozen_peaks", "snowy_taiga", "frozen_ocean"),
-		new Preset("tropics", "jungle", "bamboo_jungle", "warm_ocean", "mangrove_swamp"),
-		new Preset("badlands", "badlands", "eroded_badlands", "wooded_badlands"),
-		new Preset("caves", "lush_caves", "dripstone_caves", "deep_dark", "sulfur_caves")
+	static final List<Preset> PRESETS = List.of(
+		Preset.of("none", List.of(), List.of()),
+		Preset.of("every_climate", List.of("desert", "jungle", "snowy_plains", "savanna", "taiga"), List.of()),
+		Preset.of("mushroom_island", List.of("mushroom_fields"), List.of()),
+		Preset.of("frozen", List.of("ice_spikes", "frozen_peaks", "snowy_taiga", "frozen_ocean"), List.of()),
+		Preset.of("tropics", List.of("jungle", "bamboo_jungle", "warm_ocean", "mangrove_swamp"), List.of()),
+		Preset.of("badlands", List.of("badlands", "eroded_badlands", "wooded_badlands"), List.of()),
+		Preset.of("caves", List.of("lush_caves", "dripstone_caves", "deep_dark", "sulfur_caves"), List.of()),
+		Preset.of("structure_hunter", List.of(), List.of("villages", "pillager_outposts", "woodland_mansions", "ocean_monuments", "ancient_cities"))
 	);
 
 	private final CreateWorldScreen parent;
-	private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
+	private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this, 33, 64);
 	private final HolderGetter<NormalNoise> noises;
+	private final HolderLookup<StructureSet> structureSets;
 	private final NoiseGeneratorSettings noiseSettings;
 	private final MultiNoiseBiomeSource biomeSource;
-	private final Set<Holder<Biome>> required = new HashSet<>();
+	private final List<Holder<StructureSet>> structureCandidates;
+	private final Set<Holder<Biome>> requiredBiomes = new HashSet<>();
+	private final Set<ResourceKey<StructureSet>> requiredStructures = new HashSet<>();
 	/** Each sampling or search gets the next number. A task stops when the number moves on. */
 	private final AtomicInteger task = new AtomicInteger();
 	private final AtomicInteger tried = new AtomicInteger();
@@ -75,21 +84,22 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private CubeSettings settings;
 	private long seed;
 	private String seedText;
-	private Preset preset = PRESETS.getFirst();
 	private boolean searching;
-	private @Nullable CubeBiomeMap map;
-	private @Nullable Set<Holder<Biome>> present;
-	/** The seed and settings of {@link #map}, or of the sampling that runs for it. */
-	private long mapSeed;
-	private @Nullable CubeSettings mapSettings;
+	private @Nullable Found found;
+	/** The seed and settings of {@link #found}, or of the sampling that runs for it. */
+	private long foundSeed;
+	private @Nullable CubeSettings foundSettings;
 
 	private CubePreviewWidget preview;
 	private EditBox seedBox;
 	private Button searchButton;
-	private StringWidget summary;
-	private CycleButton<Preset> presetButton;
-	private BiomeFilterList list;
+	private FilterList<Holder<Biome>> biomeList;
+	private FilterList<ResourceKey<StructureSet>> structureList;
 	private boolean settingSeedText;
+
+	/** What a sampling of a seed found. */
+	private record Found(CubeBiomeMap map, Set<Holder<Biome>> biomes, Set<ResourceKey<StructureSet>> structures) {
+	}
 
 	public CustomizeCubeWorldScreen(CreateWorldScreen parent, WorldCreationContext context) {
 		super(Component.translatable("cubeworld.customize.title"));
@@ -97,8 +107,10 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.settings = CubeSettings.of(context.selectedDimensions().overworld());
 		NoiseBasedChunkGenerator generator = (NoiseBasedChunkGenerator) context.selectedDimensions().overworld();
 		this.noises = context.worldgenLoadContext().lookupOrThrow(Registries.NOISE);
+		this.structureSets = context.worldgenLoadContext().lookupOrThrow(Registries.STRUCTURE_SET);
 		this.noiseSettings = generator.generatorSettings().value();
 		this.biomeSource = (MultiNoiseBiomeSource) generator.getBiomeSource();
+		this.structureCandidates = CubeStructureMap.candidates(this.structureSets, this.biomeSource);
 		// An empty seed field gives the world the random seed that the options already hold.
 		this.seed = context.options().seed();
 		String text = parent.getUiState().getSeed();
@@ -109,6 +121,13 @@ public class CustomizeCubeWorldScreen extends Screen {
 	protected void init() {
 		this.layout.addTitleHeader(this.title, this.font);
 
+		this.biomeList = this.addRenderableWidget(new FilterList<>(
+			this.minecraft, this.biomeSource.possibleBiomes(), this.requiredBiomes, BiomeColors::name, BiomeColors::color, () -> {}
+		));
+		this.structureList = this.addRenderableWidget(new FilterList<>(
+			this.minecraft, this.structureCandidates.stream().flatMap(set -> set.unwrapKey().stream()).toList(), this.requiredStructures,
+			CustomizeCubeWorldScreen::structureName, null, () -> {}
+		));
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
 		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")));
 		this.seedBox.setMaxLength(64);
@@ -118,21 +137,22 @@ public class CustomizeCubeWorldScreen extends Screen {
 			.size(SEARCH_BUTTON_WIDTH, 20)
 			.tooltip(Tooltip.create(Component.translatable("cubeworld.customize.search.tooltip")))
 			.build());
-		this.summary = this.addRenderableWidget(new StringWidget(0, 12, Component.empty(), this.font));
-		this.presetButton = this.addRenderableWidget(CycleButton.builder((Preset preset) -> preset.name, this.preset)
-			.withValues(PRESETS)
-			.create(0, 0, 0, 20, Component.translatable("cubeworld.customize.preset"), (button, preset) -> this.choosePreset(preset)));
-		this.list = this.addRenderableWidget(new BiomeFilterList(this.minecraft, this.biomeSource.possibleBiomes(), this.required, this::onFilterChanged));
 
-		LinearLayout footer = this.layout.addToFooter(LinearLayout.horizontal().spacing(GAP));
-		footer.addChild(Button.builder(Component.translatable("cubeworld.customize.settings"), button ->
+		LinearLayout footer = this.layout.addToFooter(LinearLayout.vertical().spacing(4));
+		footer.defaultCellSetting().alignVerticallyMiddle();
+		LinearLayout topButtons = footer.addChild(LinearLayout.horizontal().spacing(8));
+		LinearLayout bottomButtons = footer.addChild(LinearLayout.horizontal().spacing(8));
+		topButtons.addChild(Button.builder(Component.translatable("cubeworld.customize.settings"), button ->
 			this.minecraft.gui.setScreen(new CubeSettingsScreen(this, this.settings, settings -> this.settings = settings))
-		).width(FOOTER_BUTTON_WIDTH).build());
-		footer.addChild(Button.builder(CommonComponents.GUI_DONE, button -> {
+		).build());
+		topButtons.addChild(Button.builder(Component.translatable("cubeworld.customize.presets"), button ->
+			this.minecraft.gui.setScreen(new PresetScreen(this, PRESETS, this::usePreset))
+		).build());
+		bottomButtons.addChild(Button.builder(CommonComponents.GUI_DONE, button -> {
 			this.applySettings();
 			this.onClose();
-		}).width(FOOTER_BUTTON_WIDTH).build());
-		footer.addChild(Button.builder(CommonComponents.GUI_CANCEL, button -> this.onClose()).width(FOOTER_BUTTON_WIDTH).build());
+		}).build());
+		bottomButtons.addChild(Button.builder(CommonComponents.GUI_CANCEL, button -> this.onClose()).build());
 		this.layout.visitWidgets(this::addRenderableWidget);
 		this.repositionElements();
 		// The box scrolls to the cursor when the text is set. Start at the left now that the box has its width.
@@ -143,7 +163,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	@Override
 	public void added() {
-		// Back from the Cube Settings screen. The first time, init comes after this and refreshes.
+		// Back from the Cube Settings or Presets screen. The first time, init comes after this and refreshes.
 		if (this.preview != null) {
 			this.refresh();
 		}
@@ -151,8 +171,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	/** Samples the seed again if the map is out of date. */
 	private void refresh() {
-		this.showMap();
-		if (!this.searching && (this.map == null || this.mapSeed != this.seed || !this.settings.equals(this.mapSettings))) {
+		this.showFound();
+		if (!this.searching && (this.found == null || this.foundSeed != this.seed || !this.settings.equals(this.foundSettings))) {
 			this.sample();
 		}
 		this.refreshSearchButton();
@@ -161,24 +181,33 @@ public class CustomizeCubeWorldScreen extends Screen {
 	@Override
 	protected void repositionElements() {
 		this.layout.arrangeElements();
-		int width = Math.min(this.width - 2 * GAP, MAX_WIDTH);
-		int left = (this.width - width) / 2;
-		int top = this.layout.getHeaderHeight() + GAP;
-		int bottom = this.height - this.layout.getFooterHeight() - GAP;
-		int columnWidth = (width - 2 * GAP) / 2;
-		int right = left + width - columnWidth;
+		int top = this.layout.getHeaderHeight();
+		int height = this.layout.getContentHeight();
+		int side = Math.round(this.width * SIDE_SHARE);
+		int middle = this.width - 2 * side;
+		this.biomeList.updateSizeAndPosition(side, height, 0, top);
+		this.structureList.updateSizeAndPosition(side, height, this.width - side, top);
 
-		int seedRow = bottom - 20;
-		int summaryRow = seedRow - 4 - 12;
-		int side = Math.max(0, Math.min(columnWidth, summaryRow - 4 - top));
-		this.preview.setRectangle(side, side, left + (columnWidth - side) / 2, top);
-		this.summary.setRectangle(columnWidth, 12, left, summaryRow);
-		this.seedBox.setRectangle(columnWidth - SEARCH_BUTTON_WIDTH - 4, 20, left, seedRow);
-		this.searchButton.setPosition(left + columnWidth - SEARCH_BUTTON_WIDTH, seedRow);
+		int left = side + GAP;
+		int inner = middle - 2 * GAP;
+		int seedRow = top + height - GAP - 20;
+		int previewSize = Math.max(0, Math.min(inner, seedRow - GAP - (top + GAP)));
+		this.preview.setRectangle(previewSize, previewSize, left + (inner - previewSize) / 2, top + GAP);
+		this.seedBox.setRectangle(inner - SEARCH_BUTTON_WIDTH - 4, 20, left, seedRow);
+		this.searchButton.setPosition(left + inner - SEARCH_BUTTON_WIDTH, seedRow);
+	}
 
-		this.presetButton.setRectangle(columnWidth, 20, right, top);
-		// The list draws separators 2 pixels above and below itself.
-		this.list.updateSizeAndPosition(columnWidth, bottom - top - 24 - 2, right, top + 24 + 2);
+	@Override
+	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+		super.extractBackground(graphics, mouseX, mouseY, a);
+		// The lists draw their own background and separators. This is the same for the middle column.
+		int side = Math.round(this.width * SIDE_SHARE);
+		int top = this.layout.getHeaderHeight();
+		int height = this.layout.getContentHeight();
+		int middle = this.width - 2 * side;
+		graphics.blit(RenderPipelines.GUI_TEXTURED, LIST_BACKGROUND, side, top, (float) side, (float) top, middle, height, 32, 32);
+		graphics.blit(RenderPipelines.GUI_TEXTURED, Screen.HEADER_SEPARATOR, side, top - 2, 0.0F, 0.0F, middle, 2, 32, 2);
+		graphics.blit(RenderPipelines.GUI_TEXTURED, Screen.FOOTER_SEPARATOR, side, top + height, 0.0F, 0.0F, middle, 2, 32, 2);
 	}
 
 	@Override
@@ -199,23 +228,20 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.refreshSearchButton();
 	}
 
-	private void onFilterChanged() {
-		this.preset = PRESETS.getFirst();
-		this.presetButton.setValue(this.preset);
-	}
-
-	private void choosePreset(Preset preset) {
-		this.preset = preset;
-		if (preset.biomes.isEmpty()) {
-			return;
-		}
-		this.required.clear();
+	private void usePreset(Preset preset) {
+		this.requiredBiomes.clear();
 		for (Holder<Biome> biome : this.biomeSource.possibleBiomes()) {
 			if (biome.unwrapKey().map(key -> preset.biomes.contains(key.identifier())).orElse(false)) {
-				this.required.add(biome);
+				this.requiredBiomes.add(biome);
 			}
 		}
-		this.startSearch();
+		this.requiredStructures.clear();
+		for (Holder<StructureSet> set : this.structureCandidates) {
+			set.unwrapKey().filter(key -> preset.structures.contains(key.identifier())).ifPresent(this.requiredStructures::add);
+		}
+		if (!this.requiredBiomes.isEmpty() || !this.requiredStructures.isEmpty()) {
+			this.startSearch();
+		}
 	}
 
 	private void toggleSearch() {
@@ -228,11 +254,12 @@ public class CustomizeCubeWorldScreen extends Screen {
 		}
 	}
 
-	/** Tries random seeds until one has every required biome. With no required biome, the first seed it tries is the one. */
+	/** Tries random seeds until one has everything that is required. With nothing required, the first seed it tries is the one. */
 	private void startSearch() {
 		int id = this.task.incrementAndGet();
 		BooleanSupplier stop = () -> this.task.get() != id;
-		Set<Holder<Biome>> wanted = Set.copyOf(this.required);
+		Set<Holder<Biome>> wantedBiomes = Set.copyOf(this.requiredBiomes);
+		Set<ResourceKey<StructureSet>> wantedStructures = Set.copyOf(this.requiredStructures);
 		CubeSettings settings = this.settings;
 		this.tried.set(0);
 		this.searching = true;
@@ -242,33 +269,39 @@ public class CustomizeCubeWorldScreen extends Screen {
 			while (!stop.getAsBoolean()) {
 				long seed = random.nextLong();
 				CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
-				CubeBiomeMap quick = sampler.sample(SEARCH_CELLS, wanted.isEmpty() ? null : wanted, stop);
+				CubeBiomeMap quick = sampler.sample(SEARCH_CELLS, wantedBiomes.isEmpty() ? null : wantedBiomes, stop);
 				if (quick == null) {
 					return;
 				}
 				this.tried.incrementAndGet();
-				if (quick.present.containsAll(wanted)) {
-					CubeBiomeMap full = sampler.sample(PREVIEW_CELLS, null, stop);
-					if (full == null) {
-						return;
-					}
-					// Both maps are samples of the same world, so a biome in either one is in the world.
-					Set<Holder<Biome>> present = new HashSet<>(full.present);
-					present.addAll(quick.present);
-					this.minecraft.execute(() -> {
-						if (!stop.getAsBoolean()) {
-							this.searching = false;
-							this.seed = seed;
-							this.seedText = Long.toString(seed);
-							this.settingSeedText = true;
-							this.seedBox.setValue(this.seedText);
-							this.settingSeedText = false;
-							this.setMap(full, present, seed, settings);
-							this.refreshSearchButton();
-						}
-					});
+				if (!quick.present.containsAll(wantedBiomes)) {
+					continue;
+				}
+				if (!wantedStructures.isEmpty() && !this.structures(sampler, settings, wantedStructures).containsAll(wantedStructures)) {
+					continue;
+				}
+				CubeBiomeMap full = sampler.sample(PREVIEW_CELLS, null, stop);
+				if (full == null) {
 					return;
 				}
+				// Both maps are samples of the same world, so a biome in either one is in the world.
+				Set<Holder<Biome>> biomes = new HashSet<>(full.present);
+				biomes.addAll(quick.present);
+				Found result = new Found(full, biomes, this.structures(sampler, settings, null));
+				this.minecraft.execute(() -> {
+					if (!stop.getAsBoolean()) {
+						this.searching = false;
+						this.seed = seed;
+						this.seedText = Long.toString(seed);
+						this.settingSeedText = true;
+						this.seedBox.setValue(this.seedText);
+						this.seedBox.moveCursorToStart(false);
+						this.settingSeedText = false;
+						this.setFound(result, seed, settings);
+						this.refreshSearchButton();
+					}
+				});
+				return;
 			}
 		});
 	}
@@ -279,21 +312,28 @@ public class CustomizeCubeWorldScreen extends Screen {
 		BooleanSupplier stop = () -> this.task.get() != id;
 		long seed = this.seed;
 		CubeSettings settings = this.settings;
-		this.mapSeed = seed;
-		this.mapSettings = settings;
-		this.map = null;
-		this.present = null;
-		this.showMap();
+		this.foundSeed = seed;
+		this.foundSettings = settings;
+		this.found = null;
+		this.showFound();
 		run(() -> {
-			CubeBiomeMap map = this.sampler(settings, seed).sample(PREVIEW_CELLS, null, stop);
+			CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
+			CubeBiomeMap map = sampler.sample(PREVIEW_CELLS, null, stop);
 			if (map != null) {
+				Found result = new Found(map, map.present, this.structures(sampler, settings, null));
 				this.minecraft.execute(() -> {
 					if (!stop.getAsBoolean()) {
-						this.setMap(map, map.present, seed, settings);
+						this.setFound(result, seed, settings);
 					}
 				});
 			}
 		});
+	}
+
+	private Set<ResourceKey<StructureSet>> structures(
+		CubeBiomeMap.Sampler sampler, CubeSettings settings, @Nullable Set<ResourceKey<StructureSet>> wanted
+	) {
+		return CubeStructureMap.find(sampler, settings, this.structureSets, this.biomeSource, this.structureCandidates, wanted);
 	}
 
 	private CubeBiomeMap.Sampler sampler(CubeSettings settings, long seed) {
@@ -306,28 +346,45 @@ public class CustomizeCubeWorldScreen extends Screen {
 		thread.start();
 	}
 
-	private void setMap(CubeBiomeMap map, Set<Holder<Biome>> present, long seed, CubeSettings settings) {
-		this.map = map;
-		this.present = present;
-		this.mapSeed = seed;
-		this.mapSettings = settings;
-		this.showMap();
+	private void setFound(Found found, long seed, CubeSettings settings) {
+		this.found = found;
+		this.foundSeed = seed;
+		this.foundSettings = settings;
+		this.showFound();
 	}
 
-	private void showMap() {
-		this.preview.setMap(this.map);
+	private void showFound() {
+		Found found = this.found;
+		this.preview.setMap(found == null ? null : found.map);
 		this.preview.setPlaceholder(Component.translatable("cubeworld.customize.preview.loading"));
-		this.list.setPresent(this.present);
-		this.summary.setMessage(this.present == null
-			? Component.empty()
-			: Component.translatable("cubeworld.customize.summary", this.biomeSource.possibleBiomes().stream().filter(this.present::contains).count(),
-				this.biomeSource.possibleBiomes().size()));
+		this.biomeList.setPresent(found == null ? null : found.biomes);
+		this.structureList.setPresent(found == null ? null : found.structures);
+		int biomes = this.biomeSource.possibleBiomes().size();
+		int structures = this.structureCandidates.size();
+		this.biomeList.setTitle(found == null
+			? Component.translatable("cubeworld.customize.biomes")
+			: Component.translatable("cubeworld.customize.biomes.count", this.biomeSource.possibleBiomes().stream().filter(found.biomes::contains).count(), biomes));
+		this.structureList.setTitle(found == null
+			? Component.translatable("cubeworld.customize.structures")
+			: Component.translatable("cubeworld.customize.structures.count", found.structures.size(), structures));
 	}
 
 	private void refreshSearchButton() {
 		this.searchButton.setMessage(this.searching
 			? Component.translatable("cubeworld.customize.search.stop", this.tried.get())
 			: Component.translatable("cubeworld.customize.search"));
+	}
+
+	private static Component structureName(ResourceKey<StructureSet> key) {
+		String translationKey = "cubeworld.customize.structure." + key.identifier().getPath();
+		if (Language.getInstance().has(translationKey)) {
+			return Component.translatable(translationKey);
+		}
+		StringBuilder name = new StringBuilder();
+		for (String word : key.identifier().getPath().split("_")) {
+			name.append(name.isEmpty() ? "" : " ").append(word.substring(0, 1).toUpperCase(Locale.ROOT)).append(word.substring(1));
+		}
+		return Component.literal(name.toString());
 	}
 
 	private void applySettings() {
@@ -357,13 +414,18 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.minecraft.gui.setScreen(this.parent);
 	}
 
-	/** A set of required biomes with a name. The custom preset has no biomes: it is the name for a set that the player checks. */
-	private record Preset(Component name, Set<Identifier> biomes) {
-		Preset(String key, String... biomes) {
-			this(
+	/** A set of required biomes and structures, by their ids in the minecraft namespace. */
+	record Preset(Component name, Component description, Set<Identifier> biomes, Set<Identifier> structures) {
+		static Preset of(String key, List<String> biomes, List<String> structures) {
+			return new Preset(
 				Component.translatable("cubeworld.customize.preset." + key),
-				Set.of(Arrays.stream(biomes).map(Identifier::withDefaultNamespace).toArray(Identifier[]::new))
+				Component.translatable("cubeworld.customize.preset." + key + ".description"),
+				ids(biomes), ids(structures)
 			);
+		}
+
+		private static Set<Identifier> ids(List<String> paths) {
+			return Set.copyOf(paths.stream().map(Identifier::withDefaultNamespace).toList());
 		}
 	}
 }

@@ -211,8 +211,11 @@ public final class CubeDensityFunctions {
 		}
 	}
 
-	/** How far continentalness rises at an edge. Inland starts near 0.03 and oceans are under -0.19. */
-	private static final float EDGE_LAND_BIAS = 0.5f;
+	/**
+	 * How far continentalness rises at an edge. Inland starts near 0.03 and oceans are under -0.19. Off for now, so
+	 * that the seed alone decides the terrain. A setting for edge gravity can bring it back.
+	 */
+	private static final float EDGE_LAND_BIAS = 0.0f;
 	/** How far the edge bias reaches into a face beyond the rounded shoulder, in blocks. */
 	private static final int EDGE_LAND_WIDTH = 48;
 
