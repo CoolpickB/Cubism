@@ -50,6 +50,9 @@ public final class LoadTrace {
 	private static final long STACK_AFTER_MS = 1000L;
 	private static final long STACK_INTERVAL_MS = 2000L;
 	private static final int STACK_DEPTH = 40;
+	/** A client frame that runs this long gets the stack of the render thread in the trace, at most {@link #MAX_FRAME_STACKS} times. */
+	private static final long FRAME_STACK_MS = 80L;
+	private static final int MAX_FRAME_STACKS = 300;
 
 	private static long lastServerSample;
 	/** Start of the server tick that runs, or end of the last tick while the server thread is between ticks, by {@link Util#getNanos}. */
@@ -61,6 +64,10 @@ public final class LoadTrace {
 	private static volatile boolean betweenTicks;
 	private static volatile @Nullable Thread serverThread;
 	private static @Nullable Thread watchdog;
+	private static volatile @Nullable Thread renderThread;
+	/** Start of the client frame that runs, by {@link Util#getNanos}, or 0 before the first frame. */
+	private static volatile long frameStart;
+	private static int frameStacks;
 	private static int ticks;
 	private static long tickNanos;
 	private static long maxTickNanos;
@@ -146,6 +153,12 @@ public final class LoadTrace {
 		}
 	}
 
+	/** Called at the start of every client frame. The watchdog logs where a long frame spends its time. */
+	public static void clientFrameStart() {
+		renderThread = Thread.currentThread();
+		frameStart = Util.getNanos();
+	}
+
 	private static void watch() {
 		long watched = 0L;
 		long nextDumpMs = STACK_AFTER_MS;
@@ -155,6 +168,7 @@ public final class LoadTrace {
 			} catch (InterruptedException e) {
 				break;
 			}
+			sampleRenderThread();
 			long start = tickStart;
 			boolean between = betweenTicks;
 			Thread thread = serverThread;
@@ -179,6 +193,25 @@ public final class LoadTrace {
 		synchronized (LoadTrace.class) {
 			watchdog = null;
 		}
+	}
+
+	private static void sampleRenderThread() {
+		long start = frameStart;
+		Thread thread = renderThread;
+		if (start == 0L || thread == null || frameStacks >= MAX_FRAME_STACKS) {
+			return;
+		}
+		long ms = (Util.getNanos() - start) / 1_000_000L;
+		if (ms < FRAME_STACK_MS) {
+			return;
+		}
+		frameStacks++;
+		StringBuilder stack = new StringBuilder("client frame runs for " + ms + " ms, at:");
+		StackTraceElement[] frames = thread.getStackTrace();
+		for (int i = 0; i < Math.min(frames.length, STACK_DEPTH); i++) {
+			stack.append("\n        at ").append(frames[i]);
+		}
+		event(stack.toString());
 	}
 
 	/** Records one server tick. Ticks before the first player joins come only from the pre-generation loops. */

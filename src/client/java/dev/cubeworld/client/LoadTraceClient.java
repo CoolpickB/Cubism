@@ -102,6 +102,7 @@ public final class LoadTraceClient {
 			return;
 		}
 		LoadTrace.checkEnd();
+		LoadTrace.clientFrameStart();
 		long now = Util.getNanos();
 		if (lastFrame != 0L) {
 			long nanos = now - lastFrame;
