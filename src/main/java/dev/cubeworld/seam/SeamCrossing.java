@@ -2,6 +2,7 @@ package dev.cubeworld.seam;
 
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -107,6 +108,15 @@ public final class SeamCrossing {
 	 */
 	private static boolean landsOn(ServerLevel level, Entity entity, Vec3 feet) {
 		AABB box = entity.getBoundingBox().move(feet.subtract(entity.position()));
+		// A block read in a chunk that is not loaded makes the server thread wait for it, and a chunk that has to
+		// generate first held a tick for 8 s. The entity crosses once the chunk is there.
+		for (int chunkX = SectionPos.blockToSectionCoord(box.minX); chunkX <= SectionPos.blockToSectionCoord(box.maxX); chunkX++) {
+			for (int chunkZ = SectionPos.blockToSectionCoord(box.minZ); chunkZ <= SectionPos.blockToSectionCoord(box.maxZ); chunkZ++) {
+				if (!level.getChunkSource().hasChunk(chunkX, chunkZ)) {
+					return false;
+				}
+			}
+		}
 		return level.noBlockCollision(entity, box)
 			&& (!level.noBlockCollision(entity, box.move(0.0, -GROUND_DEPTH, 0.0)) || level.containsAnyLiquid(box));
 	}
