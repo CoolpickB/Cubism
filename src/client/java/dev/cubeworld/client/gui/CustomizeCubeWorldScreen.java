@@ -61,7 +61,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private static final int SEARCH_SEED_BOUND = 10_000_000;
 	private static final int HISTORY_SIZE = 50;
 	/** A typed seed loads after this many ticks without a key. */
-	private static final int TYPING_PAUSE_TICKS = 10;
+	private static final int TYPING_PAUSE_TICKS = 20;
 	private static final float SIDE_SHARE = 0.32F;
 	private static final Identifier LIST_BACKGROUND = Identifier.withDefaultNamespace("textures/gui/menu_list_background.png");
 
@@ -276,6 +276,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		}
 		this.typedPending = false;
 		this.seed = WorldOptions.parseSeed(this.seedText).orElseGet(WorldOptions::randomSeed);
+		this.remember(this.seedText.isBlank() ? Long.toString(this.seed) : this.seedText);
 		this.sample();
 	}
 
@@ -297,7 +298,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	/** Makes the seed the newest entry of the history, and drops the entries after the one that shows. */
 	private void remember(String text) {
-		if (this.historyAt < this.history.size() && this.history.get(this.historyAt).equals(text)) {
+		if (text.isBlank() || this.historyAt < this.history.size() && this.history.get(this.historyAt).equals(text)) {
 			return;
 		}
 		while (this.history.size() > this.historyAt + 1) {
