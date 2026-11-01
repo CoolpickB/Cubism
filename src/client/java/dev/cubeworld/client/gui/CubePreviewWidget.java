@@ -31,9 +31,10 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The surface biomes of the cube, seen from outside in perspective. The cube turns slowly about an axis that it leans
- * on, so that each face comes into view. A drag turns it freely by hand, about any axis, and a drag near the rim rolls
- * it. A thrown cube goes on turning and slows down. After a pause the cube eases back to its own turn. The biome under
- * the mouse shows as a tooltip, and a highlighted biome keeps its color while the others dim.
+ * on, so that each face comes into view. A drag turns it freely by hand, about any axis, and a drag that starts at the
+ * rim rolls it. A thrown cube goes on turning and slows down. After a pause the cube turns again about the same axis
+ * as at the start, from the orientation that it was left in. The biome under the mouse shows as a tooltip, and a
+ * highlighted biome keeps its color while the others dim.
  */
 final class CubePreviewWidget extends AbstractWidget {
 	private static final float TURN_PER_MS = 0.0003F;
@@ -41,16 +42,20 @@ final class CubePreviewWidget extends AbstractWidget {
 	private static final long PAUSE_AFTER_DRAG_MS = 3000L;
 	private static final float DRAG_SPEED = 0.015F;
 	/** A thrown cube slows down with this time constant. */
-	private static final float SPIN_DECAY_MS = 1000.0F;
+	private static final float SPIN_DECAY_MS = 500.0F;
 	/** Below this turn speed, in radians per ms, a thrown cube stops. */
-	private static final float MIN_SPIN = 0.0004F;
-	private static final float MAX_SPIN = 0.01F;
+	private static final float MIN_SPIN = 0.0006F;
+	private static final float MAX_SPIN = 0.006F;
+	/** A throw keeps this share of the speed of the hand, so that a quick drag does not send the cube off. */
+	private static final float THROW_SHARE = 0.5F;
 	/** A release this long after the last drag movement throws nothing. */
-	private static final long THROW_WINDOW_MS = 100L;
-	/** The time constant of the cube easing back to its own turn. */
-	private static final float RETURN_MS = 300.0F;
+	private static final long THROW_WINDOW_MS = 60L;
+	/** A drag that starts this far from the center, in cube radii, rolls the cube. */
+	private static final float ROLL_START = 0.85F;
 	private static final float START_YAW = Mth.PI / 4.0F;
 	private static final float START_PITCH = Mth.PI / 12.0F;
+	/** The axis of the turn of the cube, in the view. */
+	private static final Vector3f TURN_AXIS = new Matrix3f().rotateX(START_PITCH).transform(new Vector3f(0.0F, 1.0F, 0.0F));
 	private static final float DIMMED = 0.35F;
 	private static final Vector3f LIGHT = new Vector3f(-0.4F, 0.7F, 0.6F).normalize();
 	/**
@@ -65,12 +70,12 @@ final class CubePreviewWidget extends AbstractWidget {
 	private @Nullable CubeBiomeMap map;
 	private Component placeholder = Component.empty();
 	private boolean loading;
-	private final Quaternionf orientation = defaultPose(START_YAW);
-	/** The yaw of the cube in its own turn, which goes on while the cube is free. */
-	private float turnYaw = START_YAW;
+	private final Quaternionf orientation = startPose();
 	/** The turn of a thrown cube as a rotation vector per ms, in the view. */
 	private final Vector3f spin = new Vector3f();
 	private boolean dragging;
+	/** Whether the drag in progress started at the rim, and rolls the cube instead of tilting it. */
+	private boolean rolling;
 	private long lastFrame;
 	private long lastActive;
 	private long lastDragMove;
@@ -103,8 +108,8 @@ final class CubePreviewWidget extends AbstractWidget {
 		this.lastActive = Util.getMillis();
 	}
 
-	private static Quaternionf defaultPose(float yaw) {
-		return new Quaternionf().rotateX(START_PITCH).rotateY(yaw).rotateZ(LEAN);
+	private static Quaternionf startPose() {
+		return new Quaternionf().rotateX(START_PITCH).rotateY(START_YAW).rotateZ(LEAN);
 	}
 
 	/** True while the map is out of date: the placeholder shows over the cube of the last map. */
@@ -180,7 +185,7 @@ final class CubePreviewWidget extends AbstractWidget {
 		}
 	}
 
-	/** Moves the cube by one frame: a thrown spin, or the return to the turn of the cube after a pause. */
+	/** Moves the cube by one frame: a thrown spin, or its own turn after a pause, from the orientation it is in. */
 	private void advance(long now, long dt) {
 		if (this.dragging) {
 			this.lastActive = now;
@@ -195,8 +200,7 @@ final class CubePreviewWidget extends AbstractWidget {
 		}
 		this.spin.zero();
 		if (now - this.lastActive > PAUSE_AFTER_DRAG_MS) {
-			this.turnYaw += dt * TURN_PER_MS;
-			this.orientation.slerp(defaultPose(this.turnYaw), 1.0F - (float) Math.exp(-dt / RETURN_MS));
+			this.turn(TURN_AXIS, dt * TURN_PER_MS);
 		}
 	}
 
@@ -298,34 +302,39 @@ final class CubePreviewWidget extends AbstractWidget {
 
 	@Override
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
+		float radius = Math.min(this.width, this.height) / 2.0F;
+		float x = (float) (event.x() - (this.getX() + this.width / 2.0)) / radius;
+		float y = (float) (event.y() - (this.getY() + this.height / 2.0)) / radius;
+		this.rolling = Mth.length(x, y) > ROLL_START;
 		this.spin.zero();
 		this.dragging = true;
 		this.lastDragMove = Util.getMillis();
 	}
 
 	/**
-	 * A drag turns the cube about the axis across the movement, and near the rim about the look, by the angle that the
-	 * mouse goes around the center. The cube keeps the turn of the last movement as its speed.
+	 * A drag turns the cube about the axis across the movement. A drag that started at the rim turns it about the look
+	 * instead, by the angle that the mouse goes around the center. The cube keeps the turn of the last movement as its
+	 * speed. The mode stays for the whole drag, so that no distance of the mouse ends the turn.
 	 */
 	@Override
 	protected void onDrag(MouseButtonEvent event, double dx, double dy) {
 		long now = Util.getMillis();
-		float radius = Math.min(this.width, this.height) / 2.0F;
-		float x1 = (float) (event.x() - (this.getX() + this.width / 2.0)) / radius;
-		float y1 = -(float) (event.y() - (this.getY() + this.height / 2.0)) / radius;
-		float x0 = x1 - (float) dx / radius;
-		float y0 = y1 + (float) dy / radius;
-		float edge = Mth.clamp((Math.min(Mth.length(x1, y1), Mth.length(x0, y0)) - 0.7F) / 0.3F, 0.0F, 1.0F);
-		float rim = Mth.smoothstep(edge);
-		float roll = rim * (float) Math.atan2(x0 * y1 - y0 * x1, x0 * x1 + y0 * y1);
-		float tilt = (1.0F - rim) * DRAG_SPEED;
-		Vector3f turn = new Vector3f((float) dy * tilt, (float) dx * tilt, roll);
+		Vector3f turn;
+		if (this.rolling) {
+			float radius = Math.min(this.width, this.height) / 2.0F;
+			float x1 = (float) (event.x() - (this.getX() + this.width / 2.0)) / radius;
+			float y1 = -(float) (event.y() - (this.getY() + this.height / 2.0)) / radius;
+			float x0 = x1 - (float) dx / radius;
+			float y0 = y1 + (float) dy / radius;
+			turn = new Vector3f(0.0F, 0.0F, (float) Math.atan2(x0 * y1 - y0 * x1, x0 * x1 + y0 * y1));
+		} else {
+			turn = new Vector3f((float) dy * DRAG_SPEED, (float) dx * DRAG_SPEED, 0.0F);
+		}
 		float angle = turn.length();
 		if (angle > 0.0F) {
 			this.turn(turn.div(angle), angle);
-			float seconds = Math.max(1L, now - this.lastDragMove);
-			Vector3f speed = new Vector3f(turn).mul(angle / seconds);
-			this.spin.lerp(speed, 0.5F);
+			float ms = Math.max(1L, now - this.lastDragMove);
+			this.spin.lerp(new Vector3f(turn).mul(THROW_SHARE * angle / ms), 0.5F);
 			if (this.spin.length() > MAX_SPIN) {
 				this.spin.normalize(MAX_SPIN);
 			}
