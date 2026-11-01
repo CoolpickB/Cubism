@@ -558,42 +558,45 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	/** A click on the mark of a structure pins its places on the cube, and a second click ends that. */
 	private void pin(ResourceKey<StructureSet> key) {
-		Found found = this.found;
-		if (this.pinned == key || found == null) {
+		if (this.pinned == key || this.found == null) {
 			this.pinned = null;
 			this.pins = List.of();
 		} else {
 			this.pinned = key;
-			this.pinnedFound = found;
-			this.pins = List.of();
-			CubeSettings settings = this.foundSettings;
-			long seed = this.foundSeed;
-			run(() -> {
-				Holder<StructureSet> set = this.structureCandidates.stream().filter(candidate -> candidate.is(key)).findFirst().orElseThrow();
-				List<Vector3f> points = CubeStructureMap.positions(this.sampler(settings, seed), settings, this.structureSets, this.biomeSource, set);
-				this.minecraft.execute(() -> {
-					if (this.pinned == key && this.pinnedFound == found) {
-						this.pins = points;
-						this.showFound();
-					}
-				});
-			});
+			this.loadPins();
 		}
 		this.preview.pause();
 		this.showFound();
 	}
 
+	/** Finds the places of the pinned structure on the shown seed. The cube shows no pins until they come. */
+	private void loadPins() {
+		ResourceKey<StructureSet> key = this.pinned;
+		Found found = this.found;
+		this.pinnedFound = found;
+		this.pins = List.of();
+		CubeSettings settings = this.foundSettings;
+		long seed = this.foundSeed;
+		run(() -> {
+			Holder<StructureSet> set = this.structureCandidates.stream().filter(candidate -> candidate.is(key)).findFirst().orElseThrow();
+			List<Vector3f> points = CubeStructureMap.positions(this.sampler(settings, seed), settings, this.structureSets, this.biomeSource, set);
+			this.minecraft.execute(() -> {
+				if (this.pinned == key && this.pinnedFound == found) {
+					this.pins = points;
+					this.showFound();
+				}
+			});
+		});
+	}
+
 	private void showFound() {
 		Found found = this.found;
-		if (this.pinned != null && found != this.pinnedFound) {
-			this.pinned = null;
-			this.pins = List.of();
+		// The picked structure and biome stay picked when the seed changes, and the cube shows their places on the new seed.
+		if (this.pinned != null && found != null && found != this.pinnedFound) {
+			this.loadPins();
 		}
 		this.preview.setPins(this.pins);
 		this.structureList.setHighlighted(this.pinned);
-		if (found != null && this.highlighted != null && !found.biomes.contains(this.highlighted)) {
-			this.highlighted = null;
-		}
 		this.preview.setHighlighted(this.highlighted);
 		this.biomeList.setHighlighted(this.highlighted);
 		this.preview.setMap(found == null ? null : found.map);
