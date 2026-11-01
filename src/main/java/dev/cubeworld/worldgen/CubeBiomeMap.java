@@ -13,7 +13,9 @@ import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
@@ -123,8 +125,7 @@ public final class CubeBiomeMap {
 						present.add(biome);
 						if (s % CAVE_STEP == 0 && t % CAVE_STEP == 0) {
 							for (int vanillaY : CAVE_LAYERS_VANILLA_Y) {
-								int[] p = point(axes, n, u, v, this.radius - (64 - vanillaY) * crustScale);
-								present.add(this.biomes.getNoiseBiome(this.climate.sample(p[0] >> 2, p[1] >> 2, p[2] >> 2)));
+								present.add(this.caveBiome(point(axes, n, u, v, this.radius - (64 - vanillaY) * crustScale)));
 							}
 						}
 					}
@@ -134,6 +135,28 @@ public final class CubeBiomeMap {
 				}
 			}
 			return new CubeBiomeMap(cells, surface, present);
+		}
+
+		/**
+		 * The cave biomes under a surface position of the level, on the layers that {@link #sample} looks at. The normal
+		 * is that of the face that the position is on.
+		 */
+		public List<Holder<Biome>> caveBiomesBelow(int[] surface, Vec3i normal) {
+			float crustScale = (this.radius - this.innerBedrockRadius) / 128.0F;
+			List<Holder<Biome>> found = new ArrayList<>();
+			for (int vanillaY : CAVE_LAYERS_VANILLA_Y) {
+				float depth = (64 - vanillaY) * crustScale;
+				found.add(this.caveBiome(new int[] {
+					(int) Math.floor(surface[0] - normal.getX() * depth),
+					(int) Math.floor(surface[1] - normal.getY() * depth),
+					(int) Math.floor(surface[2] - normal.getZ() * depth)
+				}));
+			}
+			return found;
+		}
+
+		private Holder<Biome> caveBiome(int[] p) {
+			return this.biomes.getNoiseBiome(this.climate.sample(p[0] >> 2, p[1] >> 2, p[2] >> 2));
 		}
 
 		private Holder<Biome> surfaceBiome(int[] p) {

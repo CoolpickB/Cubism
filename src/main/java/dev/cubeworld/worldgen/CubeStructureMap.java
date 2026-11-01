@@ -75,6 +75,10 @@ public final class CubeStructureMap {
 		return points;
 	}
 
+	private static boolean fits(Holder<StructureSet> set, List<Holder<Biome>> biomes) {
+		return set.value().structures().stream().anyMatch(entry -> biomes.stream().anyMatch(biome -> entry.structure().value().biomes().contains(biome)));
+	}
+
 	/** Called for a chunk where a set can place a structure. Returns true when the set needs no more chunks. */
 	private interface Hit {
 		boolean accept(Holder<StructureSet> set, int[] cubePoint);
@@ -108,7 +112,8 @@ public final class CubeStructureMap {
 							biome = sampler.surfaceBiomeAt(cube3[0], cube3[1], cube3[2]);
 						}
 						Holder<Biome> here = biome;
-						if (set.value().structures().stream().anyMatch(entry -> entry.structure().value().biomes().contains(here)) && hit.accept(set, cube3)) {
+						// A structure of a cave biome, such as an ancient city, has no surface biome that fits it.
+						if ((fits(set, List.of(here)) || fits(set, sampler.caveBiomesBelow(cube3, SeamLayout.FACES[face].getUnitVec3i()))) && hit.accept(set, cube3)) {
 							remaining.remove(set);
 						}
 					}

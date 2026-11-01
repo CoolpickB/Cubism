@@ -1,20 +1,20 @@
 package dev.cubeworld.client.gui;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.resources.Identifier;
 
 import java.util.function.Consumer;
 
 /** A compass icon that switches the direction markers of the cube preview on and off. */
 final class CompassToggle extends AbstractWidget {
 	private static final int SIZE = 20;
-	private final ItemStack icon = new ItemStack(Items.COMPASS);
+	private static final Identifier ICON = Identifier.withDefaultNamespace("textures/item/compass_16.png");
 	private final Consumer<Boolean> onChange;
 	private boolean on;
 
@@ -34,11 +34,8 @@ final class CompassToggle extends AbstractWidget {
 	protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
 		int x = this.getX();
 		int y = this.getY();
-		graphics.fill(x, y, x + SIZE, y + SIZE, this.isHovered() ? 0xA0404040 : 0x80000000);
-		if (this.on) {
-			graphics.outline(x, y, SIZE, SIZE, 0xFFFFFFFF);
-		}
-		graphics.item(this.icon, x + 2, y + 2);
+		int tint = this.on ? 0xFFFFFFFF : this.isHovered() ? 0xFFB0B0B0 : 0xFF707070;
+		graphics.blit(RenderPipelines.GUI_TEXTURED, ICON, x + 2, y + 2, 0.0F, 0.0F, 16, 16, 16, 16, tint);
 	}
 
 	@Override
