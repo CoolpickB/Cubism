@@ -6,7 +6,14 @@ import dev.cubeworld.worldgen.CubeDensityFunctions;
 import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
 import dev.cubeworld.worldgen.SeamRandomState;
+import dev.cubeworld.worldgen.FoldedStarts;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
@@ -15,6 +22,7 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /** {@link net.minecraft.server.level.ChunkMap} calls this right after it makes the RandomState of a level. */
@@ -37,6 +45,22 @@ public abstract class ChunkGeneratorMixin {
 				RandomStateAccessor router = (RandomStateAccessor) (Object) randomState;
 				router.cubeworld$setRouter(CubeDensityFunctions.withClimateShift(router.cubeworld$getRouter(), settings.temperature(), settings.humidity()));
 			}
+		}
+	}
+
+	/** After the starts of a chunk, the starts of other faces that fold over an edge into it. */
+	@Inject(method = "createStructures", at = @At("TAIL"))
+	private void cubeworld$foldStarts(
+		RegistryAccess registries,
+		ChunkGeneratorStructureState state,
+		StructureManager structureManager,
+		ChunkAccess centerChunk,
+		StructureTemplateManager templates,
+		ResourceKey<Level> level,
+		CallbackInfo ci
+	) {
+		if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+			FoldedStarts.addTo(generator, registries, state, structureManager, centerChunk, templates, level);
 		}
 	}
 }

@@ -41,6 +41,8 @@
 		"ServerGamePacketListenerImplMixin",
 		"ServerLevelMixin",
 		"StructureMixin",
+		"StructureStartMixin",
+		"PoolElementStructurePieceAccessor",
 		"UseOnContextMixin",
 		"VegetationBlockMixin",
 		"WorldGenRegionMixin",

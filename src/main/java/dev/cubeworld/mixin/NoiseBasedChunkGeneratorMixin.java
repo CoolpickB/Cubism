@@ -2,14 +2,18 @@ package dev.cubeworld.mixin;
 
 import com.google.common.base.Suppliers;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.worldgen.CubeSettings;
+import dev.cubeworld.worldgen.SeamFold;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.LevelHeightAccessor;
+import net.minecraft.world.level.NoiseColumn;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -20,6 +24,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.SpawnTargetPoint;
 import net.minecraft.world.level.levelgen.densityfunction.DensitySamplerSet;
 import org.spongepowered.asm.mixin.Final;
@@ -30,12 +35,15 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.apache.commons.lang3.mutable.MutableObject;
 import org.jspecify.annotations.Nullable;
 
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -185,6 +193,25 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 			return Blocks.AIR.defaultBlockState();
 		}
 		return original.call(aquifer, x, y, z, density);
+	}
+
+	/**
+	 * A structure is laid out on the flat plane of its face, and the plane past an edge is folded onto the neighbor
+	 * face (see {@link SeamFold}). The ground of that part is the ground of the neighbor face at the folded column.
+	 */
+	@WrapMethod(method = "iterateNoiseColumn")
+	private OptionalInt cubeworld$foldedColumn(
+		LevelHeightAccessor heights, RandomState randomState, int x, int z, @Nullable MutableObject<NoiseColumn> column,
+		@Nullable Predicate<BlockState> tester, Operation<OptionalInt> original
+	) {
+		SeamLayout layout = SeamLayout.active();
+		if (layout != null && ((NoiseBasedChunkGenerator) (Object) this).generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+			SeamFold.Fold fold = layout.foldOfColumn(x, z);
+			if (fold != null) {
+				return original.call(heights, randomState, fold.x(x, z), fold.z(x, z), column, tester);
+			}
+		}
+		return original.call(heights, randomState, x, z, column, tester);
 	}
 
 	@ModifyReturnValue(method = "buildTerrain", at = @At("RETURN"))

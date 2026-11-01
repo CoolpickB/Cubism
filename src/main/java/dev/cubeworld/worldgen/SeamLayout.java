@@ -28,6 +28,7 @@ public final class SeamLayout {
 
 	public final int radius;
 	public final int centerY;
+	public final SeamFold fold;
 	public final int innerBedrockRadius;
 	/** Distance between region centers. A wedge is 2(R + 96) + 1 blocks wide at the top, and region edges are chunk-aligned. */
 	public final int spacing;
@@ -41,6 +42,7 @@ public final class SeamLayout {
 		for (int i = 0; i < FACES.length; i++) {
 			this.rotations[i] = rotation(FACES[i]);
 		}
+		this.fold = new SeamFold(this);
 	}
 
 	public static @Nullable SeamLayout active() {
@@ -94,6 +96,22 @@ public final class SeamLayout {
 	public int faceIndexAt(int storageX) {
 		int index = Math.floorDiv(storageX + this.spacing / 2, this.spacing);
 		return Math.clamp(index, 0, FACES.length - 1);
+	}
+
+	/** The fold that carries a storage column past an edge of its face, or null for a column on the face or past a corner. */
+	public SeamFold.@Nullable Fold foldOfColumn(int storageX, int storageZ) {
+		if (!this.inRegion(storageX, storageZ)) {
+			return null;
+		}
+		int face = this.faceIndexAt(storageX);
+		int x = storageX - this.offsetX(face);
+		boolean beyondX = Math.abs(x) > this.radius;
+		boolean beyondZ = Math.abs(storageZ) > this.radius;
+		if (beyondX == beyondZ) {
+			return null;
+		}
+		int edge = beyondX ? (x > 0 ? 0 : 1) : (storageZ > 0 ? 2 : 3);
+		return this.fold.get(face, edge);
 	}
 
 	public boolean inRegion(int storageX, int storageZ) {
