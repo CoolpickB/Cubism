@@ -108,7 +108,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 	/** The counts of the latest search. The lists show its rates until the checked items change. */
 	private volatile @Nullable SearchStats stats;
 	private @Nullable Found found;
-	/** The seed and settings of {@link #found}, or of the sampling that runs for it. */
+	/** The seed and settings of {@link #found}. */
 	private long foundSeed;
 	private @Nullable CubeSettings foundSettings;
 
@@ -463,16 +463,12 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.structureList.setRates(null);
 	}
 
-	/** Samples the shown seed for the preview. */
+	/** Samples the shown seed for the preview. The screen keeps showing the last map, its counts and its marks until the new ones come. */
 	private void sample() {
 		int id = this.task.incrementAndGet();
 		BooleanSupplier stop = () -> this.task.get() != id;
 		long seed = this.seed;
 		CubeSettings settings = this.settings;
-		this.foundSeed = seed;
-		this.foundSettings = settings;
-		this.found = null;
-		this.showFound();
 		run(() -> {
 			CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
 			CubeBiomeMap map = sampler.sample(PREVIEW_CELLS, null, stop);
