@@ -1,5 +1,6 @@
 package dev.cubeworld.client;
 
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.seam.SeamCrossing;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -12,6 +13,8 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import java.util.ArrayDeque;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
@@ -36,6 +39,9 @@ public final class CubeFlight {
 	private static final Quaternionf physicsFrame = new Quaternionf();
 	private static float worldYRot;
 	private static float worldXRot;
+	/** The last ticks before a crossing and the ticks after it, for the load trace. */
+	private static final ArrayDeque<String> RECENT_TICKS = new ArrayDeque<>();
+	private static int traceTicksLeft;
 
 	private CubeFlight() {}
 
@@ -46,6 +52,28 @@ public final class CubeFlight {
 		weight = Mth.clamp(weight + (flies ? 1.0F : -1.0F) / EASE_TICKS, 0.0F, 1.0F);
 		if (flies || !player.isPassenger() && !player.isSpectator()) {
 			cross(player, flies);
+		}
+		traceTick(player);
+	}
+
+	/** Logs the position, velocity and view of the player for 10 ticks before and 30 after each crossing. */
+	private static void traceTick(LocalPlayer player) {
+		if (!LoadTrace.active()) {
+			return;
+		}
+		Quaternionf view = viewFrame(player, 1.0F);
+		Vec3 delta = player.getDeltaMovement();
+		String line = String.format(Locale.ROOT, "  tick pos=%.3f %.3f %.3f vel=%.3f %.3f %.3f yaw=%.1f pitch=%.1f ground=%b tilt=%.1f",
+			player.getX(), player.getY(), player.getZ(), delta.x, delta.y, delta.z, player.getYRot(), player.getXRot(),
+			player.onGround(), Math.toDegrees(view.angle()));
+		if (traceTicksLeft > 0) {
+			traceTicksLeft--;
+			LoadTrace.event(line);
+			return;
+		}
+		RECENT_TICKS.addLast(line);
+		if (RECENT_TICKS.size() > 10) {
+			RECENT_TICKS.removeFirst();
 		}
 	}
 
@@ -283,6 +311,11 @@ public final class CubeFlight {
 		player.yRotO = yaw(oldLook, turned.yRot());
 		player.xRotO = pitch(oldLook);
 		((TurnableAvatarState) player.avatarState()).cubeworld$turn(m, halfHeight);
+		if (LoadTrace.active()) {
+			RECENT_TICKS.forEach(LoadTrace::event);
+			RECENT_TICKS.clear();
+			traceTicksLeft = 30;
+		}
 	}
 
 	private static Vector3f turnLook(int[] m, Vector3f v) {
