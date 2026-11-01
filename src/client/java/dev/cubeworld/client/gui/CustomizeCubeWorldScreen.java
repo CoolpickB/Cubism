@@ -39,9 +39,14 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -60,6 +65,10 @@ public class CustomizeCubeWorldScreen extends Screen {
 	/** Searches pick seeds below this, so that they fit in the seed box: at most 7 digits. */
 	private static final int SEARCH_SEED_BOUND = 10_000_000;
 	private static final int HISTORY_SIZE = 50;
+	/** A search leaves two cores to the game, and no more than 8 threads work on it. */
+	private static final int SEARCH_THREADS = Math.max(1, Math.min(8, Runtime.getRuntime().availableProcessors() - 2));
+	/** A rate shows after this many seeds, before that it is noise. */
+	private static final int MIN_RATE_SAMPLES = 20;
 	/** A typed seed loads after this many ticks without a key. */
 	private static final int TYPING_PAUSE_TICKS = 20;
 	private static final float SIDE_SHARE = 0.32F;
@@ -87,7 +96,6 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private final Set<ResourceKey<StructureSet>> requiredStructures = new HashSet<>();
 	/** Each sampling or search gets the next number. A task stops when the number moves on. */
 	private final AtomicInteger task = new AtomicInteger();
-	private final AtomicInteger tried = new AtomicInteger();
 	/** The seeds that the screen showed, oldest first, as the player typed them. {@link #historyAt} is the one that shows now. */
 	private final List<String> history = new ArrayList<>();
 	private int historyAt;
@@ -95,7 +103,10 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private CubeSettings settings;
 	private long seed;
 	private String seedText;
+	private int searchWidth = SEARCH_WIDTH;
 	private boolean searching;
+	/** The counts of the latest search. The lists show its rates until the checked items change. */
+	private volatile @Nullable SearchStats stats;
 	private @Nullable Found found;
 	/** The seed and settings of {@link #found}, or of the sampling that runs for it. */
 	private long foundSeed;
@@ -138,11 +149,11 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.layout.addTitleHeader(this.title, this.font);
 
 		this.biomeList = this.addRenderableWidget(new FilterList<>(
-			this.minecraft, this.biomeSource.possibleBiomes(), this.requiredBiomes, BiomeColors::name, BiomeColors::color, () -> {}
+			this.minecraft, this.biomeSource.possibleBiomes(), this.requiredBiomes, BiomeColors::name, BiomeColors::color, this::clearRates
 		));
 		this.structureList = this.addRenderableWidget(new FilterList<>(
 			this.minecraft, this.structureCandidates.stream().flatMap(set -> set.unwrapKey().stream()).toList(), this.requiredStructures,
-			CustomizeCubeWorldScreen::structureName, null, () -> {}
+			CustomizeCubeWorldScreen::structureName, null, this::clearRates
 		));
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
 		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")) {
@@ -230,8 +241,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.backButton.setRectangle(ARROW_WIDTH, 20, left, seedRow);
 		this.forwardButton.setRectangle(ARROW_WIDTH, 20, left + ARROW_WIDTH + 2, seedRow);
 		int seedLeft = left + 2 * ARROW_WIDTH + 2 + GAP;
-		this.searchButton.setRectangle(SEARCH_WIDTH, 20, left + inner - SEARCH_WIDTH, seedRow);
-		this.seedBox.setRectangle(left + inner - SEARCH_WIDTH - GAP - seedLeft, 20, seedLeft, seedRow);
+		this.searchButton.setRectangle(this.searchWidth, 20, left + inner - this.searchWidth, seedRow);
+		this.seedBox.setRectangle(left + inner - this.searchWidth - GAP - seedLeft, 20, seedLeft, seedRow);
 	}
 
 	@Override
@@ -338,13 +349,18 @@ public class CustomizeCubeWorldScreen extends Screen {
 		if (this.searching) {
 			this.task.incrementAndGet();
 			this.searching = false;
+			this.settleOnBest();
 			this.refreshSearchButton();
 		} else {
 			this.startSearch();
 		}
 	}
 
-	/** Tries random seeds until one has everything that is required. With nothing required, the first seed it tries is the one. */
+	/**
+	 * Tries random seeds on several threads until one has everything that is required. With nothing required, the first
+	 * seed it tries is the one. The search also keeps the seed that has the most of the required items: Stop leaves the
+	 * screen on that seed.
+	 */
 	private void startSearch() {
 		this.typedPending = false;
 		this.remember(this.seedText);
@@ -353,50 +369,98 @@ public class CustomizeCubeWorldScreen extends Screen {
 		Set<Holder<Biome>> wantedBiomes = Set.copyOf(this.requiredBiomes);
 		Set<ResourceKey<StructureSet>> wantedStructures = Set.copyOf(this.requiredStructures);
 		CubeSettings settings = this.settings;
-		this.tried.set(0);
+		SearchStats stats = SearchStats.of(wantedBiomes, wantedStructures);
+		this.stats = stats;
+		this.biomeList.setRates(stats::biomeRate);
+		this.structureList.setRates(stats::structureRate);
 		this.searching = true;
 		this.refreshSearchButton();
-		run(() -> {
-			Random random = new Random();
-			while (!stop.getAsBoolean()) {
-				long seed = random.nextInt(SEARCH_SEED_BOUND);
-				CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
-				CubeBiomeMap quick = sampler.sample(SEARCH_CELLS, wantedBiomes.isEmpty() ? null : wantedBiomes, stop);
-				if (quick == null) {
-					return;
-				}
-				this.tried.incrementAndGet();
-				if (!quick.present.containsAll(wantedBiomes)) {
-					continue;
-				}
-				if (!wantedStructures.isEmpty() && !this.structures(sampler, settings, wantedStructures).containsAll(wantedStructures)) {
-					continue;
-				}
-				CubeBiomeMap full = sampler.sample(PREVIEW_CELLS, null, stop);
-				if (full == null) {
-					return;
-				}
-				// Both maps are samples of the same world, so a biome in either one is in the world.
-				Set<Holder<Biome>> biomes = new HashSet<>(full.present);
-				biomes.addAll(quick.present);
-				Found result = new Found(full, biomes, this.structures(sampler, settings, null));
-				this.minecraft.execute(() -> {
-					if (!stop.getAsBoolean()) {
-						this.searching = false;
-						this.seed = seed;
-						this.seedText = Long.toString(seed);
-						this.settingSeedText = true;
-						this.seedBox.setValue(this.seedText);
-						this.seedBox.moveCursorToStart(false);
-						this.settingSeedText = false;
-						this.remember(this.seedText);
-						this.setFound(result, seed, settings);
-						this.refreshSearchButton();
-					}
-				});
+		BooleanSupplier halt = () -> stop.getAsBoolean() || stats.finished().get();
+		for (int i = 0; i < SEARCH_THREADS; i++) {
+			run(() -> this.searchSeeds(stats, wantedBiomes, wantedStructures, settings, stop, halt));
+		}
+	}
+
+	/** One thread of a search. {@code stop} ends the search, {@code halt} also ends it when another thread found the seed. */
+	private void searchSeeds(
+		SearchStats stats, Set<Holder<Biome>> wantedBiomes, Set<ResourceKey<StructureSet>> wantedStructures, CubeSettings settings,
+		BooleanSupplier stop, BooleanSupplier halt
+	) {
+		Random random = ThreadLocalRandom.current();
+		while (!halt.getAsBoolean()) {
+			long seed = random.nextInt(SEARCH_SEED_BOUND);
+			CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
+			CubeBiomeMap quick = sampler.sample(SEARCH_CELLS, wantedBiomes.isEmpty() ? null : wantedBiomes, halt);
+			if (quick == null) {
 				return;
 			}
-		});
+			stats.tried().incrementAndGet();
+			int score = 0;
+			for (Holder<Biome> biome : wantedBiomes) {
+				if (quick.present.contains(biome)) {
+					score++;
+					stats.biomeHits().get(biome).incrementAndGet();
+				}
+			}
+			// The structures cost much more than the biomes. A seed that cannot beat the best so far is not worth them.
+			if (!wantedStructures.isEmpty() && score + wantedStructures.size() > stats.best().get().score()) {
+				Set<ResourceKey<StructureSet>> structures = this.structures(sampler, settings, wantedStructures);
+				stats.structuresChecked().incrementAndGet();
+				structures.forEach(key -> stats.structureHits().get(key).incrementAndGet());
+				score += structures.size();
+			}
+			if (score < stats.total()) {
+				stats.offer(score, seed);
+				continue;
+			}
+			if (!stats.finished().compareAndSet(false, true)) {
+				return;
+			}
+			CubeBiomeMap full = sampler.sample(PREVIEW_CELLS, null, stop);
+			if (full == null) {
+				return;
+			}
+			// Both maps are samples of the same world, so a biome in either one is in the world.
+			Set<Holder<Biome>> biomes = new HashSet<>(full.present);
+			biomes.addAll(quick.present);
+			Found result = new Found(full, biomes, this.structures(sampler, settings, null));
+			this.minecraft.execute(() -> {
+				if (!stop.getAsBoolean()) {
+					this.searching = false;
+					this.showSeed(seed);
+					this.setFound(result, seed, settings);
+					this.refreshSearchButton();
+				}
+			});
+			return;
+		}
+	}
+
+	/** Puts a seed in the seed box and the history. The caller samples it. */
+	private void showSeed(long seed) {
+		this.seed = seed;
+		this.seedText = Long.toString(seed);
+		this.settingSeedText = true;
+		this.seedBox.setValue(this.seedText);
+		this.seedBox.moveCursorToStart(false);
+		this.settingSeedText = false;
+		this.remember(this.seedText);
+	}
+
+	/** After Stop: the screen shows the seed with the most required items that the search saw, if it had any. */
+	private void settleOnBest() {
+		SearchStats stats = this.stats;
+		SearchStats.Best best = stats == null ? null : stats.best().get();
+		if (best != null && best.score() > 0) {
+			this.showSeed(best.seed());
+			this.sample();
+		}
+	}
+
+	private void clearRates() {
+		this.stats = null;
+		this.biomeList.setRates(null);
+		this.structureList.setRates(null);
 	}
 
 	/** Samples the shown seed for the preview. */
@@ -463,9 +527,28 @@ public class CustomizeCubeWorldScreen extends Screen {
 	}
 
 	private void refreshSearchButton() {
-		this.searchButton.setMessage(this.searching
-			? Component.translatable("cubeworld.customize.search.stop", this.tried.get())
-			: Component.translatable("cubeworld.customize.search"));
+		SearchStats stats = this.stats;
+		Component label;
+		if (!this.searching || stats == null) {
+			label = Component.translatable("cubeworld.customize.search");
+		} else if (stats.total() > 1) {
+			label = Component.translatable("cubeworld.customize.search.progress", Math.max(0, stats.best().get().score()), stats.total(), stats.tried().get());
+		} else {
+			label = Component.translatable("cubeworld.customize.search.stop", stats.tried().get());
+		}
+		this.searchButton.setMessage(label);
+		// The button grows with the count that it shows, and the seed box gives way.
+		int width = Mth.clamp(this.font.width(label) + 12, SEARCH_WIDTH, this.searchMaxWidth());
+		if (width != this.searchWidth) {
+			this.searchWidth = width;
+			this.repositionElements();
+		}
+	}
+
+	/** The widest the search button gets: the seed box keeps room for 7 digits. */
+	private int searchMaxWidth() {
+		int middle = this.width - 2 * Math.round(this.width * SIDE_SHARE);
+		return Math.max(SEARCH_WIDTH, middle - 2 * GAP - 2 * ARROW_WIDTH - 2 - 2 * GAP - this.font.width("0000000") - 10);
 	}
 
 	private static Component structureName(ResourceKey<StructureSet> key) {
@@ -505,6 +588,41 @@ public class CustomizeCubeWorldScreen extends Screen {
 	@Override
 	public void onClose() {
 		this.minecraft.gui.setScreen(this.parent);
+	}
+
+	/** The counts of one search, which its threads update. Rates are the share of the tried seeds that had the item. */
+	private record SearchStats(
+		int total, Map<Holder<Biome>, AtomicInteger> biomeHits, Map<ResourceKey<StructureSet>, AtomicInteger> structureHits,
+		AtomicInteger tried, AtomicInteger structuresChecked, AtomicReference<Best> best, AtomicBoolean finished
+	) {
+		/** The most required items that one seed had. Score -1 is no seed yet. */
+		record Best(int score, long seed) {
+		}
+
+		static SearchStats of(Set<Holder<Biome>> biomes, Set<ResourceKey<StructureSet>> structures) {
+			Map<Holder<Biome>, AtomicInteger> biomeHits = new ConcurrentHashMap<>();
+			biomes.forEach(biome -> biomeHits.put(biome, new AtomicInteger()));
+			Map<ResourceKey<StructureSet>, AtomicInteger> structureHits = new ConcurrentHashMap<>();
+			structures.forEach(key -> structureHits.put(key, new AtomicInteger()));
+			return new SearchStats(biomes.size() + structures.size(), biomeHits, structureHits, new AtomicInteger(), new AtomicInteger(),
+				new AtomicReference<>(new Best(-1, 0L)), new AtomicBoolean());
+		}
+
+		void offer(int score, long seed) {
+			this.best.accumulateAndGet(new Best(score, seed), (old, now) -> now.score() > old.score() ? now : old);
+		}
+
+		double biomeRate(Holder<Biome> biome) {
+			return rate(this.biomeHits.get(biome), this.tried.get());
+		}
+
+		double structureRate(ResourceKey<StructureSet> key) {
+			return rate(this.structureHits.get(key), this.structuresChecked.get());
+		}
+
+		private static double rate(@Nullable AtomicInteger hits, int seeds) {
+			return hits == null || seeds < MIN_RATE_SAMPLES ? -1.0 : (double) hits.get() / seeds;
+		}
 	}
 
 	/** A set of required biomes and structures, by their ids in the minecraft namespace. */

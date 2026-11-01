@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.ToDoubleFunction;
 import java.util.function.ToIntFunction;
 
 /**
@@ -31,8 +32,8 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 	private static final int PRESENT_COLOR = 0xFFFFFFFF;
 	private static final int ABSENT_COLOR = 0xFF707070;
 	private static final int HAS_MARK_COLOR = 0xFF55AA55;
-	private static final Component IN_SEED = Component.translatable("cubeworld.customize.in_seed");
-	private static final Component NOT_IN_SEED = Component.translatable("cubeworld.customize.not_in_seed");
+	private static final int RATE_COLOR = 0xFFB0A060;
+	private static final int NO_HITS_COLOR = 0xFFCC5555;
 
 	private final Set<T> required;
 	private final Runnable onChange;
@@ -40,6 +41,7 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 	private final @Nullable ToIntFunction<T> swatches;
 	private Component title = Component.empty();
 	private @Nullable Set<T> present;
+	private @Nullable ToDoubleFunction<T> rates;
 
 	/**
 	 * The list adds and removes items of {@code required} as the player checks them, then calls {@code onChange}.
@@ -66,6 +68,14 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 	/** The items of the shown seed, or null while there is none. */
 	void setPresent(@Nullable Set<T> present) {
 		this.present = present;
+	}
+
+	/**
+	 * How often a search saw each checked item, as a share from 0 to 1, or below 0 for too few seeds. Null shows nothing.
+	 * A rate of 0 shows in red, as the item that holds a search back.
+	 */
+	void setRates(@Nullable ToDoubleFunction<T> rates) {
+		this.rates = rates;
 	}
 
 	/** The scrollbar sits inside the right edge of the list, and the rows stop before it. */
@@ -146,16 +156,28 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 			Set<T> present = FilterList.this.present;
 			boolean has = present != null && present.contains(this.item);
 			int right = this.getContentRight() - 10;
-			graphics.text(font, fit(font, this.name.getString(), right - x), x, y - 4, present == null || has ? PRESENT_COLOR : ABSENT_COLOR);
+			String rate = null;
+			double share = -1.0;
+			ToDoubleFunction<T> rates = FilterList.this.rates;
+			if (rates != null && FilterList.this.required.contains(this.item)) {
+				share = rates.applyAsDouble(this.item);
+				if (share >= 0.0) {
+					rate = share == 0.0 ? "0%" : share < 0.01 ? String.format(Locale.ROOT, "%.1f%%", share * 100.0) : String.format(Locale.ROOT, "%.0f%%", share * 100.0);
+					right -= font.width(rate) + 4;
+				}
+			}
+			String shown = fit(font, this.name.getString(), right - x);
+			graphics.text(font, shown, x, y - 4, present == null || has ? PRESENT_COLOR : ABSENT_COLOR);
+			if (rate != null) {
+				graphics.text(font, rate, right + 4, y - 4, share == 0.0 ? NO_HITS_COLOR : RATE_COLOR);
+				right += font.width(rate) + 4;
+			}
 			if (has) {
 				graphics.fill(right + 2, y - 2, right + 6, y + 2, HAS_MARK_COLOR);
 			}
-			if (hovered) {
-				Component tip = this.name;
-				if (present != null) {
-					tip = Component.empty().append(this.name).append("\n").append(has ? IN_SEED : NOT_IN_SEED);
-				}
-				graphics.setTooltipForNextFrame(tip, mouseX, mouseY);
+			// A name cut short to fit the column shows in full on hover.
+			if (hovered && !shown.equals(this.name.getString())) {
+				graphics.setTooltipForNextFrame(this.name, mouseX, mouseY);
 			}
 		}
 
