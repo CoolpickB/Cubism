@@ -3,6 +3,7 @@ package dev.cubeworld.worldgen;
 import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.math.CubePlanetMath;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -283,6 +284,26 @@ public final class SeamLayout {
 			}
 		}
 		throw new IllegalArgumentException(face.toString());
+	}
+
+	/**
+	 * Whether a piece of a structure, laid out on the flat plane of a face, cannot be folded without a cut: it lies in
+	 * the corner past two edges, which has no ground on any face, or it is more than {@code flatHeight} blocks tall and
+	 * lies on both sides of an edge row. The fold opens a gap above an edge, so a tall piece there would show a cut.
+	 */
+	public boolean splitsAtEdge(BoundingBox box, int flatHeight) {
+		int offset = this.offsetX(this.faceIndexAt((box.minX() + box.maxX()) / 2));
+		int r = this.radius;
+		int minX = box.minX() - offset;
+		int maxX = box.maxX() - offset;
+		boolean pastX = maxX > r || minX < -r;
+		boolean pastZ = box.maxZ() > r || box.minZ() < -r;
+		if (pastX && pastZ) {
+			return true;
+		}
+		boolean straddlesX = maxX > r && minX <= r || minX < -r && maxX >= -r;
+		boolean straddlesZ = box.maxZ() > r && box.minZ() <= r || box.minZ() < -r && box.maxZ() >= -r;
+		return (straddlesX || straddlesZ) && box.getYSpan() > flatHeight;
 	}
 
 	/** True when the storage position is part of the wedge of the face whose region contains it. */

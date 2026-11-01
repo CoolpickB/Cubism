@@ -43,6 +43,7 @@
 		"StructureMixin",
 		"StructureStartMixin",
 		"PoolElementStructurePieceAccessor",
+		"JigsawPlacerMixin",
 		"UseOnContextMixin",
 		"VegetationBlockMixin",
 		"WorldGenRegionMixin",
