@@ -1,6 +1,7 @@
 package dev.cubeworld.client.mixin;
 
 import dev.cubeworld.client.CubeFlight;
+import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
@@ -144,6 +145,7 @@ public abstract class CameraMixin {
 			level.getChunkSource().updateViewCenter(SectionPos.blockToSectionCoord(player.getX()), SectionPos.blockToSectionCoord(player.getZ()));
 		}
 		if (face >= 0 && this.cubeworld$lastFace >= 0 && face != this.cubeworld$lastFace) {
+			LoadTrace.event(String.format("client: face %d -> %d at %.1f %.1f %.1f", this.cubeworld$lastFace, face, position.x, position.y, position.z));
 			int[] m = layout.motion(this.cubeworld$lastFace, face);
 			Vec3 last = this.cubeworld$lastPosition;
 			Vec3 carried = new Vec3(
