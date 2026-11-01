@@ -105,6 +105,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private String seedText;
 	private int searchWidth = SEARCH_WIDTH;
 	private boolean searching;
+	/** The biome that the cube highlights, which the player picked with its mark in the list. */
+	private @Nullable Holder<Biome> highlighted;
 	/** The counts of the latest search. The lists show its rates until the checked items change. */
 	private volatile @Nullable SearchStats stats;
 	private @Nullable Found found;
@@ -155,6 +157,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			this.minecraft, this.structureCandidates.stream().flatMap(set -> set.unwrapKey().stream()).toList(), this.requiredStructures,
 			CustomizeCubeWorldScreen::structureName, null, this::clearRates
 		));
+		this.biomeList.setMarkAction(this::highlight);
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
 		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")) {
 			@Override
@@ -510,8 +513,20 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.showFound();
 	}
 
+	/** A click on the mark of a biome highlights it on the cube, and a second click ends that. */
+	private void highlight(Holder<Biome> biome) {
+		this.highlighted = this.highlighted == biome ? null : biome;
+		this.preview.pause();
+		this.showFound();
+	}
+
 	private void showFound() {
 		Found found = this.found;
+		if (found != null && this.highlighted != null && !found.biomes.contains(this.highlighted)) {
+			this.highlighted = null;
+		}
+		this.preview.setHighlighted(this.highlighted);
+		this.biomeList.setHighlighted(this.highlighted);
 		this.preview.setMap(found == null ? null : found.map);
 		this.preview.setPlaceholder(Component.translatable("cubeworld.customize.preview.loading"));
 		this.preview.setLoading(!this.searching && (found == null || this.foundSeed != this.seed || !this.settings.equals(this.foundSettings)));

@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.ToDoubleFunction;
 import java.util.function.ToIntFunction;
@@ -42,6 +43,8 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 	private Component title = Component.empty();
 	private @Nullable Set<T> present;
 	private @Nullable ToDoubleFunction<T> rates;
+	private @Nullable Consumer<T> markAction;
+	private @Nullable T highlighted;
 
 	/**
 	 * The list adds and removes items of {@code required} as the player checks them, then calls {@code onChange}.
@@ -76,6 +79,16 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 	 */
 	void setRates(@Nullable ToDoubleFunction<T> rates) {
 		this.rates = rates;
+	}
+
+	/** A click on the green mark of an item that the seed has calls the action instead of checking the item. */
+	void setMarkAction(@Nullable Consumer<T> markAction) {
+		this.markAction = markAction;
+	}
+
+	/** The item whose mark shows an outline, or null. */
+	void setHighlighted(@Nullable T highlighted) {
+		this.highlighted = highlighted;
 	}
 
 	/** The scrollbar sits inside the right edge of the list, and the rows stop before it. */
@@ -124,6 +137,8 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 	class Row extends ObjectSelectionList.Entry<Row> {
 		private final @Nullable T item;
 		private final Component name;
+		/** The left edge of the mark of the last frame, or -1 when the row shows none. */
+		private int markX = -1;
 
 		Row(@Nullable T item) {
 			this.item = item;
@@ -172,7 +187,11 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 				graphics.text(font, rate, right + 4, y - 4, share == 0.0 ? NO_HITS_COLOR : RATE_COLOR);
 				right += font.width(rate) + 4;
 			}
+			this.markX = has ? right + 2 : -1;
 			if (has) {
+				if (this.item != null && this.item.equals(FilterList.this.highlighted)) {
+					graphics.fill(right + 1, y - 3, right + 7, y + 3, PRESENT_COLOR);
+				}
 				graphics.fill(right + 2, y - 2, right + 6, y + 2, HAS_MARK_COLOR);
 			}
 			// A name cut short to fit the column shows in full on hover.
@@ -183,6 +202,11 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 
 		@Override
 		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+			Consumer<T> markAction = FilterList.this.markAction;
+			if (markAction != null && this.item != null && this.markX >= 0 && event.x() >= this.markX - 3 && event.x() <= this.markX + 9) {
+				markAction.accept(this.item);
+				return true;
+			}
 			FilterList.this.setSelected(this);
 			this.toggle();
 			return true;
