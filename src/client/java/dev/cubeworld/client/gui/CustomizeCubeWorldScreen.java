@@ -34,6 +34,7 @@ import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
+import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -114,6 +115,10 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private boolean searching;
 	/** The biome that the cube highlights, which the player picked with its mark in the list. */
 	private @Nullable Holder<Biome> highlighted;
+	/** The structure whose places the cube shows as pins, which the player picked with its mark in the list. */
+	private @Nullable ResourceKey<StructureSet> pinned;
+	private @Nullable Found pinnedFound;
+	private List<Vector3f> pins = List.of();
 	/** The counts of the latest search. The lists show its rates until the checked items change. */
 	private volatile @Nullable SearchStats stats;
 	private @Nullable Found found;
@@ -166,6 +171,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			CustomizeCubeWorldScreen::structureName, null, this::clearRates
 		));
 		this.biomeList.setMarkAction(this::highlight);
+		this.structureList.setMarkAction(this::pin);
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
 		this.climateButton = this.addRenderableWidget(Button.builder(Component.empty(), button -> {
 			this.settings = this.settings.withTemperature(0).withHumidity(0);
@@ -539,8 +545,41 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.showFound();
 	}
 
+	/** A click on the mark of a structure pins its places on the cube, and a second click ends that. */
+	private void pin(ResourceKey<StructureSet> key) {
+		Found found = this.found;
+		if (this.pinned == key || found == null) {
+			this.pinned = null;
+			this.pins = List.of();
+		} else {
+			this.pinned = key;
+			this.pinnedFound = found;
+			this.pins = List.of();
+			CubeSettings settings = this.foundSettings;
+			long seed = this.foundSeed;
+			run(() -> {
+				Holder<StructureSet> set = this.structureCandidates.stream().filter(candidate -> candidate.is(key)).findFirst().orElseThrow();
+				List<Vector3f> points = CubeStructureMap.positions(this.sampler(settings, seed), settings, this.structureSets, this.biomeSource, set);
+				this.minecraft.execute(() -> {
+					if (this.pinned == key && this.pinnedFound == found) {
+						this.pins = points;
+						this.showFound();
+					}
+				});
+			});
+		}
+		this.preview.pause();
+		this.showFound();
+	}
+
 	private void showFound() {
 		Found found = this.found;
+		if (this.pinned != null && found != this.pinnedFound) {
+			this.pinned = null;
+			this.pins = List.of();
+		}
+		this.preview.setPins(this.pins);
+		this.structureList.setHighlighted(this.pinned);
 		if (found != null && this.highlighted != null && !found.biomes.contains(this.highlighted)) {
 			this.highlighted = null;
 		}

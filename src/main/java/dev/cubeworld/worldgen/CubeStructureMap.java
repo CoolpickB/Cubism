@@ -9,8 +9,10 @@ import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
+import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -47,10 +49,42 @@ public final class CubeStructureMap {
 		List<Holder<StructureSet>> candidates,
 		@Nullable Set<ResourceKey<StructureSet>> wanted
 	) {
-		ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForNormal(sampler.randomState(), sampler.seed(), ChunkPos.ZERO, biomes, sets);
-		SeamLayout layout = new SeamLayout(cube.diameterChunks());
 		Set<ResourceKey<StructureSet>> found = new HashSet<>();
 		List<Holder<StructureSet>> open = candidates.stream().filter(set -> wanted == null || set.unwrapKey().map(wanted::contains).orElse(false)).toList();
+		scan(sampler, cube, sets, biomes, open, (set, point) -> {
+			set.unwrapKey().ifPresent(found::add);
+			return true;
+		});
+		return found;
+	}
+
+	/**
+	 * The places of one structure set on the surface of the cube, as points of a cube with a radius of 1 and its center at
+	 * the origin. Every place that {@link #find} would count is here.
+	 */
+	public static List<Vector3f> positions(
+		CubeBiomeMap.Sampler sampler, CubeSettings cube, HolderLookup<StructureSet> sets, MultiNoiseBiomeSource biomes, Holder<StructureSet> set
+	) {
+		List<Vector3f> points = new ArrayList<>();
+		float radius = new SeamLayout(cube.diameterChunks()).radius;
+		scan(sampler, cube, sets, biomes, List.of(set), (hit, point) -> {
+			points.add(new Vector3f(point[0], point[1], point[2]).div(radius));
+			return false;
+		});
+		return points;
+	}
+
+	/** Called for a chunk where a set can place a structure. Returns true when the set needs no more chunks. */
+	private interface Hit {
+		boolean accept(Holder<StructureSet> set, int[] cubePoint);
+	}
+
+	private static void scan(
+		CubeBiomeMap.Sampler sampler, CubeSettings cube, HolderLookup<StructureSet> sets, MultiNoiseBiomeSource biomes,
+		List<Holder<StructureSet>> open, Hit hit
+	) {
+		ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForNormal(sampler.randomState(), sampler.seed(), ChunkPos.ZERO, biomes, sets);
+		SeamLayout layout = new SeamLayout(cube.diameterChunks());
 		Set<Holder<StructureSet>> remaining = new HashSet<>(open);
 		int r = layout.radius;
 		int[] cube3 = new int[3];
@@ -73,14 +107,12 @@ public final class CubeStructureMap {
 							biome = sampler.surfaceBiomeAt(cube3[0], cube3[1], cube3[2]);
 						}
 						Holder<Biome> here = biome;
-						if (set.value().structures().stream().anyMatch(entry -> entry.structure().value().biomes().contains(here))) {
+						if (set.value().structures().stream().anyMatch(entry -> entry.structure().value().biomes().contains(here)) && hit.accept(set, cube3)) {
 							remaining.remove(set);
-							set.unwrapKey().ifPresent(found::add);
 						}
 					}
 				}
 			}
 		}
-		return found;
 	}
 }

@@ -29,6 +29,8 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
 
+import java.util.List;
+
 /**
  * The surface biomes of the cube, seen from outside in perspective. The cube turns slowly about an axis that it leans
  * on, so that each face comes into view. A drag turns it freely by hand, about any axis, and a drag that starts at the
@@ -63,6 +65,7 @@ final class CubePreviewWidget extends AbstractWidget {
 	private static final Vector3f TURN_AXIS = new Matrix3f().rotateX(START_PITCH).transform(new Vector3f(0.0F, 1.0F, 0.0F));
 	private static final float DIMMED = 0.35F;
 	/** The arrow in the corner that shows where up is: its length is that of the up axis as it shows on the screen. */
+	private static final int PIN_COLOR = 0xFFFFD83A;
 	private static final int ARROW_LENGTH = 11;
 	private static final int ARROW_MARGIN = 26;
 	private static final Component UP_LABEL = Component.translatable("cubeworld.customize.preview.up");
@@ -83,6 +86,7 @@ final class CubePreviewWidget extends AbstractWidget {
 	/** The turn of a thrown cube as a rotation vector per ms, in the view. */
 	private final Vector3f spin = new Vector3f();
 	private boolean dragging;
+	private List<Vector3f> pins = List.of();
 	/** Whether the drag in progress started at the rim, and rolls the cube instead of tilting it. */
 	private boolean rolling;
 	private long lastFrame;
@@ -109,6 +113,11 @@ final class CubePreviewWidget extends AbstractWidget {
 			this.highlighted = highlighted;
 			this.highlightOnSurface = null;
 		}
+	}
+
+	/** Marks places on the surface of the cube, as points of a cube with a radius of 1. They show on the faces in view. */
+	void setPins(List<Vector3f> pins) {
+		this.pins = pins;
 	}
 
 	/** Holds the cube still, as a drag does, before it turns again. */
@@ -181,6 +190,7 @@ final class CubePreviewWidget extends AbstractWidget {
 		graphics.guiRenderState.addGuiElement(new QuadsRenderState(
 			new Matrix3x2f(graphics.pose()), quads, colors, count, scissor, scissor != null ? scissor.intersection(area) : area
 		));
+		this.extractPins(graphics, view);
 		this.extractUpArrow(graphics, view);
 		if (this.loading) {
 			Font font = Minecraft.getInstance().font;
@@ -192,6 +202,29 @@ final class CubePreviewWidget extends AbstractWidget {
 		}
 		if (hovered != null) {
 			graphics.setTooltipForNextFrame(BiomeColors.name(hovered), mouseX, mouseY);
+		}
+	}
+
+	private void extractPins(GuiGraphicsExtractor graphics, Matrix3f view) {
+		float scale = this.scale();
+		float cx = this.getX() + this.width / 2.0F;
+		float cy = this.getY() + this.height / 2.0F;
+		for (Vector3f pin : this.pins) {
+			// The face of a place is the one that its largest coordinate points to. A face in view has its normal toward the eye.
+			float ax = Math.abs(pin.x);
+			float ay = Math.abs(pin.y);
+			float az = Math.abs(pin.z);
+			Vector3f normal = ax >= ay && ax >= az ? new Vector3f(Math.signum(pin.x), 0.0F, 0.0F)
+				: ay >= az ? new Vector3f(0.0F, Math.signum(pin.y), 0.0F) : new Vector3f(0.0F, 0.0F, Math.signum(pin.z));
+			if (view.transform(normal).z * EYE_DISTANCE <= 1.0F) {
+				continue;
+			}
+			Vector3f p = view.transform(new Vector3f(pin));
+			float k = scale / (EYE_DISTANCE - p.z);
+			int x = Math.round(cx + p.x * k);
+			int y = Math.round(cy - p.y * k);
+			graphics.fill(x - 3, y - 3, x + 3, y + 3, 0xFF000000);
+			graphics.fill(x - 2, y - 2, x + 2, y + 2, PIN_COLOR);
 		}
 	}
 
