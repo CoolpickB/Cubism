@@ -10,6 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -34,9 +35,15 @@ public final class SeamCrossing {
 	 * Past this distance an entity crosses without ground under it. Otherwise a fall that goes deep past the diagonal
 	 * could leave the entity on a slope with no floor in the new frame, held by the gravity of the wrong face.
 	 */
-	private static final double FORCED_MARGIN = 3.0;
+	public static final double FORCED_MARGIN = 3.0;
 	/** Spectators fly near the corners, where three diagonals meet and each crossing turns the view. */
 	private static final double SPECTATOR_MARGIN = 4.0;
+	/**
+	 * A player crosses on its own client, at {@link #MARGIN}, and the server follows with the first movement in the new
+	 * region. The server crosses a player itself only when the client did not, so that its late teleport does not pull
+	 * back a client that crossed already.
+	 */
+	private static final double PLAYER_BACKUP_MARGIN = 4.0;
 	/** How far below the feet the ground must be in the new frame, in blocks. */
 	private static final double GROUND_DEPTH = 0.5;
 
@@ -60,7 +67,7 @@ public final class SeamCrossing {
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();
 			boolean spectator = entity.isSpectator();
-			int face = layout.crossingFace(center.x, center.y, center.z, spectator ? SPECTATOR_MARGIN : MARGIN);
+			int face = layout.crossingFace(center.x, center.y, center.z, spectator ? SPECTATOR_MARGIN : entity instanceof ServerPlayer ? PLAYER_BACKUP_MARGIN : MARGIN);
 			if (face < 0) {
 				continue;
 			}
@@ -106,14 +113,16 @@ public final class SeamCrossing {
 	 * the new frame. Without the ground, a jump over the diagonal would cross, fall in the new gravity and cross back.
 	 * A swimmer has no ground, and before the fluid counted it crossed only at the forced margin.
 	 */
-	private static boolean landsOn(ServerLevel level, Entity entity, Vec3 feet) {
+	public static boolean landsOn(Level level, Entity entity, Vec3 feet) {
 		AABB box = entity.getBoundingBox().move(feet.subtract(entity.position()));
 		// A block read in a chunk that is not loaded makes the server thread wait for it, and a chunk that has to
 		// generate first held a tick for 8 s. The entity crosses once the chunk is there.
-		for (int chunkX = SectionPos.blockToSectionCoord(box.minX); chunkX <= SectionPos.blockToSectionCoord(box.maxX); chunkX++) {
-			for (int chunkZ = SectionPos.blockToSectionCoord(box.minZ); chunkZ <= SectionPos.blockToSectionCoord(box.maxZ); chunkZ++) {
-				if (!level.getChunkSource().hasChunk(chunkX, chunkZ)) {
-					return false;
+		if (level instanceof ServerLevel server) {
+			for (int chunkX = SectionPos.blockToSectionCoord(box.minX); chunkX <= SectionPos.blockToSectionCoord(box.maxX); chunkX++) {
+				for (int chunkZ = SectionPos.blockToSectionCoord(box.minZ); chunkZ <= SectionPos.blockToSectionCoord(box.maxZ); chunkZ++) {
+					if (!server.getChunkSource().hasChunk(chunkX, chunkZ)) {
+						return false;
+					}
 				}
 			}
 		}

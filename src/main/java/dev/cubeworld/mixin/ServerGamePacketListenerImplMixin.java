@@ -39,8 +39,8 @@ public abstract class ServerGamePacketListenerImplMixin {
 	@Shadow private double firstGoodZ;
 
 	/**
-	 * A player in flight crosses a diagonal on its own client (see {@link SeamCrossing#flies}). The first movement in
-	 * the new face region makes the same crossing here, so the rest of the check sees a short move.
+	 * A player crosses a diagonal on its own client. The first movement in the new face region makes the same crossing
+	 * here, so the rest of the check sees a short move.
 	 */
 	@Inject(method = "handlePlayerPositionChange", at = @At("HEAD"))
 	private void cubeworld$followClientCrossing(

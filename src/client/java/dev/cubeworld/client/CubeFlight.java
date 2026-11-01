@@ -44,8 +44,8 @@ public final class CubeFlight {
 		weightO = weight;
 		boolean flies = SeamLayout.of(player.level()) != null && SeamCrossing.flies(player);
 		weight = Mth.clamp(weight + (flies ? 1.0F : -1.0F) / EASE_TICKS, 0.0F, 1.0F);
-		if (flies) {
-			cross(player);
+		if (flies || !player.isPassenger() && !player.isSpectator()) {
+			cross(player, flies);
 		}
 	}
 
@@ -229,14 +229,23 @@ public final class CubeFlight {
 	}
 
 	/**
-	 * Moves the player into the region of the next face when it flew past the diagonal, the same way the server moves
-	 * entities that walk across. The last tick moves along, so the frame between the two ticks stays in place.
+	 * Moves the player into the region of the next face when it flew or walked past the diagonal, the same way the server
+	 * moves other entities. The server follows with the first movement in the new region, so a walker does not wait a
+	 * tick for the server to move it. The last tick moves along, so the frame between the two ticks stays in place.
 	 */
-	private static void cross(LocalPlayer player) {
+	private static void cross(LocalPlayer player, boolean flies) {
 		SeamLayout layout = SeamLayout.of(player.level());
+		if (layout == null) {
+			return;
+		}
 		Vec3 center = player.getBoundingBox().getCenter();
 		int toFace = layout.crossingFace(center.x, center.y, center.z, SeamCrossing.MARGIN);
 		if (toFace < 0) {
+			return;
+		}
+		// A walker crosses by the rule of the server: far enough past the diagonal, or with ground under it in the new frame.
+		if (!flies && layout.crossingFace(center.x, center.y, center.z, SeamCrossing.FORCED_MARGIN) < 0
+			&& !SeamCrossing.landsOn(player.level(), player, SeamCrossing.turned(layout, player, toFace).position())) {
 			return;
 		}
 		int[] m = layout.motion(layout.faceIndexAt(Mth.floor(player.getX())), toFace);
