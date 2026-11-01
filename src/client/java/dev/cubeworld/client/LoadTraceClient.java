@@ -147,6 +147,12 @@ public final class LoadTraceClient {
 				line.append(" player=").append(minecraft.player.blockPosition().toShortString());
 			}
 		}
+		if (!COUNTS.isEmpty()) {
+			Map<String, Integer> sorted = new TreeMap<>();
+			COUNTS.forEach((name, value) -> sorted.put(name, value.getAndSet(0)));
+			sorted.values().removeIf(value -> value == 0);
+			line.append(" counts=").append(sorted);
+		}
 		line.append(' ').append(LoadTrace.memory());
 		LoadTrace.event(line.toString());
 	}
