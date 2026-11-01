@@ -28,9 +28,6 @@ public final class CubeFlight {
 	private static final float EASE_TICKS = 8.0F;
 	/** The pitch in the air frame stays this far from straight up or down, where it gives no yaw. */
 	private static final float MAX_PITCH = 89.9F;
-	/** The lean on a seam, in radians, and how far from the seam it starts, in blocks. */
-	private static final double SEAM_LEAN = Math.toRadians(12.0);
-	private static final double SEAM_LEAN_BAND = 9.0;
 
 	private static float weight;
 	private static float weightO;
@@ -98,46 +95,32 @@ public final class CubeFlight {
 	}
 
 	/**
-	 * The frame that the camera leans into near a seam out of flight: its up tips toward the up of each neighbor face
-	 * whose seam is close, up to {@link #SEAM_LEAN} on the seam.
+	 * The frame of the view: the air frame at the entity, at full weight, also on the ground. Over a rounded edge the
+	 * ground is a slope of the face frame, up to 45 degrees on a seam, and this frame turns the view with the surface so
+	 * that the ground looks level. It is the identity above the flat part of a face. Unlike {@link #frame} it does not
+	 * ease with the flight, and it does not move the eye, so the crosshair stays where vanilla aims on the ground.
 	 */
-	public static Quaternionf seamLean(Entity entity, float partialTicks) {
+	public static Quaternionf viewFrame(Entity entity, float partialTicks) {
 		SeamLayout layout = SeamLayout.of(entity.level());
-		Vec3 p = entity.getPosition(partialTicks);
-		if (layout == null || !layout.inRegion(Mth.floor(p.x), Mth.floor(p.z))) {
+		if (layout == null) {
 			return new Quaternionf();
 		}
-		// Relative to the center of the cube, in the frame of the face, as in SeamLayout.crossingFace.
-		double x = p.x - layout.offsetX(layout.faceIndexAt(Mth.floor(p.x))) - 0.5;
-		double y = p.y + entity.getBbHeight() / 2.0 - layout.centerY - 0.5;
-		double z = p.z - 0.5;
-		double tipX = Math.signum(x) * leanTip(y, x);
-		double tipZ = Math.signum(z) * leanTip(y, z);
-		if (tipX == 0.0 && tipZ == 0.0) {
-			return new Quaternionf();
-		}
-		Vector3f up = new Vector3f((float) tipX, 1.0F, (float) tipZ).normalize();
-		return new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F, up.x, up.y, up.z);
+		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), 1.0F);
 	}
 
-	/** The tangent of the lean toward the seam between the up axis and one side axis, by the distance to it. */
-	private static double leanTip(double up, double side) {
-		double distance = Math.max((up - Math.abs(side)) / Math.sqrt(2.0), 0.0);
-		double t = Math.max(1.0 - distance / SEAM_LEAN_BAND, 0.0);
-		return Math.tan(SEAM_LEAN) * t * t * (3.0 - 2.0 * t);
+	/** How far the body is in flight, from 0 on the ground to 1 in flight. */
+	public static float flightWeight(float partialTicks) {
+		return Mth.lerp(partialTicks, weightO, weight);
 	}
 
 	/**
 	 * Turns the look by mouse movement about the up of the frame the camera stands in: the air frame in flight, the
-	 * lean near a seam. Vanilla turns about the up of the face, which the camera does not show there, so a move to the
+	 * view frame near an edge. Vanilla turns about the up of the face, which the camera does not show there, so a move to the
 	 * right turned the view sideways, and at a pitch of 90 it did nothing. Returns false when the camera stands in the
 	 * face frame and vanilla can turn the look.
 	 */
 	public static boolean turn(LocalPlayer player, double xo, double yo) {
-		Quaternionf frame = frame(player, 1.0F);
-		if (isIdentity(frame)) {
-			frame = seamLean(player, 1.0F);
-		}
+		Quaternionf frame = viewFrame(player, 1.0F);
 		if (isIdentity(frame)) {
 			return false;
 		}

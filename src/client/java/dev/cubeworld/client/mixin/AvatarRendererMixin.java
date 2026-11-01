@@ -20,28 +20,33 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * The camera of the local player in flight shows the air frame of {@link CubeFlight}. The model stood upright in the
- * face frame instead, so it tilted against the view near an edge, and at a crossing it jumped from the frame of one
- * face to the frame of the next. The model now stands in the air frame, which turns with the surface and has no step
- * at an edge. The angles of the pose are taken in the air frame, and the model turns into it about its center.
+ * The camera of the local player shows the air frame of {@link CubeFlight} near an edge, in flight and on the ground.
+ * The model stood upright in the face frame instead, so it tilted against the view near an edge, and at a crossing it
+ * jumped from the frame of one face to the frame of the next. The model now stands in the air frame, which turns with
+ * the surface and has no step at an edge. The angles of the pose are taken in the air frame, and the model turns into
+ * it about its center in flight and about its feet on the ground.
  */
 @Mixin(AvatarRenderer.class)
 public abstract class AvatarRendererMixin {
-	/** The air frame of each render state that shows the local player in flight. Render thread only. */
+	/** The view frame of each render state that shows the local player near an edge. Render thread only. */
 	@Unique
-	private static final Map<AvatarRenderState, Quaternionf> AIR = new WeakHashMap<>();
+	private static final Map<AvatarRenderState, Pose> AIR = new WeakHashMap<>();
+
+	/** The frame that the model stands in, and how far the body is in flight, which puts the pivot at the center. */
+	@Unique
+	private record Pose(Quaternionf frame, float flight) {}
 
 	@Inject(method = "extractRenderState(Lnet/minecraft/world/entity/Avatar;Lnet/minecraft/client/renderer/entity/state/AvatarRenderState;F)V", at = @At("TAIL"))
 	private void cubeworld$poseInAirFrame(Avatar entity, AvatarRenderState state, float partialTicks, CallbackInfo ci) {
 		if (!(entity instanceof LocalPlayer player)) {
 			return;
 		}
-		Quaternionf air = CubeFlight.frame(player, partialTicks);
+		Quaternionf air = CubeFlight.viewFrame(player, partialTicks);
 		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
 			AIR.remove(state);
 			return;
 		}
-		AIR.put(state, air);
+		AIR.put(state, new Pose(air, CubeFlight.flightWeight(partialTicks)));
 		float headRot = Mth.rotLerp(partialTicks, entity.yHeadRotO, entity.yHeadRot);
 		float[] head = CubeFlight.anglesIn(air, headRot, entity.getXRot(partialTicks));
 		// The body keeps its yaw relative to the head. Its own direction turned into the air frame would point off the
@@ -70,13 +75,14 @@ public abstract class AvatarRendererMixin {
 
 	@Inject(method = "setupRotations(Lnet/minecraft/client/renderer/entity/state/AvatarRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;FF)V", at = @At("HEAD"))
 	private void cubeworld$turnIntoAirFrame(AvatarRenderState state, PoseStack poseStack, float bodyRot, float entityScale, CallbackInfo ci) {
-		Quaternionf air = AIR.get(state);
-		if (air == null) {
+		Pose pose = AIR.get(state);
+		if (pose == null) {
 			return;
 		}
-		// The pose is already scaled, so the center is in model units.
+		// The pose is already scaled, so the center is in model units. In flight the body turns about its center. On
+		// the ground it turns about the feet, which stand on the surface.
 		float center = state.boundingBoxHeight / 2.0F / entityScale;
-		poseStack.rotateAround(air, 0.0F, center, 0.0F);
+		poseStack.rotateAround(pose.frame(), 0.0F, center * pose.flight(), 0.0F);
 	}
 
 	@Unique

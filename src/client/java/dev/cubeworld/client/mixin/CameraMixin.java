@@ -37,8 +37,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>In flight the camera stands upright in the air frame of {@link CubeFlight}, which tilts over the edges. The
  * frame turns with the face motion at a crossing, so the seam turn is then near zero.
  *
- * <p>Out of flight the camera leans a little toward the next face near a seam between two wedges, on the surface and
- * underground. The lean is a roll about the look, so the crosshair stays where vanilla aims.
+ * <p>On the ground near an edge the camera also stands upright in the air frame, so the rounded edge looks level, up
+ * to 45 degrees on a seam. The turn is a roll about the look, and the eye stays where vanilla puts it, so the crosshair
+ * stays where vanilla aims.
  */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
@@ -75,6 +76,8 @@ public abstract class CameraMixin {
 	/** The air frame of {@link CubeFlight} in this frame and the last one. */
 	@Unique private Quaternionf cubeworld$air = new Quaternionf();
 	@Unique private Quaternionf cubeworld$lastAir = new Quaternionf();
+	/** The frame of the view of {@link CubeFlight#viewFrame}, which also turns the view on the ground near an edge. */
+	@Unique private Quaternionf cubeworld$view = new Quaternionf();
 
 	@Inject(method = "alignWithEntity", at = @At("HEAD"))
 	private void cubeworld$updateFrameRotation(float partialTicks, CallbackInfo ci) {
@@ -82,6 +85,7 @@ public abstract class CameraMixin {
 		float now = this.entity.tickCount + partialTicks;
 		this.cubeworld$lastAir = this.cubeworld$air;
 		this.cubeworld$air = CubeFlight.frame(this.entity, partialTicks);
+		this.cubeworld$view = CubeFlight.viewFrame(this.entity, partialTicks);
 		Quaternionf airTurn = this.cubeworld$airTurn(partialTicks);
 		if (this.entity != this.cubeworld$lastEntity) {
 			this.cubeworld$lastEntity = this.entity;
@@ -99,7 +103,7 @@ public abstract class CameraMixin {
 		this.cubeworld$turnAcrossSeam(partialTicks, now, airTurn);
 		this.cubeworld$frameRotation.set(this.cubeworld$smoothedCorrection(now).mul(airTurn).mul(CubePlanetMath.getCameraRotation(frame)));
 		this.cubeworld$eyeFrame.set(this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(frame)));
-		SeamClient.lightFrame.set(this.cubeworld$smoothedCorrection(now).mul(this.cubeworld$air));
+		SeamClient.lightFrame.set(this.cubeworld$smoothedCorrection(now).mul(this.cubeworld$view));
 	}
 
 	@Unique
@@ -113,10 +117,7 @@ public abstract class CameraMixin {
 	 */
 	@Unique
 	private Quaternionf cubeworld$airTurn(float partialTicks) {
-		Quaternionf air = this.cubeworld$air;
-		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
-			air = CubeFlight.seamLean(this.entity, partialTicks);
-		}
+		Quaternionf air = this.cubeworld$view;
 		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
 			return new Quaternionf();
 		}
