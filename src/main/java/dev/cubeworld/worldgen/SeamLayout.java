@@ -288,10 +288,10 @@ public final class SeamLayout {
 
 	/**
 	 * Whether a piece of a structure, laid out on the flat plane of a face, cannot be folded without a cut: it lies in
-	 * the corner past two edges, which has no ground on any face, or it is more than {@code flatHeight} blocks tall and
-	 * lies on both sides of an edge row. The fold opens a gap above an edge, so a tall piece there would show a cut.
+	 * the corner past two edges, which has no ground on any face, or it is {@code tall} and lies on both sides of an
+	 * edge row. The fold opens a gap above an edge, so a tall piece there would show a cut.
 	 */
-	public boolean splitsAtEdge(BoundingBox box, int flatHeight) {
+	public boolean splitsAtEdge(BoundingBox box, boolean tall) {
 		int offset = this.offsetX(this.faceIndexAt((box.minX() + box.maxX()) / 2));
 		int r = this.radius;
 		int minX = box.minX() - offset;
@@ -303,7 +303,7 @@ public final class SeamLayout {
 		}
 		boolean straddlesX = maxX > r && minX <= r || minX < -r && maxX >= -r;
 		boolean straddlesZ = box.maxZ() > r && box.minZ() <= r || box.minZ() < -r && box.maxZ() >= -r;
-		return (straddlesX || straddlesZ) && box.getYSpan() > flatHeight;
+		return (straddlesX || straddlesZ) && tall;
 	}
 
 	/** True when the storage position is part of the wedge of the face whose region contains it. */

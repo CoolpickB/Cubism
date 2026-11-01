@@ -1,6 +1,7 @@
 package dev.cubeworld.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -34,16 +35,15 @@ public abstract class JigsawPlacerMixin {
 		method = "tryPlacingChildren",
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/phys/shapes/Shapes;joinIsNotEmpty(Lnet/minecraft/world/phys/shapes/VoxelShape;Lnet/minecraft/world/phys/shapes/VoxelShape;Lnet/minecraft/world/phys/shapes/BooleanOp;)Z")
 	)
-	private boolean cubeworld$refuseSplitPiece(VoxelShape free, VoxelShape piece, BooleanOp op, Operation<Boolean> original) {
+	private boolean cubeworld$refuseSplitPiece(
+		VoxelShape free, VoxelShape piece, BooleanOp op, Operation<Boolean> original,
+		@Local(ordinal = 2) BoundingBox template, @Local(ordinal = 3) BoundingBox placed
+	) {
 		SeamLayout layout = SeamLayout.active();
 		if (layout != null && this.chunkGenerator instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
-			// The shape is the box of the piece shrunk by a quarter of a block on each side.
-			var bounds = piece.bounds();
-			BoundingBox box = new BoundingBox(
-				(int) Math.floor(bounds.minX), (int) Math.floor(bounds.minY), (int) Math.floor(bounds.minZ),
-				(int) Math.ceil(bounds.maxX) - 1, (int) Math.ceil(bounds.maxY) - 1, (int) Math.ceil(bounds.maxZ) - 1
-			);
-			if (layout.splitsAtEdge(box, FLAT_HEIGHT)) {
+			// The height is that of the template. The box in the placer is taller for a piece with connectors of its own,
+			// which the expansion hack makes room for, so a road would pass as tall.
+			if (layout.splitsAtEdge(placed, template.getYSpan() > FLAT_HEIGHT)) {
 				return true;
 			}
 		}
