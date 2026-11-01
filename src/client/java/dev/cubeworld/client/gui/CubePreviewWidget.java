@@ -45,7 +45,7 @@ final class CubePreviewWidget extends AbstractWidget {
 	private static final float SPIN_DECAY_MS = 1000.0F;
 	/** Below this turn speed, in radians per ms, a thrown cube stops. */
 	private static final float MIN_SPIN = 0.0004F;
-	private static final float MAX_SPIN = 0.04F;
+	private static final float MAX_SPIN = 0.16F;
 	/** The speed of the hand is an average over about this long, in ms, so that two moves in one frame do not skew it. */
 	private static final float SPEED_WINDOW_MS = 30.0F;
 	/**
