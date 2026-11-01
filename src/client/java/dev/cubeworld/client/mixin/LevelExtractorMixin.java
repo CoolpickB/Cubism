@@ -52,11 +52,7 @@ public abstract class LevelExtractorMixin {
 	@Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
 	private void cubeworld$markSeamDirty(int sectionX, int sectionY, int sectionZ, boolean playerChanged, CallbackInfo ci) {
 		boolean urgent = playerChanged || this.cubeworld$blockChanging;
-if (dev.cubeworld.debug.LoadTrace.active()) {
-	LoadTraceClient.count("dirty." + StackWalker.getInstance().walk(frames -> frames
-		.skip(1).filter(frame -> !frame.getClassName().contains("LevelExtractor")).findFirst()
-		.map(frame -> frame.getClassName().substring(frame.getClassName().lastIndexOf('.') + 1) + "." + frame.getMethodName()).orElse("?")));
-}
+		LoadTraceClient.count("dirty.sections");
 		SeamRenderer.markDirty(sectionX, sectionY, sectionZ, urgent);
 		SeamRenderer.markAcrossSeamDirty(sectionX, sectionY, sectionZ, urgent);
 	}
