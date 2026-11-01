@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubeworld.client.LoadTraceClient;
 import dev.cubeworld.client.gui.CubeLoadingView;
+import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.worldgen.CubePregen;
 import net.minecraft.client.gui.Font;
@@ -105,7 +106,8 @@ public abstract class LevelLoadingScreenMixin {
 		}
 		int total = progress.pregenTotal;
 		int done = progress.pregenDone;
-		float bar = done < total ? PREGEN_SHARE * done / total : PREGEN_SHARE + (1.0F - PREGEN_SHARE) * vanilla;
+		float pregen = progress.settings.pregen() == CubeSettings.Pregen.SPAWN_FACE ? CubeLoadingView.fullShare(progress) : (float) done / total;
+		float bar = done < total ? PREGEN_SHARE * pregen : PREGEN_SHARE + (1.0F - PREGEN_SHARE) * vanilla;
 		LoadTraceClient.bar = bar;
 		return bar;
 	}

@@ -110,6 +110,30 @@ public final class CubeLoadingView {
 		return progress == cachedFor && foldStart != 0L && Util.getMillis() - foldStart < FOLD_MS + HOLD_MS;
 	}
 
+	/**
+	 * The share of the drawn cells that are full. The pre-generation of the spawn face also covers columns that the
+	 * view has no cell for, so its count of columns runs ahead of the picture, and the bar follows the picture.
+	 */
+	public static float fullShare(CubePregen.Progress progress) {
+		if (cachedFor != progress) {
+			return 0.0F;
+		}
+		int drawn = 0;
+		int full = 0;
+		for (int f = 0; f < FACES - 1; f++) {
+			int[] table = cells[f];
+			for (int at = 0; at < table.length; at += 3) {
+				if (table[at] >= 0) {
+					drawn++;
+					if (progress.get(table[at], table[at + 1], table[at + 2]) == ChunkStatus.FULL) {
+						full++;
+					}
+				}
+			}
+		}
+		return drawn == 0 ? 0.0F : (float) full / drawn;
+	}
+
 	/** Cells drawn in each status, as {@link LoadTrace#histogram} takes them. */
 	public static int[] shownCounts(CubePregen.Progress progress) {
 		int[] counts = new int[ChunkStatus.getStatusList().size() + 1];
