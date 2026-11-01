@@ -45,14 +45,14 @@ final class CubePreviewWidget extends AbstractWidget {
 	private static final float SPIN_DECAY_MS = 1000.0F;
 	/** Below this turn speed, in radians per ms, a thrown cube stops. */
 	private static final float MIN_SPIN = 0.0004F;
-	private static final float MAX_SPIN = 0.16F;
+	private static final float MAX_SPIN = 0.1F;
 	/** The speed of the hand is an average over about this long, in ms, so that two moves in one frame do not skew it. */
-	private static final float SPEED_WINDOW_MS = 30.0F;
+	private static final float SPEED_WINDOW_MS = 20.0F;
 	/**
 	 * A release throws the cube with the speed of the hand minus this, in radians per ms. A slow hand throws nothing, so
 	 * that the cube stops where the hand stops, and the throw grows from zero with the speed of the hand.
 	 */
-	private static final float THROW_DEADZONE = 0.002F;
+	private static final float THROW_DEADZONE = 0.003F;
 	/** A release this long after the last drag movement throws nothing. */
 	private static final long THROW_WINDOW_MS = 100L;
 	/** A drag that starts this far from the center, in cube radii, rolls the cube. */
