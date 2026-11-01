@@ -45,7 +45,9 @@ final class CubePreviewWidget extends AbstractWidget {
 	private static final float SPIN_DECAY_MS = 1000.0F;
 	/** Below this turn speed, in radians per ms, a thrown cube stops. */
 	private static final float MIN_SPIN = 0.0004F;
-	private static final float MAX_SPIN = 0.01F;
+	private static final float MAX_SPIN = 0.04F;
+	/** The speed of the hand is an average over about this long, in ms, so that two moves in one frame do not skew it. */
+	private static final float SPEED_WINDOW_MS = 30.0F;
 	/**
 	 * A release throws the cube with the speed of the hand minus this, in radians per ms. A slow hand throws nothing, so
 	 * that the cube stops where the hand stops, and the throw grows from zero with the speed of the hand.
@@ -337,7 +339,7 @@ final class CubePreviewWidget extends AbstractWidget {
 		if (angle > 0.0F) {
 			this.turn(turn.div(angle), angle);
 			float ms = Math.max(1L, now - this.lastDragMove);
-			this.spin.lerp(new Vector3f(turn).mul(angle / ms), 0.5F);
+			this.spin.lerp(new Vector3f(turn).mul(angle / ms), 1.0F - (float) Math.exp(-ms / SPEED_WINDOW_MS));
 			if (this.spin.length() > MAX_SPIN) {
 				this.spin.normalize(MAX_SPIN);
 			}
