@@ -80,16 +80,21 @@ public class CustomizeCubeWorldScreen extends Screen {
 		Preset.of("none", List.of(), List.of()),
 		Preset.of("every_climate", List.of("desert", "jungle", "snowy_plains", "savanna", "taiga"), List.of()),
 		Preset.of("mushroom_island", List.of("mushroom_fields"), List.of()),
-		Preset.of("frozen", List.of("ice_spikes", "frozen_peaks", "snowy_taiga", "frozen_ocean"), List.of()),
-		Preset.of("tropics", List.of("jungle", "bamboo_jungle", "warm_ocean", "mangrove_swamp"), List.of()),
-		Preset.of("badlands", List.of("badlands", "eroded_badlands", "wooded_badlands"), List.of()),
-		Preset.of("caves", List.of("lush_caves", "dripstone_caves", "deep_dark", "sulfur_caves"), List.of()),
 		Preset.planet("desert_planet", 60, -50, List.of("desert")),
-		Preset.planet("frozen_planet", -70, 0, List.of("snowy_plains", "snowy_taiga")),
-		Preset.planet("jungle_planet", 40, 70, List.of("jungle")),
-		Preset.planet("swamp_planet", 0, 80, List.of("swamp")),
-		Preset.planet("badlands_planet", 70, -40, List.of("badlands")),
-		Preset.of("structure_hunter", List.of(), List.of("villages", "pillager_outposts", "woodland_mansions", "ocean_monuments", "ancient_cities"))
+		Preset.planet("frozen_planet", -70, 0, List.of("snowy_plains", "snowy_taiga", "ice_spikes", "frozen_peaks")),
+		Preset.planet("jungle_planet", 40, 70, List.of("jungle", "bamboo_jungle", "sparse_jungle")),
+		Preset.planet("swamp_planet", 0, 80, List.of("swamp", "mangrove_swamp")),
+		Preset.planet("badlands_planet", 70, -40, List.of("badlands", "eroded_badlands", "wooded_badlands")),
+		Preset.planet("savanna_planet", 40, -20, List.of("savanna", "savanna_plateau", "windswept_savanna")),
+		Preset.of("mountains", List.of("jagged_peaks", "stony_peaks", "snowy_slopes", "windswept_hills", "grove"), List.of()),
+		Preset.of("ocean_world", List.of("warm_ocean", "lukewarm_ocean", "cold_ocean", "frozen_ocean", "deep_ocean"), List.of()),
+		Preset.of("wonderland", List.of("cherry_grove", "flower_forest", "sunflower_plains", "meadow"), List.of()),
+		Preset.of("haunted_woods", List.of("dark_forest", "pale_garden", "swamp"), List.of()),
+		Preset.of("giant_trees", List.of("old_growth_pine_taiga", "old_growth_spruce_taiga", "old_growth_birch_forest", "bamboo_jungle"), List.of()),
+		Preset.of("caves", List.of("lush_caves", "dripstone_caves", "deep_dark", "sulfur_caves"), List.of()),
+		Preset.of("structure_hunter", List.of(), List.of("villages", "pillager_outposts", "woodland_mansions", "ocean_monuments", "ancient_cities")),
+		Preset.of("temple_tour", List.of(), List.of("desert_pyramids", "jungle_temples", "igloos", "swamp_huts")),
+		Preset.of("treasure_hunter", List.of(), List.of("buried_treasures", "shipwrecks", "ocean_ruins", "trail_ruins", "ruined_portals"))
 	);
 
 	private final CreateWorldScreen parent;

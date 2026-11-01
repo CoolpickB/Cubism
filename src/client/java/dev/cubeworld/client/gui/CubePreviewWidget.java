@@ -64,10 +64,10 @@ final class CubePreviewWidget extends AbstractWidget {
 	/** The axis of the turn of the cube, in the view. */
 	private static final Vector3f TURN_AXIS = new Matrix3f().rotateX(START_PITCH).transform(new Vector3f(0.0F, 1.0F, 0.0F));
 	private static final float DIMMED = 0.35F;
-	/** The arrow in the corner that shows where up is: its length is that of the up axis as it shows on the screen. */
 	private static final int PIN_COLOR = 0xFFFFD83A;
-	private static final int ARROW_LENGTH = 11;
-	private static final int ARROW_MARGIN = 26;
+	/** Heights above the center of the cube, in cube radii, of the start of the stem over the top face and of the label. */
+	private static final float UP_STEM_START = 1.04F;
+	private static final float UP_LABEL_HEIGHT = 1.36F;
 	private static final Component UP_LABEL = Component.translatable("cubeworld.customize.preview.up");
 	private static final Vector3f LIGHT = new Vector3f(-0.4F, 0.7F, 0.6F).normalize();
 	/**
@@ -191,7 +191,7 @@ final class CubePreviewWidget extends AbstractWidget {
 			new Matrix3x2f(graphics.pose()), quads, colors, count, scissor, scissor != null ? scissor.intersection(area) : area
 		));
 		this.extractPins(graphics, view);
-		this.extractUpArrow(graphics, view);
+		this.extractUpMarker(graphics, view);
 		if (this.loading) {
 			Font font = Minecraft.getInstance().font;
 			int x = this.getX() + this.width / 2;
@@ -229,23 +229,27 @@ final class CubePreviewWidget extends AbstractWidget {
 	}
 
 	/**
-	 * A small arrow in the corner of the widget, so that it covers no biome. It points the way the up axis of the world
-	 * points on the screen, and it is dim while up points away from the viewer.
+	 * A short stem that stands on the middle of the top face and ends in the label "UP", so that it covers no biome. It
+	 * is dim while the top face turns away from the viewer.
 	 */
-	private void extractUpArrow(GuiGraphicsExtractor graphics, Matrix3f view) {
-		Vector3f up = view.transform(new Vector3f(0.0F, 1.0F, 0.0F));
-		int color = up.z >= 0.0F ? 0xFFFFFFFF : 0x90FFFFFF;
-		int cx = this.getX() + ARROW_MARGIN;
-		int cy = this.getY() + ARROW_MARGIN;
-		for (int i = 1; i <= ARROW_LENGTH; i++) {
-			int x = cx + Math.round(up.x * i);
-			int y = cy - Math.round(up.y * i);
+	private void extractUpMarker(GuiGraphicsExtractor graphics, Matrix3f view) {
+		float scale = this.scale();
+		float cx = this.getX() + this.width / 2.0F;
+		float cy = this.getY() + this.height / 2.0F;
+		int color = view.transform(new Vector3f(0.0F, 1.0F, 0.0F)).z * EYE_DISTANCE > 1.0F ? 0xFFFFFFFF : 0x90FFFFFF;
+		for (float height = UP_STEM_START; height <= UP_LABEL_HEIGHT - 0.08F; height += 0.04F) {
+			Vector3f p = view.transform(new Vector3f(0.0F, height, 0.0F));
+			float k = scale / (EYE_DISTANCE - p.z);
+			int x = Math.round(cx + p.x * k);
+			int y = Math.round(cy - p.y * k);
 			graphics.fill(x, y, x + 2, y + 2, color);
 		}
+		Vector3f p = view.transform(new Vector3f(0.0F, UP_LABEL_HEIGHT, 0.0F));
+		float k = scale / (EYE_DISTANCE - p.z);
 		Font font = Minecraft.getInstance().font;
-		int tipX = cx + Math.round(up.x * (ARROW_LENGTH + 8));
-		int tipY = cy - Math.round(up.y * (ARROW_LENGTH + 8));
-		graphics.centeredText(font, UP_LABEL, tipX + 1, tipY - 3, color);
+		int x = Mth.clamp(Math.round(cx + p.x * k), this.getX() + 10, this.getX() + this.width - 10);
+		int y = Mth.clamp(Math.round(cy - p.y * k) - 4, this.getY() + 2, this.getY() + this.height - 10);
+		graphics.centeredText(font, UP_LABEL, x, y, color);
 	}
 
 	/** Moves the cube by one frame: a thrown spin, or its own turn after a pause, from the orientation it is in. */
