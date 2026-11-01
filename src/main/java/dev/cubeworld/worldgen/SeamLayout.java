@@ -314,6 +314,12 @@ public final class SeamLayout {
 		return rise < 0.0 ? DimensionType.MIN_Y * 2 : (int) Math.ceil(this.centerY + core + Math.sqrt(rise));
 	}
 
+	/** True when a storage column lies over the rounded part of an edge, where {@link #seaLevelAt} drops with the column. */
+	public boolean inRoundedEdgeBand(int sx, int sz) {
+		double core = this.radius - CubePlanetMath.edgeRounding();
+		return Math.abs(sx - this.offsetX(this.faceIndexAt(sx))) > core || Math.abs(sz) > core;
+	}
+
 	/**
 	 * Adds the chunks of the neighbor faces that a viewer at the storage position can see across a seam. A chunk
 	 * counts when part of its wedge is within {@code viewDistance} chunks of the viewer in cube space. The test runs

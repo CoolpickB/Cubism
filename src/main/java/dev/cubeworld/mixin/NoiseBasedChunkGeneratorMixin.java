@@ -53,6 +53,9 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 	@Unique
 	private @Nullable CubeSettings cubeworld$settings;
 
+	@Unique
+	private static final int SEA_BARRIER_RANGE = 24;
+
 	/**
 	 * The vanilla codec, with the cube settings as an optional field. The chunk generator registry takes the codec
 	 * from this field after the class is initialized, so the registry gets this one.
@@ -107,6 +110,29 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 				return status.fluidType().is(Blocks.LAVA) ? status : new Aquifer.FluidStatus(layout.seaLevelAt(x, z, seaLevel), fluid);
 			};
 		});
+	}
+
+	/**
+	 * Where the sea bends over a rounded edge, the sea level of neighbor aquifer cells differs by several blocks. The
+	 * aquifer then builds a stone barrier between the water of one cell and the air of the next, and the barrier stood
+	 * as a ridge in the open sea, next to the diagonal where the other face has plain water. The sea fluid takes the
+	 * place of the barrier there.
+	 */
+	@WrapOperation(
+		method = "doFill",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/Aquifer;computeSubstance(IIID)Lnet/minecraft/world/level/block/state/BlockState;")
+	)
+	private @Nullable BlockState cubeworld$seaInsteadOfBarrier(Aquifer aquifer, int x, int y, int z, double density, Operation<BlockState> original) {
+		BlockState state = original.call(aquifer, x, y, z, density);
+		if (state != null || density > 0.0) {
+			return state;
+		}
+		SeamLayout layout = SeamLayout.active();
+		if (layout == null || !layout.inRoundedEdgeBand(x, z) || !((NoiseBasedChunkGenerator) (Object) this).generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+			return state;
+		}
+		Aquifer.FluidStatus sea = this.globalFluidPicker.get().computeFluid(x, y, z);
+		return Math.abs(y - sea.fluidLevel()) <= SEA_BARRIER_RANGE ? sea.at(y) : state;
 	}
 
 	/**
