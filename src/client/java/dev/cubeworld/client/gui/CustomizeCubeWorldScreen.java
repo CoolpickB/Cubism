@@ -53,7 +53,6 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private static final int PREVIEW_CELLS = 64;
 	private static final int SEARCH_CELLS = 24;
 	private static final int GAP = 4;
-	private static final int SEARCH_BUTTON_WIDTH = 64;
 	private static final float SIDE_SHARE = 0.32F;
 	private static final Identifier LIST_BACKGROUND = Identifier.withDefaultNamespace("textures/gui/menu_list_background.png");
 
@@ -134,7 +133,6 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.seedBox.setValue(this.seedText);
 		this.seedBox.setResponder(this::onSeedTyped);
 		this.searchButton = this.addRenderableWidget(Button.builder(Component.empty(), button -> this.toggleSearch())
-			.size(SEARCH_BUTTON_WIDTH, 20)
 			.tooltip(Tooltip.create(Component.translatable("cubeworld.customize.search.tooltip")))
 			.build());
 
@@ -193,8 +191,9 @@ public class CustomizeCubeWorldScreen extends Screen {
 		int seedRow = top + height - GAP - 20;
 		int previewSize = Math.max(0, Math.min(inner, seedRow - GAP - (top + GAP)));
 		this.preview.setRectangle(previewSize, previewSize, left + (inner - previewSize) / 2, top + GAP);
-		this.seedBox.setRectangle(inner - SEARCH_BUTTON_WIDTH - 4, 20, left, seedRow);
-		this.searchButton.setPosition(left + inner - SEARCH_BUTTON_WIDTH, seedRow);
+		int half = (inner - 4) / 2;
+		this.seedBox.setRectangle(half, 20, left, seedRow);
+		this.searchButton.setRectangle(half, 20, left + inner - half, seedRow);
 	}
 
 	@Override
