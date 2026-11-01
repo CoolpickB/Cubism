@@ -1,11 +1,15 @@
 package dev.cubeworld.seam;
 
 import dev.cubeworld.CubeWorldMod;
+import dev.cubeworld.mixin.ChunkMapAccessor;
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 import java.util.function.Consumer;
 
@@ -26,12 +30,36 @@ public record SeamTrackingView(
 	 * level. Entities tick only at the entity-ticking level, which needs radius 2.
 	 */
 	public void addTickets(ServerLevel level) {
+		if (!this.baseLoaded(level)) {
+			return;
+		}
 		for (long chunk : this.seamChunks) {
 			level.getChunkSource().addTicketWithRadius(CubeWorldMod.SEAM_TICKET, ChunkPos.unpack(chunk), 1);
 		}
 		for (long chunk : this.simulatedSeamChunks) {
 			level.getChunkSource().addTicketWithRadius(CubeWorldMod.SEAM_SIMULATION_TICKET, ChunkPos.unpack(chunk), 2);
 		}
+	}
+
+	/**
+	 * The chunk tasks of the server run in the order of the ticket levels, and a seam ticket outranks the vanilla ticket
+	 * of the square. After a join, the seam chunks that were not generated yet held the tasks of the square back for
+	 * 15 s, and the player saw nothing of the ground around them. The seam tickets wait until the square is loaded.
+	 * A tenth of the square may stay behind, so that a chunk that does not load does not hold the seam chunks back.
+	 */
+	private boolean baseLoaded(ServerLevel level) {
+		Long2ObjectLinkedOpenHashMap<ChunkHolder> visible = ((ChunkMapAccessor) level.getChunkSource().chunkMap).cubeworld$visibleChunkMap();
+		int[] count = new int[2];
+		this.base.forEach(pos -> {
+			if (this.inBase(pos.x(), pos.z(), true)) {
+				count[0]++;
+				ChunkHolder holder = visible.get(pos.pack());
+				if (holder != null && holder.getLatestStatus() == ChunkStatus.FULL) {
+					count[1]++;
+				}
+			}
+		});
+		return count[1] * 10 >= count[0] * 9;
 	}
 
 	public static void refreshTickets(ServerLevel level) {
