@@ -48,7 +48,10 @@ public final class SeamCrossing {
 		}
 		List<Entity> crossing = new ArrayList<>();
 		List<TeleportTransition> transitions = new ArrayList<>();
-		for (Entity entity : level.getAllEntities()) {
+		// landsOn can wait for a chunk to load, and the tasks that run meanwhile add entities to the level.
+		List<Entity> entities = new ArrayList<>();
+		level.getAllEntities().forEach(entities::add);
+		for (Entity entity : entities) {
 			// A passenger crosses with the vehicle that carries it. A player in flight crosses on its own client, which
 			// the server follows when the movement arrives: a crossing from here would pull a fast glider back.
 			if (entity.isPassenger() || entity instanceof Player player && flies(player)) {
