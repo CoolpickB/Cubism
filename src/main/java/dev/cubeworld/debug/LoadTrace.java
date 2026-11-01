@@ -1,9 +1,12 @@
 package dev.cubeworld.debug;
 
 import dev.cubeworld.mixin.ChunkMapAccessor;
+import dev.cubeworld.seam.SeamTrackingView;
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Util;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jspecify.annotations.Nullable;
@@ -261,6 +264,23 @@ public final class LoadTrace {
 			.append(" full=").append(FULL.getAndSet(0)).append(" saved=").append(SAVES.getAndSet(0));
 		if (ticks > 0) {
 			line.append(String.format(Locale.ROOT, " | ticks=%d mspt avg=%.1f max=%.1f", ticks, tickNanos / 1e6 / ticks, maxTickNanos / 1e6));
+		}
+		for (ServerPlayer player : level.players()) {
+			if (player.getChunkTrackingView() instanceof SeamTrackingView view) {
+				int[] base = new int[2];
+				int[] seam = new int[2];
+				Long2ObjectLinkedOpenHashMap<ChunkHolder> visible = chunkMap.cubeworld$visibleChunkMap();
+				view.forEach(pos -> {
+					int[] tally = view.seamChunks().contains(pos.pack()) ? seam : base;
+					tally[0]++;
+					ChunkHolder holder = visible.get(pos.pack());
+					if (holder != null && holder.getLatestStatus() == ChunkStatus.FULL) {
+						tally[1]++;
+					}
+				});
+				line.append(" | tracked full/total base=").append(base[1]).append('/').append(base[0]).append(" seam=").append(seam[1]).append('/').append(seam[0])
+					.append(" viewDistance=").append(view.base().viewDistance());
+			}
 		}
 		line.append(" players=").append(level.getServer().getPlayerCount()).append(' ').append(memory());
 		ticks = 0;
