@@ -1,5 +1,6 @@
 package dev.cubeworld.client.render;
 
+import dev.cubeworld.client.LoadTraceClient;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -226,6 +227,7 @@ public final class SeamRenderer {
 	}
 
 	public static void onChunkUnloaded(ChunkPos pos) {
+		LoadTraceClient.count("seamChunk.unloaded");
 		chunks.remove(pos.pack());
 		pendingChunks.remove(pos.pack());
 		for (long node : sectionNodes(pos.x(), pos.z())) {
@@ -266,12 +268,15 @@ public final class SeamRenderer {
 			dirtySections.remove(node);
 			SectionRenderDispatcher.RenderSection target = viewArea == null ? null : viewArea.getRenderSectionAt(section.storageOrigin);
 			if (!(section.getSectionMesh() instanceof CompiledSectionMesh)) {
+				LoadTraceClient.count("toVanilla.noMesh");
 				section.reset();
 			} else if (target != null && target.getSectionNode() == node && target.getSectionMesh() == CompiledSectionMesh.UNCOMPILED) {
+				LoadTraceClient.count("toVanilla.meshMoved");
 				moveMesh(section, target);
 				bridging.put(target, frame);
 				section.reset();
 			} else {
+				LoadTraceClient.count("toVanilla.meshKept");
 				keep(handover, node, section);
 			}
 		}
@@ -291,6 +296,7 @@ public final class SeamRenderer {
 			SectionRenderDispatcher.RenderSection section = viewArea.getRenderSectionAt(SectionPos.of(node).origin());
 			if (section != null && section.getSectionNode() == node && section.getSectionMesh() instanceof CompiledSectionMesh && !sections.containsKey(node)) {
 				SeamSection holder = new SeamSection(Minecraft.getInstance().levelRenderer.sectionRenderDispatcher(), node);
+				LoadTraceClient.count("toSeam.meshAdopted");
 				moveMesh(section, holder);
 				keep(adopted, node, holder);
 			}
@@ -343,6 +349,7 @@ public final class SeamRenderer {
 			}
 			return;
 		}
+		LoadTraceClient.count("vanillaMoving.meshAdopted");
 		SeamSection holder = new SeamSection(Minecraft.getInstance().levelRenderer.sectionRenderDispatcher(), oldNode);
 		moveMesh(section, holder);
 		keep(adopted, oldNode, holder);
@@ -355,6 +362,7 @@ public final class SeamRenderer {
 		SeamSection kept = handover.remove(section.getSectionNode());
 		if (kept != null) {
 			if (section.getSectionMesh() == CompiledSectionMesh.UNCOMPILED) {
+				LoadTraceClient.count("vanillaMoved.handoverUsed");
 				moveMesh(kept, section);
 				bridging.put(section, frame);
 			}
@@ -382,6 +390,7 @@ public final class SeamRenderer {
 			while (iterator.hasNext()) {
 				SeamSection section = iterator.next();
 				if (all || frame - section.keptSince > KEEP_FRAMES) {
+					LoadTraceClient.count(all ? "released.all" : "released.timeout");
 					section.reset();
 					iterator.remove();
 				}
@@ -705,6 +714,7 @@ public final class SeamRenderer {
 				long node = SectionPos.asLong(ChunkPos.getX(chunkKey), chunk.getSectionYFromSectionIndex(index), ChunkPos.getZ(chunkKey));
 				if (!sections.containsKey(node)) {
 					SeamSection kept = adopted.remove(node);
+					LoadTraceClient.count(kept != null ? "seamSection.adoptedUsed" : "seamSection.new");
 					sections.put(node, kept != null ? kept : new SeamSection(current, node));
 				}
 				dirtySections.add(node);
@@ -718,6 +728,7 @@ public final class SeamRenderer {
 			long node = dirtySections.removeFirstLong();
 			SeamSection section = sections.get(node);
 			if (section != null) {
+				LoadTraceClient.count("compile.seam");
 				section.compileAsync(cache.createRegion(level, node));
 			}
 		}

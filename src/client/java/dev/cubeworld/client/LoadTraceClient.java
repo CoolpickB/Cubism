@@ -13,6 +13,9 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** The client part of the {@link LoadTrace}: frame times, what the loading screen shows, and chunk rendering after it. */
@@ -25,6 +28,7 @@ public final class LoadTraceClient {
 
 	public static final AtomicInteger CHUNK_PACKETS = new AtomicInteger();
 	public static final AtomicInteger COMPILED = new AtomicInteger();
+	private static final Map<String, AtomicInteger> COUNTS = new ConcurrentHashMap<>();
 
 	/** What the loading screen drew last, set by the screen. */
 	public static String view = "none";
@@ -42,6 +46,13 @@ public final class LoadTraceClient {
 	private static int slowFrames;
 
 	private LoadTraceClient() {
+	}
+
+	/** Counts one event under a name. The sample line of each second lists the counts and starts them again. */
+	public static void count(String name) {
+		if (LoadTrace.active()) {
+			COUNTS.computeIfAbsent(name, key -> new AtomicInteger()).incrementAndGet();
+		}
 	}
 
 	public static void begin(String why) {

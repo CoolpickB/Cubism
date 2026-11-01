@@ -1,5 +1,6 @@
 package dev.cubeworld.client.mixin;
 
+import dev.cubeworld.client.LoadTraceClient;
 import dev.cubeworld.client.render.SeamRenderer;
 import net.minecraft.client.renderer.chunk.CompiledSectionMesh;
 import net.minecraft.client.renderer.chunk.SectionMesh;
@@ -22,6 +23,7 @@ public abstract class RenderSectionMixin {
 
 	@Inject(method = "setSectionNode", at = @At("HEAD"))
 	private void cubeworld$handMeshToSeam(long sectionNode, CallbackInfo ci) {
+		LoadTraceClient.count("vanilla.sectionMoved");
 		SeamRenderer.onVanillaSectionMoving((SectionRenderDispatcher.RenderSection) (Object) this, sectionNode);
 	}
 

@@ -3,6 +3,7 @@ package dev.cubeworld.client.mixin;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+import dev.cubeworld.client.LoadTraceClient;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.SeamRenderer;
 import dev.cubeworld.seam.SeamInteraction;
@@ -51,6 +52,11 @@ public abstract class LevelExtractorMixin {
 	@Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
 	private void cubeworld$markSeamDirty(int sectionX, int sectionY, int sectionZ, boolean playerChanged, CallbackInfo ci) {
 		boolean urgent = playerChanged || this.cubeworld$blockChanging;
+if (dev.cubeworld.debug.LoadTrace.active()) {
+	LoadTraceClient.count("dirty." + StackWalker.getInstance().walk(frames -> frames
+		.skip(1).filter(frame -> !frame.getClassName().contains("LevelExtractor")).findFirst()
+		.map(frame -> frame.getClassName().substring(frame.getClassName().lastIndexOf('.') + 1) + "." + frame.getMethodName()).orElse("?")));
+}
 		SeamRenderer.markDirty(sectionX, sectionY, sectionZ, urgent);
 		SeamRenderer.markAcrossSeamDirty(sectionX, sectionY, sectionZ, urgent);
 	}

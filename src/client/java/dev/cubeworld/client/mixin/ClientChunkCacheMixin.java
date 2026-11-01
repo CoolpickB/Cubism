@@ -1,5 +1,6 @@
 package dev.cubeworld.client.mixin;
 
+import dev.cubeworld.client.LoadTraceClient;
 import dev.cubeworld.client.SeamChunkStorageAccess;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.SeamRenderer;
@@ -65,6 +66,7 @@ public abstract class ClientChunkCacheMixin {
 		for (int index = 0; index < access.cubeworld$slotCount(); index++) {
 			LevelChunk chunk = access.cubeworld$detachIfSeam(index, x, z, this.storageRadius);
 			if (chunk != null) {
+				LoadTraceClient.count("chunk.toSeam");
 				this.seamChunks.put(chunk.getPos().pack(), chunk);
 				SeamRenderer.onChunkMovedToSeam(chunk.getPos());
 				SeamRenderer.onChunkLoaded(chunk.getPos());
@@ -76,6 +78,7 @@ public abstract class ClientChunkCacheMixin {
 			ChunkPos pos = chunk.getPos();
 			if (!this.cubeworld$isSeamChunk(pos.x(), pos.z())) {
 				iterator.remove();
+				LoadTraceClient.count("chunk.toVanilla");
 				SeamRenderer.onChunkMovedToVanilla(pos);
 				access.cubeworld$attach(chunk);
 				this.level.onChunkLoaded(pos);
@@ -108,6 +111,7 @@ public abstract class ClientChunkCacheMixin {
 			return;
 		}
 		ChunkPos pos = new ChunkPos(chunkX, chunkZ);
+		LoadTraceClient.count("packet.seamStore");
 		LevelChunk chunk = this.seamChunks.get(pos.pack());
 		if (chunk == null) {
 			chunk = new LevelChunk(this.level, pos);
@@ -138,6 +142,7 @@ public abstract class ClientChunkCacheMixin {
 	@Inject(method = "drop", at = @At("HEAD"))
 	private void cubeworld$dropSeamChunk(ChunkPos pos, CallbackInfo ci) {
 		LevelChunk chunk = this.seamChunks.remove(pos.pack());
+		LoadTraceClient.count(chunk != null ? "drop.seamStore" : "drop.vanillaStore");
 		if (chunk != null) {
 			this.level.unload(chunk);
 			SeamRenderer.onChunkUnloaded(pos);
