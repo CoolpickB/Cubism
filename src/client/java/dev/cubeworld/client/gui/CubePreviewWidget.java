@@ -5,6 +5,7 @@ import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.cubeworld.worldgen.CubeBiomeMap;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -49,6 +50,7 @@ final class CubePreviewWidget extends AbstractWidget {
 
 	private @Nullable CubeBiomeMap map;
 	private Component placeholder = Component.empty();
+	private boolean loading;
 	private float yaw = Mth.PI / 4.0F;
 	private float pitch = Mth.PI / 12.0F;
 	private long lastFrame;
@@ -62,7 +64,12 @@ final class CubePreviewWidget extends AbstractWidget {
 		this.map = map;
 	}
 
-	/** Text in place of the cube while there is no map. */
+	/** True while the map is out of date: the placeholder shows over the cube of the last map. */
+	void setLoading(boolean loading) {
+		this.loading = loading;
+	}
+
+	/** Text in place of the cube while there is no map, and over it while it loads. */
 	void setPlaceholder(Component placeholder) {
 		this.placeholder = placeholder;
 	}
@@ -117,6 +124,14 @@ final class CubePreviewWidget extends AbstractWidget {
 		graphics.guiRenderState.addGuiElement(new QuadsRenderState(
 			new Matrix3x2f(graphics.pose()), quads, colors, count, scissor, scissor != null ? scissor.intersection(area) : area
 		));
+		if (this.loading) {
+			Font font = Minecraft.getInstance().font;
+			int x = this.getX() + this.width / 2;
+			int y = this.getY() + this.height / 2;
+			int half = font.width(this.placeholder) / 2 + 4;
+			graphics.fill(x - half, y - 7, x + half, y + 7, 0xA0000000);
+			graphics.centeredText(font, this.placeholder, x, y - 4, -1);
+		}
 		if (hovered != null) {
 			graphics.setTooltipForNextFrame(BiomeColors.name(hovered), mouseX, mouseY);
 		}

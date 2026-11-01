@@ -454,6 +454,9 @@ public class CustomizeCubeWorldScreen extends Screen {
 		if (best != null && best.score() > 0) {
 			this.showSeed(best.seed());
 			this.sample();
+		} else {
+			// The search may have cut off the sampling of the shown seed.
+			this.refresh();
 		}
 	}
 
@@ -469,6 +472,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		BooleanSupplier stop = () -> this.task.get() != id;
 		long seed = this.seed;
 		CubeSettings settings = this.settings;
+		this.showFound();
 		run(() -> {
 			CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
 			CubeBiomeMap map = sampler.sample(PREVIEW_CELLS, null, stop);
@@ -510,6 +514,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		Found found = this.found;
 		this.preview.setMap(found == null ? null : found.map);
 		this.preview.setPlaceholder(Component.translatable("cubeworld.customize.preview.loading"));
+		this.preview.setLoading(!this.searching && (found == null || this.foundSeed != this.seed || !this.settings.equals(this.foundSettings)));
 		this.biomeList.setPresent(found == null ? null : found.biomes);
 		this.structureList.setPresent(found == null ? null : found.structures);
 		int biomes = this.biomeSource.possibleBiomes().size();
