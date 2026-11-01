@@ -42,14 +42,17 @@ final class CubePreviewWidget extends AbstractWidget {
 	private static final long PAUSE_AFTER_DRAG_MS = 3000L;
 	private static final float DRAG_SPEED = 0.015F;
 	/** A thrown cube slows down with this time constant. */
-	private static final float SPIN_DECAY_MS = 500.0F;
+	private static final float SPIN_DECAY_MS = 1000.0F;
 	/** Below this turn speed, in radians per ms, a thrown cube stops. */
-	private static final float MIN_SPIN = 0.0006F;
-	private static final float MAX_SPIN = 0.006F;
-	/** A throw keeps this share of the speed of the hand, so that a quick drag does not send the cube off. */
-	private static final float THROW_SHARE = 0.5F;
+	private static final float MIN_SPIN = 0.0004F;
+	private static final float MAX_SPIN = 0.01F;
+	/**
+	 * A release throws the cube with the speed of the hand minus this, in radians per ms. A slow hand throws nothing, so
+	 * that the cube stops where the hand stops, and the throw grows from zero with the speed of the hand.
+	 */
+	private static final float THROW_DEADZONE = 0.002F;
 	/** A release this long after the last drag movement throws nothing. */
-	private static final long THROW_WINDOW_MS = 60L;
+	private static final long THROW_WINDOW_MS = 100L;
 	/** A drag that starts this far from the center, in cube radii, rolls the cube. */
 	private static final float ROLL_START = 0.85F;
 	private static final float START_YAW = Mth.PI / 4.0F;
@@ -334,7 +337,7 @@ final class CubePreviewWidget extends AbstractWidget {
 		if (angle > 0.0F) {
 			this.turn(turn.div(angle), angle);
 			float ms = Math.max(1L, now - this.lastDragMove);
-			this.spin.lerp(new Vector3f(turn).mul(THROW_SHARE * angle / ms), 0.5F);
+			this.spin.lerp(new Vector3f(turn).mul(angle / ms), 0.5F);
 			if (this.spin.length() > MAX_SPIN) {
 				this.spin.normalize(MAX_SPIN);
 			}
@@ -348,8 +351,11 @@ final class CubePreviewWidget extends AbstractWidget {
 		long now = Util.getMillis();
 		this.dragging = false;
 		this.lastActive = now;
-		if (now - this.lastDragMove > THROW_WINDOW_MS) {
+		float speed = this.spin.length();
+		if (now - this.lastDragMove > THROW_WINDOW_MS || speed <= THROW_DEADZONE) {
 			this.spin.zero();
+		} else {
+			this.spin.mul((speed - THROW_DEADZONE) / speed);
 		}
 	}
 
