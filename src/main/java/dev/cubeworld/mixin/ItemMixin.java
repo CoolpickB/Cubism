@@ -28,8 +28,8 @@ public abstract class ItemMixin {
 	}
 
 	@WrapOperation(method = "getPlayerPOVHitResult", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;getEyePosition()Lnet/minecraft/world/phys/Vec3;"))
-	private static Vec3 cubeworld$eyeInFlight(Player player, Operation<Vec3> original) {
-		return SeamCrossing.flightEye(player, original.call(player));
+	private static Vec3 cubeworld$shownEye(Player player, Operation<Vec3> original) {
+		return SeamCrossing.shownEye(player, original.call(player));
 	}
 
 	@WrapOperation(method = "getPlayerPOVHitResult", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;clip(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"))

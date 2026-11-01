@@ -81,6 +81,11 @@ public abstract class LocalPlayerMixin extends LivingEntity {
 		}
 	}
 
+	@Override
+	public void moveRelative(float speed, Vec3 input) {
+		this.setDeltaMovement(this.getDeltaMovement().add(getInputVector(input, speed, CubeFlight.moveYaw((LocalPlayer) (Object) this))));
+	}
+
 	// View bobbing and step sounds use the walked distance, which must be horizontal in the local frame.
 	@ModifyExpressionValue(method = "move", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Mth;length(FF)F"))
 	private float cubeworld$localWalkedDistance(float worldLength) {

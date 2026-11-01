@@ -126,7 +126,8 @@ public final class CubeFlight {
 	 * The frame of the view: the air frame at the entity, at full weight, also on the ground. Over a rounded edge the
 	 * ground is a slope of the face frame, up to 45 degrees on a seam, and this frame turns the view with the surface so
 	 * that the ground looks level. It is the identity above the flat part of a face. Unlike {@link #frame} it does not
-	 * ease with the flight, and it does not move the eye, so the crosshair stays where vanilla aims on the ground.
+	 * ease with the flight. The eye stands along its up, on the ground too: the eye of vanilla stands along the up of
+	 * the face, and at a crossing it swung about 1 block to the up of the next face.
 	 */
 	public static Quaternionf viewFrame(Entity entity, float partialTicks) {
 		SeamLayout layout = SeamLayout.of(entity.level());
@@ -169,6 +170,21 @@ public final class CubeFlight {
 		player.yRotO = yaw(oldLook, newYRot);
 		player.xRotO = pitch(oldLook);
 		return true;
+	}
+
+	/**
+	 * The yaw that the movement keys walk along: the forward of the screen, level in the view frame. Near an edge the
+	 * view frame tilts the camera, so a look that the screen shows 45 degrees down can be straight down in the face.
+	 * There the yaw of the face turned far with a small mouse move and flipped past the vertical, and W walked away
+	 * from where the screen looked.
+	 */
+	public static float moveYaw(LocalPlayer player) {
+		Quaternionf frame = viewFrame(player, 1.0F);
+		if (inFrame || isIdentity(frame)) {
+			return player.getYRot();
+		}
+		float[] angles = anglesIn(frame, player.getYRot(), player.getXRot());
+		return yaw(frame.transform(look(angles[0], 0.0F)), player.getYRot());
 	}
 
 	private static Vector3f turnIn(Quaternionf frame, float yRot, float xRot, float yawChange, float pitchChange) {
@@ -237,7 +253,7 @@ public final class CubeFlight {
 	 * eye of vanilla stands along the up of the face.
 	 */
 	public static Vec3 eyePosition(Entity entity, float partialTicks, Vec3 vanillaEye) {
-		Quaternionf frame = frame(entity, partialTicks);
+		Quaternionf frame = viewFrame(entity, partialTicks);
 		if (isIdentity(frame)) {
 			return vanillaEye;
 		}

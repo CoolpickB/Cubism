@@ -136,12 +136,12 @@ public final class SeamCrossing {
 	}
 
 	/**
-	 * The eye of a flying player as the client camera shows it: along the up of the air, about the center of the body.
+	 * The eye of a player as the client camera shows it: along the up of the air, about the center of the body.
 	 * The crosshair starts there, so rays of the server that must hit the same block start there too.
 	 */
-	public static Vec3 flightEye(Player player, Vec3 vanillaEye) {
+	public static Vec3 shownEye(Player player, Vec3 vanillaEye) {
 		SeamLayout layout = SeamLayout.of(player.level());
-		if (layout == null || !flies(player)) {
+		if (layout == null) {
 			return vanillaEye;
 		}
 		Vec3 center = player.position().add(0.0, player.getBbHeight() / 2.0, 0.0);
@@ -169,14 +169,8 @@ public final class SeamCrossing {
 		float xRot;
 		if (entity instanceof Player) {
 			// The camera keeps the exact turned look. A look along the edge normal turns vertical, where it gives no
-			// yaw. The top of the screen then points along the turned up of the head: forward when the look is down,
-			// backward when it is up. A heading from that keeps the view and the keys as they were. The away direction
-			// made S push a player who looked down back over the edge, so the crossing repeated.
-			Vec3 heading = look;
-			if (look.x * look.x + look.z * look.z < 1.0E-6) {
-				Vec3 headUp = rotate(m, new Vec3(0.0, 1.0, 0.0));
-				heading = headUp.x * headUp.x + headUp.z * headUp.z < 1.0E-6 ? away : look.y < 0.0 ? headUp : headUp.scale(-1.0);
-			}
+			// yaw, so the away direction gives it.
+			Vec3 heading = look.x * look.x + look.z * look.z < 1.0E-6 ? away : look;
 			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
 			xRot = (float) Math.toDegrees(Math.asin(Mth.clamp(-look.y, -1.0, 1.0)));
 		} else if (entity instanceof Projectile && entity.getDeltaMovement().lengthSqr() > 1.0E-7) {

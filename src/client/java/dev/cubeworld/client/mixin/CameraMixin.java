@@ -39,8 +39,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * frame turns with the face motion at a crossing, so the seam turn is then near zero.
  *
  * <p>On the ground near an edge the camera also stands upright in the air frame, so the rounded edge looks level, up
- * to 45 degrees on a seam. The turn is a roll about the look, and the eye stays where vanilla puts it, so the crosshair
- * stays where vanilla aims.
+ * to 45 degrees on a seam. The turn is a roll about the look, and the eye stands along the up of the air frame.
  */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
@@ -74,18 +73,15 @@ public abstract class CameraMixin {
 	@Unique private final Quaternionf cubeworld$eyeCorrection = new Quaternionf();
 	@Unique private int cubeworld$lastFace = -1;
 	@Unique private Vec3 cubeworld$lastPosition = Vec3.ZERO;
-	/** The air frame of {@link CubeFlight} in this frame and the last one. */
-	@Unique private Quaternionf cubeworld$air = new Quaternionf();
-	@Unique private Quaternionf cubeworld$lastAir = new Quaternionf();
-	/** The frame of the view of {@link CubeFlight#viewFrame}, which also turns the view on the ground near an edge. */
+	/** The frame of the view of {@link CubeFlight#viewFrame} in this frame and the last one. The eye stands along it. */
 	@Unique private Quaternionf cubeworld$view = new Quaternionf();
+	@Unique private Quaternionf cubeworld$lastView = new Quaternionf();
 
 	@Inject(method = "alignWithEntity", at = @At("HEAD"))
 	private void cubeworld$updateFrameRotation(float partialTicks, CallbackInfo ci) {
 		Direction frame = this.entity instanceof GravityEntityAccess access ? access.cubeworld$getFrame() : Direction.DOWN;
 		float now = this.entity.tickCount + partialTicks;
-		this.cubeworld$lastAir = this.cubeworld$air;
-		this.cubeworld$air = CubeFlight.frame(this.entity, partialTicks);
+		this.cubeworld$lastView = this.cubeworld$view;
 		this.cubeworld$view = CubeFlight.viewFrame(this.entity, partialTicks);
 		Quaternionf airTurn = this.cubeworld$airTurn(partialTicks);
 		if (this.entity != this.cubeworld$lastEntity) {
@@ -93,7 +89,7 @@ public abstract class CameraMixin {
 			this.cubeworld$correction.identity();
 			this.cubeworld$eyeCorrection.identity();
 			this.cubeworld$lastFace = -1;
-			this.cubeworld$lastAir = this.cubeworld$air;
+			this.cubeworld$lastView = this.cubeworld$view;
 		} else if (frame != this.cubeworld$lastFrame) {
 			// Start from the rotation on screen, also when the last turn is not complete.
 			Quaternionf shown = this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(this.cubeworld$lastFrame));
@@ -165,7 +161,7 @@ public abstract class CameraMixin {
 				this.cubeworld$correction.set(shown.mul(view.conjugate()));
 				// The eye stands along the air frame. The correction keeps it where the motion carries the last eye.
 				this.cubeworld$eyeCorrection.set(motion.mul(this.cubeworld$smoothed(this.cubeworld$eyeCorrection, now))
-					.mul(this.cubeworld$lastAir).mul(new Quaternionf(this.cubeworld$air).conjugate()));
+					.mul(this.cubeworld$lastView).mul(new Quaternionf(this.cubeworld$view).conjugate()));
 				this.cubeworld$flipTime = now;
 			}
 		}
@@ -204,7 +200,7 @@ public abstract class CameraMixin {
 
 	@Inject(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setPosition(DDD)V", shift = At.Shift.AFTER))
 	private void cubeworld$placeEyeInFrame(float partialTicks, CallbackInfo ci) {
-		Quaternionf eyeTurn = this.cubeworld$smoothed(this.cubeworld$eyeCorrection, this.entity.tickCount + partialTicks).mul(this.cubeworld$air);
+		Quaternionf eyeTurn = this.cubeworld$smoothed(this.cubeworld$eyeCorrection, this.entity.tickCount + partialTicks).mul(this.cubeworld$view);
 		if (Math.abs(eyeTurn.x) > 1.0E-6F || Math.abs(eyeTurn.y) > 1.0E-6F || Math.abs(eyeTurn.z) > 1.0E-6F) {
 			float halfHeight = this.entity.getBbHeight() / 2.0F;
 			Vector3f eye = eyeTurn.transform(new Vector3f(0.0F, Mth.lerp(partialTicks, this.eyeHeightOld, this.eyeHeight) - halfHeight, 0.0F));
