@@ -57,5 +57,7 @@
   "cubeworld.customize.structure.trail_ruins": "Trail Ruins",
   "cubeworld.customize.structure.trial_chambers": "Trial Chambers",
   "cubeworld.customize.structure.villages": "Village",
-  "cubeworld.customize.structure.woodland_mansions": "Woodland Mansion"
+  "cubeworld.customize.structure.woodland_mansions": "Woodland Mansion",
+  "cubeworld.customize.history.back": "Previous seed",
+  "cubeworld.customize.history.forward": "Next seed"
 }

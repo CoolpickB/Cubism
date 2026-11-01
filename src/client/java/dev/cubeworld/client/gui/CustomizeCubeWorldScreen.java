@@ -22,6 +22,7 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
@@ -34,6 +35,7 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -53,6 +55,11 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private static final int PREVIEW_CELLS = 64;
 	private static final int SEARCH_CELLS = 24;
 	private static final int GAP = 4;
+	private static final int ARROW_WIDTH = 14;
+	private static final int SEARCH_WIDTH = 52;
+	/** Searches pick seeds below this, so that they fit in the seed box: at most 7 digits. */
+	private static final int SEARCH_SEED_BOUND = 10_000_000;
+	private static final int HISTORY_SIZE = 50;
 	private static final float SIDE_SHARE = 0.32F;
 	private static final Identifier LIST_BACKGROUND = Identifier.withDefaultNamespace("textures/gui/menu_list_background.png");
 
@@ -79,6 +86,9 @@ public class CustomizeCubeWorldScreen extends Screen {
 	/** Each sampling or search gets the next number. A task stops when the number moves on. */
 	private final AtomicInteger task = new AtomicInteger();
 	private final AtomicInteger tried = new AtomicInteger();
+	/** The seeds that the screen showed, oldest first, as the player typed them. {@link #historyAt} is the one that shows now. */
+	private final List<String> history = new ArrayList<>();
+	private int historyAt;
 
 	private CubeSettings settings;
 	private long seed;
@@ -92,6 +102,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private CubePreviewWidget preview;
 	private EditBox seedBox;
 	private Button searchButton;
+	private Button backButton;
+	private Button forwardButton;
 	private FilterList<Holder<Biome>> biomeList;
 	private FilterList<ResourceKey<StructureSet>> structureList;
 	private boolean settingSeedText;
@@ -128,10 +140,27 @@ public class CustomizeCubeWorldScreen extends Screen {
 			CustomizeCubeWorldScreen::structureName, null, () -> {}
 		));
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
-		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")));
+		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")) {
+			@Override
+			public void setFocused(boolean focused) {
+				super.setFocused(focused);
+				if (!focused) {
+					CustomizeCubeWorldScreen.this.remember(CustomizeCubeWorldScreen.this.seedText);
+				}
+			}
+		});
 		this.seedBox.setMaxLength(64);
 		this.seedBox.setValue(this.seedText);
 		this.seedBox.setResponder(this::onSeedTyped);
+		this.backButton = this.addRenderableWidget(Button.builder(Component.literal("<"), button -> this.step(-1))
+			.tooltip(Tooltip.create(Component.translatable("cubeworld.customize.history.back")))
+			.build());
+		this.forwardButton = this.addRenderableWidget(Button.builder(Component.literal(">"), button -> this.step(1))
+			.tooltip(Tooltip.create(Component.translatable("cubeworld.customize.history.forward")))
+			.build());
+		if (this.history.isEmpty()) {
+			this.history.add(this.seedText);
+		}
 		this.searchButton = this.addRenderableWidget(Button.builder(Component.empty(), button -> this.toggleSearch())
 			.tooltip(Tooltip.create(Component.translatable("cubeworld.customize.search.tooltip")))
 			.build());
@@ -174,6 +203,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			this.sample();
 		}
 		this.refreshSearchButton();
+		this.refreshHistoryButtons();
 	}
 
 	@Override
@@ -191,9 +221,11 @@ public class CustomizeCubeWorldScreen extends Screen {
 		int seedRow = top + height - GAP - 20;
 		int previewSize = Math.max(0, Math.min(inner, seedRow - GAP - (top + GAP)));
 		this.preview.setRectangle(previewSize, previewSize, left + (inner - previewSize) / 2, top + GAP);
-		int half = (inner - 4) / 2;
-		this.seedBox.setRectangle(half, 20, left, seedRow);
-		this.searchButton.setRectangle(half, 20, left + inner - half, seedRow);
+		this.backButton.setRectangle(ARROW_WIDTH, 20, left, seedRow);
+		this.forwardButton.setRectangle(ARROW_WIDTH, 20, left + ARROW_WIDTH + 2, seedRow);
+		int seedLeft = left + 2 * ARROW_WIDTH + 2 + GAP;
+		this.searchButton.setRectangle(SEARCH_WIDTH, 20, left + inner - SEARCH_WIDTH, seedRow);
+		this.seedBox.setRectangle(left + inner - SEARCH_WIDTH - GAP - seedLeft, 20, seedLeft, seedRow);
 	}
 
 	@Override
@@ -243,6 +275,43 @@ public class CustomizeCubeWorldScreen extends Screen {
 		}
 	}
 
+	/** Makes the seed the newest entry of the history, and drops the entries after the one that shows. */
+	private void remember(String text) {
+		if (this.historyAt < this.history.size() && this.history.get(this.historyAt).equals(text)) {
+			return;
+		}
+		while (this.history.size() > this.historyAt + 1) {
+			this.history.removeLast();
+		}
+		this.history.add(text);
+		if (this.history.size() > HISTORY_SIZE) {
+			this.history.removeFirst();
+		}
+		this.historyAt = this.history.size() - 1;
+		this.refreshHistoryButtons();
+	}
+
+	private void step(int direction) {
+		this.remember(this.seedText);
+		this.historyAt = Mth.clamp(this.historyAt + direction, 0, this.history.size() - 1);
+		this.task.incrementAndGet();
+		this.searching = false;
+		this.seedText = this.history.get(this.historyAt);
+		this.seed = WorldOptions.parseSeed(this.seedText).orElseGet(WorldOptions::randomSeed);
+		this.settingSeedText = true;
+		this.seedBox.setValue(this.seedText);
+		this.seedBox.moveCursorToStart(false);
+		this.settingSeedText = false;
+		this.sample();
+		this.refreshSearchButton();
+		this.refreshHistoryButtons();
+	}
+
+	private void refreshHistoryButtons() {
+		this.backButton.active = this.historyAt > 0;
+		this.forwardButton.active = this.historyAt < this.history.size() - 1;
+	}
+
 	private void toggleSearch() {
 		if (this.searching) {
 			this.task.incrementAndGet();
@@ -255,6 +324,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	/** Tries random seeds until one has everything that is required. With nothing required, the first seed it tries is the one. */
 	private void startSearch() {
+		this.remember(this.seedText);
 		int id = this.task.incrementAndGet();
 		BooleanSupplier stop = () -> this.task.get() != id;
 		Set<Holder<Biome>> wantedBiomes = Set.copyOf(this.requiredBiomes);
@@ -266,7 +336,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		run(() -> {
 			Random random = new Random();
 			while (!stop.getAsBoolean()) {
-				long seed = random.nextLong();
+				long seed = random.nextInt(SEARCH_SEED_BOUND);
 				CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
 				CubeBiomeMap quick = sampler.sample(SEARCH_CELLS, wantedBiomes.isEmpty() ? null : wantedBiomes, stop);
 				if (quick == null) {
@@ -296,6 +366,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 						this.seedBox.setValue(this.seedText);
 						this.seedBox.moveCursorToStart(false);
 						this.settingSeedText = false;
+						this.remember(this.seedText);
 						this.setFound(result, seed, settings);
 						this.refreshSearchButton();
 					}
