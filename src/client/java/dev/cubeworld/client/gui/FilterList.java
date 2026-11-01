@@ -68,9 +68,20 @@ final class FilterList<T> extends ObjectSelectionList<FilterList<T>.Row> {
 		this.present = present;
 	}
 
+	/** The scrollbar sits inside the right edge of the list, and the rows stop before it. */
+	@Override
+	protected int scrollBarX() {
+		return this.getRight() - this.scrollbarWidth() - 1;
+	}
+
+	@Override
+	public int getRowLeft() {
+		return this.getX() + 4;
+	}
+
 	@Override
 	public int getRowWidth() {
-		return this.width - 14;
+		return this.width - 4 - this.scrollbarWidth() - 1 - 4;
 	}
 
 	private final class Heading extends Row {
