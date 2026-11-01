@@ -29,6 +29,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -91,6 +92,8 @@ final class CubePreviewWidget extends AbstractWidget {
 	private final Vector3f spin = new Vector3f();
 	private boolean dragging;
 	private List<Vector3f> pins = List.of();
+	private boolean showDirections;
+	private final List<AbstractWidget> overlays = new ArrayList<>();
 	/** Whether the drag in progress started off the cube, and rolls the cube instead of tilting it. */
 	private boolean rolling;
 	private long lastFrame;
@@ -122,6 +125,20 @@ final class CubePreviewWidget extends AbstractWidget {
 	/** Marks places on the surface of the cube, as points of a cube with a radius of 1. They show on the faces in view. */
 	void setPins(List<Vector3f> pins) {
 		this.pins = pins;
+	}
+
+	void setShowDirections(boolean showDirections) {
+		this.showDirections = showDirections;
+	}
+
+	/** A widget drawn over the preview. A click on it goes to the widget, not to the cube. */
+	void addOverlay(AbstractWidget overlay) {
+		this.overlays.add(overlay);
+	}
+
+	@Override
+	public boolean isMouseOver(double x, double y) {
+		return super.isMouseOver(x, y) && this.overlays.stream().noneMatch(overlay -> overlay.isMouseOver(x, y));
 	}
 
 	/** Holds the cube still, as a drag does, before it turns again. */
@@ -195,7 +212,9 @@ final class CubePreviewWidget extends AbstractWidget {
 			new Matrix3x2f(graphics.pose()), quads, colors, count, scissor, scissor != null ? scissor.intersection(area) : area
 		));
 		this.extractPins(graphics, view);
-		this.extractDirectionMarkers(graphics, view);
+		if (this.showDirections) {
+			this.extractDirectionMarkers(graphics, view);
+		}
 		if (this.loading) {
 			Font font = Minecraft.getInstance().font;
 			int x = this.getX() + this.width / 2;

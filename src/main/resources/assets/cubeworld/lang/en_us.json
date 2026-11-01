@@ -3,6 +3,8 @@
   "cubeworld.customize.title": "Customize Cube World",
   "cubeworld.customize.preview": "Cube Preview",
   "cubeworld.customize.preview.loading": "Loading...",
+  "cubeworld.customize.compass": "Direction Markers",
+  "cubeworld.customize.compass.tooltip": "Show UP, WEST and NORTH on the cube",
   "cubeworld.customize.preview.up": "UP",
   "cubeworld.customize.preview.west": "WEST",
   "cubeworld.customize.preview.north": "NORTH",

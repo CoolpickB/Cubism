@@ -117,6 +117,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private String seedText;
 	private int searchWidth = SEARCH_WIDTH;
 	private Button climateButton;
+	private CompassToggle compass;
 	private boolean searching;
 	/** The biome that the cube highlights, which the player picked with its mark in the list. */
 	private @Nullable Holder<Biome> highlighted;
@@ -178,10 +179,14 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.biomeList.setMarkAction(this::highlight);
 		this.structureList.setMarkAction(this::pin);
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
+		CompassToggle compass = this.addRenderableWidget(new CompassToggle(this.preview::setShowDirections));
+		this.preview.addOverlay(compass);
+		this.compass = compass;
 		this.climateButton = this.addRenderableWidget(Button.builder(Component.empty(), button -> {
 			this.settings = this.settings.withTemperature(0).withHumidity(0);
 			this.refresh();
 		}).tooltip(Tooltip.create(Component.translatable("cubeworld.customize.climate.reset"))).build());
+		this.preview.addOverlay(this.climateButton);
 		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")) {
 			@Override
 			public void setFocused(boolean focused) {
@@ -265,6 +270,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		int seedRow = top + height - GAP - 20;
 		int previewSize = Math.max(0, Math.min(inner, seedRow - GAP - (top + GAP)));
 		this.preview.setRectangle(previewSize, previewSize, left + (inner - previewSize) / 2, top + GAP);
+		this.compass.setPosition(this.preview.getX() + 2, this.preview.getY() + 2);
 		this.climateButton.setHeight(14);
 		this.climateButton.setPosition(this.preview.getX(), this.preview.getY() + previewSize - 14);
 		this.backButton.setRectangle(ARROW_WIDTH, 20, left, seedRow);
