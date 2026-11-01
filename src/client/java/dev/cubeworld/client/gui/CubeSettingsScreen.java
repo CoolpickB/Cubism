@@ -44,20 +44,26 @@ final class CubeSettingsScreen extends Screen {
 		content.addChild(slider(
 			CubePlanetMath.MIN_DIAMETER_CHUNKS / 2, CubePlanetMath.MAX_DIAMETER_CHUNKS / 2, this.settings.diameterChunks() / 2,
 			half -> Component.translatable("cubeworld.customize.diameter", half * 2, half * 32),
-			half -> this.update(new CubeSettings(half * 2, this.settings.edgeRounding(), this.settings.spawnFace(), this.settings.pregen()))
+			half -> this.update(this.settings.withDiameterChunks(half * 2))
 		));
 		content.addChild(slider(
 			CubePlanetMath.MIN_EDGE_ROUNDING, CubePlanetMath.MAX_EDGE_ROUNDING, this.settings.edgeRounding(),
 			blocks -> Component.translatable("cubeworld.customize.edge_rounding", blocks),
-			blocks -> this.update(new CubeSettings(this.settings.diameterChunks(), blocks, this.settings.spawnFace(), this.settings.pregen()))
+			blocks -> this.update(this.settings.withEdgeRounding(blocks))
+		));
+		content.addChild(slider(
+			CubeSettings.MIN_CLIMATE_SHIFT, CubeSettings.MAX_CLIMATE_SHIFT, this.settings.temperature(),
+			shift -> climateText("cubeworld.customize.temperature", shift), shift -> this.update(this.settings.withTemperature(shift))
+		));
+		content.addChild(slider(
+			CubeSettings.MIN_CLIMATE_SHIFT, CubeSettings.MAX_CLIMATE_SHIFT, this.settings.humidity(),
+			shift -> climateText("cubeworld.customize.humidity", shift), shift -> this.update(this.settings.withHumidity(shift))
 		));
 		content.addChild(CycleButton.builder(
 				(CubeSettings.Pregen pregen) -> Component.translatable("cubeworld.customize.pregen." + pregen.getSerializedName()), this.settings.pregen()
 			)
 			.withValues(CubeSettings.Pregen.values())
-			.create(0, 0, WIDTH, 20, Component.translatable("cubeworld.customize.pregen"), (button, pregen) -> this.update(
-				new CubeSettings(this.settings.diameterChunks(), this.settings.edgeRounding(), this.settings.spawnFace(), pregen)
-			)));
+			.create(0, 0, WIDTH, 20, Component.translatable("cubeworld.customize.pregen"), (button, pregen) -> this.update(this.settings.withPregen(pregen))));
 		this.pregenLabel = content.addChild(new StringWidget(WIDTH, 12, Component.empty(), this.font));
 		this.update(this.settings);
 
@@ -70,6 +76,10 @@ final class CubeSettingsScreen extends Screen {
 
 		this.layout.visitWidgets(this::addRenderableWidget);
 		this.repositionElements();
+	}
+
+	private static Component climateText(String key, int shift) {
+		return Component.translatable(key, shift == 0 ? Component.translatable("cubeworld.customize.climate.normal") : Component.literal(String.format("%+d%%", shift)));
 	}
 
 	private static AbstractSliderButton slider(int min, int max, int initial, IntFunction<Component> text, IntConsumer onChange) {

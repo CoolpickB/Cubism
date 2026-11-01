@@ -2,6 +2,7 @@ package dev.cubeworld.mixin;
 
 import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.math.CubePlanetMath;
+import dev.cubeworld.worldgen.CubeDensityFunctions;
 import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
 import dev.cubeworld.worldgen.SeamRandomState;
@@ -32,6 +33,10 @@ public abstract class ChunkGeneratorMixin {
 			SeamLayout layout = new SeamLayout(settings.diameterChunks());
 			SeamLayout.setActive(layout);
 			((SeamRandomState) (Object) randomState).cubeworld$enableSeams(layout);
+			if (settings.shiftsClimate()) {
+				RandomStateAccessor router = (RandomStateAccessor) (Object) randomState;
+				router.cubeworld$setRouter(CubeDensityFunctions.withClimateShift(router.cubeworld$getRouter(), settings.temperature(), settings.humidity()));
+			}
 		}
 	}
 }

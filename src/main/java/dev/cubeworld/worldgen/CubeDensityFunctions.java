@@ -10,6 +10,7 @@ import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.Noises;
 import net.minecraft.world.level.levelgen.densityfunction.DensityBuffer;
 import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunctions;
 import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
 import net.minecraft.world.level.levelgen.densityfunction.DensityVolume;
 import net.minecraft.world.level.levelgen.densityfunction.DfRewriteRule;
@@ -26,6 +27,31 @@ import java.util.Map;
 
 public final class CubeDensityFunctions {
 	private CubeDensityFunctions() {}
+
+	/**
+	 * The router with a shift added to the temperature and to the humidity, which the router calls vegetation. The shifts
+	 * are in hundredths of the climate range. The biome search takes the nearest biome, so a climate beyond the range
+	 * gives the most extreme biomes.
+	 */
+	public static NoiseRouter withClimateShift(NoiseRouter router, int temperature, int humidity) {
+		if (temperature == 0 && humidity == 0) {
+			return router;
+		}
+		return new NoiseRouter(
+			shifted(router.temperature(), temperature),
+			shifted(router.vegetation(), humidity),
+			router.continents(),
+			router.erosion(),
+			router.depth(),
+			router.ridges(),
+			router.chunkSurfaceLevel(),
+			router.finalDensity()
+		);
+	}
+
+	private static DensityFunction shifted(DensityFunction function, int hundredths) {
+		return hundredths == 0 ? function : DensityFunctions.add(function, DensityFunctions.constant(hundredths / 100.0F));
+	}
 
 	public static NoiseRouter rewriteRouter(NoiseRouter router, int centerY, int radiusBlocks, int innerBedrockRadius) {
 		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, innerBedrockRadius);

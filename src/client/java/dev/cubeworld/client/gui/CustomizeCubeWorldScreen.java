@@ -20,6 +20,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.Mth;
@@ -82,6 +83,11 @@ public class CustomizeCubeWorldScreen extends Screen {
 		Preset.of("tropics", List.of("jungle", "bamboo_jungle", "warm_ocean", "mangrove_swamp"), List.of()),
 		Preset.of("badlands", List.of("badlands", "eroded_badlands", "wooded_badlands"), List.of()),
 		Preset.of("caves", List.of("lush_caves", "dripstone_caves", "deep_dark", "sulfur_caves"), List.of()),
+		Preset.planet("desert_planet", 60, -50, List.of("desert")),
+		Preset.planet("frozen_planet", -70, 0, List.of("snowy_plains", "snowy_taiga")),
+		Preset.planet("jungle_planet", 40, 70, List.of("jungle")),
+		Preset.planet("swamp_planet", 0, 80, List.of("swamp")),
+		Preset.planet("badlands_planet", 70, -40, List.of("badlands")),
 		Preset.of("structure_hunter", List.of(), List.of("villages", "pillager_outposts", "woodland_mansions", "ocean_monuments", "ancient_cities"))
 	);
 
@@ -104,6 +110,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private long seed;
 	private String seedText;
 	private int searchWidth = SEARCH_WIDTH;
+	private Button climateButton;
 	private boolean searching;
 	/** The biome that the cube highlights, which the player picked with its mark in the list. */
 	private @Nullable Holder<Biome> highlighted;
@@ -141,8 +148,9 @@ public class CustomizeCubeWorldScreen extends Screen {
 		this.biomeSource = (MultiNoiseBiomeSource) generator.getBiomeSource();
 		this.structureCandidates = CubeStructureMap.candidates(this.structureSets, this.biomeSource);
 		// An empty seed field gives the world the random seed that the options already hold.
-		this.seed = context.options().seed();
 		String text = parent.getUiState().getSeed();
+		// A seed that fits the box, so that the player can read and type it. The random seed of the options does not.
+		this.seed = text.isBlank() ? ThreadLocalRandom.current().nextInt(SEARCH_SEED_BOUND) : context.options().seed();
 		this.seedText = text.isBlank() ? Long.toString(this.seed) : text;
 	}
 
@@ -159,6 +167,10 @@ public class CustomizeCubeWorldScreen extends Screen {
 		));
 		this.biomeList.setMarkAction(this::highlight);
 		this.preview = this.addRenderableWidget(new CubePreviewWidget());
+		this.climateButton = this.addRenderableWidget(Button.builder(Component.empty(), button -> {
+			this.settings = this.settings.withTemperature(0).withHumidity(0);
+			this.refresh();
+		}).tooltip(Tooltip.create(Component.translatable("cubeworld.customize.climate.reset"))).build());
 		this.seedBox = this.addRenderableWidget(new EditBox(this.font, 100, 20, Component.translatable("selectWorld.enterSeed")) {
 			@Override
 			public void setFocused(boolean focused) {
@@ -218,6 +230,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	/** Samples the seed again if the map is out of date. */
 	private void refresh() {
+		this.refreshClimateButton();
 		this.showFound();
 		if (!this.searching && (this.found == null || this.foundSeed != this.seed || !this.settings.equals(this.foundSettings))) {
 			this.sample();
@@ -241,6 +254,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 		int seedRow = top + height - GAP - 20;
 		int previewSize = Math.max(0, Math.min(inner, seedRow - GAP - (top + GAP)));
 		this.preview.setRectangle(previewSize, previewSize, left + (inner - previewSize) / 2, top + GAP);
+		this.climateButton.setHeight(14);
+		this.climateButton.setPosition(this.preview.getX(), this.preview.getY() + previewSize - 14);
 		this.backButton.setRectangle(ARROW_WIDTH, 20, left, seedRow);
 		this.forwardButton.setRectangle(ARROW_WIDTH, 20, left + ARROW_WIDTH + 2, seedRow);
 		int seedLeft = left + 2 * ARROW_WIDTH + 2 + GAP;
@@ -295,6 +310,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 	}
 
 	private void usePreset(Preset preset) {
+		// A preset sets the climate to its own, and to the normal climate when it has none.
+		this.settings = this.settings.withTemperature(preset.temperature).withHumidity(preset.humidity);
 		this.requiredBiomes.clear();
 		for (Holder<Biome> biome : this.biomeSource.possibleBiomes()) {
 			if (biome.unwrapKey().map(key -> preset.biomes.contains(key.identifier())).orElse(false)) {
@@ -307,6 +324,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 		}
 		if (!this.requiredBiomes.isEmpty() || !this.requiredStructures.isEmpty()) {
 			this.startSearch();
+		} else {
+			this.refresh();
 		}
 	}
 
@@ -542,6 +561,29 @@ public class CustomizeCubeWorldScreen extends Screen {
 			: Component.translatable("cubeworld.customize.structures.count", found.structures.size(), structures));
 	}
 
+	/** The button over the corner of the cube shows the climate shift of the settings, and resets it. */
+	private void refreshClimateButton() {
+		boolean shifted = this.settings.shiftsClimate();
+		this.climateButton.visible = shifted;
+		this.climateButton.active = shifted;
+		if (shifted) {
+			List<Component> words = new ArrayList<>();
+			climateWord(words, "cold", "hot", this.settings.temperature());
+			climateWord(words, "dry", "wet", this.settings.humidity());
+			Component label = Component.translatable("cubeworld.customize.climate", ComponentUtils.formatList(words, Component.literal(", ")));
+			this.climateButton.setMessage(label);
+			this.climateButton.setWidth(this.font.width(label) + 8);
+		}
+	}
+
+	/** Adds a word for a shift: from 40 in hundredths of the range it is very much so. */
+	private static void climateWord(List<Component> words, String negative, String positive, int shift) {
+		if (shift != 0) {
+			String key = shift < 0 ? negative : positive;
+			words.add(Component.translatable("cubeworld.customize.climate." + (Math.abs(shift) >= 40 ? "very_" : "") + key));
+		}
+	}
+
 	private void refreshSearchButton() {
 		SearchStats stats = this.stats;
 		Component label;
@@ -642,12 +684,21 @@ public class CustomizeCubeWorldScreen extends Screen {
 	}
 
 	/** A set of required biomes and structures, by their ids in the minecraft namespace. */
-	record Preset(Component name, Component description, Set<Identifier> biomes, Set<Identifier> structures) {
+	record Preset(Component name, Component description, Set<Identifier> biomes, Set<Identifier> structures, int temperature, int humidity) {
 		static Preset of(String key, List<String> biomes, List<String> structures) {
 			return new Preset(
 				Component.translatable("cubeworld.customize.preset." + key),
 				Component.translatable("cubeworld.customize.preset." + key + ".description"),
-				ids(biomes), ids(structures)
+				ids(biomes), ids(structures), 0, 0
+			);
+		}
+
+		/** A preset that shifts the climate, in hundredths of its range, so that the biomes are common. */
+		static Preset planet(String key, int temperature, int humidity, List<String> biomes) {
+			return new Preset(
+				Component.translatable("cubeworld.customize.preset." + key),
+				Component.translatable("cubeworld.customize.preset." + key + ".description"),
+				ids(biomes), Set.of(), temperature, humidity
 			);
 		}
 

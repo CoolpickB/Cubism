@@ -71,7 +71,10 @@ public final class CubeBiomeMap {
 			this.edgeRounding = cube.edgeRounding();
 			RandomState state = RandomState.create(
 				noises, seed, settings.useLegacyRandomSource(), settings.defaultBlock(), settings.seaLevel(),
-				CubeDensityFunctions.rewriteRouter(settings.noiseRouter(), this.centerY, this.radius, this.innerBedrockRadius)
+				CubeDensityFunctions.rewriteRouter(
+					CubeDensityFunctions.withClimateShift(settings.noiseRouter(), cube.temperature(), cube.humidity()),
+					this.centerY, this.radius, this.innerBedrockRadius
+				)
 			);
 			this.randomState = state;
 			this.climate = state.createClimateSampler(SamplerContext.EMPTY_UNCACHED);
