@@ -60,6 +60,8 @@ public class CustomizeCubeWorldScreen extends Screen {
 	/** Searches pick seeds below this, so that they fit in the seed box: at most 7 digits. */
 	private static final int SEARCH_SEED_BOUND = 10_000_000;
 	private static final int HISTORY_SIZE = 50;
+	/** A typed seed loads after this many ticks without a key. */
+	private static final int TYPING_PAUSE_TICKS = 10;
 	private static final float SIDE_SHARE = 0.32F;
 	private static final Identifier LIST_BACKGROUND = Identifier.withDefaultNamespace("textures/gui/menu_list_background.png");
 
@@ -107,6 +109,9 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private FilterList<Holder<Biome>> biomeList;
 	private FilterList<ResourceKey<StructureSet>> structureList;
 	private boolean settingSeedText;
+	/** True while a typed seed waits for the pause to end. */
+	private boolean typedPending;
+	private int typingPause;
 
 	/** What a sampling of a seed found. */
 	private record Found(CubeBiomeMap map, Set<Holder<Biome>> biomes, Set<ResourceKey<StructureSet>> structures) {
@@ -145,6 +150,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			public void setFocused(boolean focused) {
 				super.setFocused(focused);
 				if (!focused) {
+					CustomizeCubeWorldScreen.this.loadTypedSeed();
 					CustomizeCubeWorldScreen.this.remember(CustomizeCubeWorldScreen.this.seedText);
 				}
 			}
@@ -243,6 +249,9 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	@Override
 	public void tick() {
+		if (this.typedPending && --this.typingPause <= 0) {
+			this.loadTypedSeed();
+		}
 		if (this.searching) {
 			this.refreshSearchButton();
 		}
@@ -253,10 +262,21 @@ public class CustomizeCubeWorldScreen extends Screen {
 			return;
 		}
 		this.seedText = text;
-		this.seed = WorldOptions.parseSeed(text).orElseGet(WorldOptions::randomSeed);
+		this.task.incrementAndGet();
 		this.searching = false;
-		this.sample();
+		this.typedPending = true;
+		this.typingPause = TYPING_PAUSE_TICKS;
 		this.refreshSearchButton();
+	}
+
+	/** Loads the seed that the player typed, now instead of after the pause. */
+	private void loadTypedSeed() {
+		if (!this.typedPending) {
+			return;
+		}
+		this.typedPending = false;
+		this.seed = WorldOptions.parseSeed(this.seedText).orElseGet(WorldOptions::randomSeed);
+		this.sample();
 	}
 
 	private void usePreset(Preset preset) {
@@ -292,6 +312,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 	}
 
 	private void step(int direction) {
+		this.typedPending = false;
 		this.remember(this.seedText);
 		this.historyAt = Mth.clamp(this.historyAt + direction, 0, this.history.size() - 1);
 		this.task.incrementAndGet();
@@ -324,6 +345,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 
 	/** Tries random seeds until one has everything that is required. With nothing required, the first seed it tries is the one. */
 	private void startSearch() {
+		this.typedPending = false;
 		this.remember(this.seedText);
 		int id = this.task.incrementAndGet();
 		BooleanSupplier stop = () -> this.task.get() != id;
@@ -391,7 +413,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			CubeBiomeMap map = sampler.sample(PREVIEW_CELLS, null, stop);
 			if (map != null) {
 				Found result = new Found(map, map.present, this.structures(sampler, settings, null));
-				this.minecraft.execute(() -> {
+						this.minecraft.execute(() -> {
 					if (!stop.getAsBoolean()) {
 						this.setFound(result, seed, settings);
 					}
