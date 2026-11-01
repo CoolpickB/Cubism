@@ -9,6 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
@@ -16,6 +17,8 @@ import java.util.function.Consumer;
 
 /** The presets of the Customize screen, as a list like the Superflat presets. */
 final class PresetScreen extends Screen {
+	private static final int DESCRIPTION_LINES = 2;
+	private static final int ROW_HEIGHT = 14 + 10 * DESCRIPTION_LINES;
 	private final Screen parent;
 	private final List<CustomizeCubeWorldScreen.Preset> presets;
 	private final Consumer<CustomizeCubeWorldScreen.Preset> onUse;
@@ -63,7 +66,7 @@ final class PresetScreen extends Screen {
 
 	private final class PresetList extends ObjectSelectionList<PresetList.Row> {
 		PresetList() {
-			super(PresetScreen.this.minecraft, PresetScreen.this.width, PresetScreen.this.layout.getContentHeight(), PresetScreen.this.layout.getHeaderHeight(), 24);
+			super(PresetScreen.this.minecraft, PresetScreen.this.width, PresetScreen.this.layout.getContentHeight(), PresetScreen.this.layout.getHeaderHeight(), ROW_HEIGHT);
 			PresetScreen.this.presets.stream().map(Row::new).forEach(this::addEntry);
 		}
 
@@ -83,7 +86,11 @@ final class PresetScreen extends Screen {
 			@Override
 			public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY, boolean hovered, float a) {
 				graphics.text(PresetScreen.this.font, this.preset.name(), this.getContentX() + 2, this.getContentY() + 1, 0xFFFFFFFF);
-				graphics.text(PresetScreen.this.font, this.preset.description(), this.getContentX() + 2, this.getContentY() + 11, 0xFF808080);
+				// The description wraps inside the row, which ends before the scrollbar.
+				List<FormattedCharSequence> lines = PresetScreen.this.font.split(this.preset.description(), this.getContentWidth() - 4);
+				for (int i = 0; i < Math.min(lines.size(), DESCRIPTION_LINES); i++) {
+					graphics.text(PresetScreen.this.font, lines.get(i), this.getContentX() + 2, this.getContentY() + 11 + 10 * i, 0xFF808080);
+				}
 			}
 
 			@Override

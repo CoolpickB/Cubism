@@ -34,7 +34,7 @@ import java.util.List;
 /**
  * The surface biomes of the cube, seen from outside in perspective. The cube turns slowly about an axis that it leans
  * on, so that each face comes into view. A drag turns it freely by hand, about any axis, and a drag that starts at the
- * rim rolls it. A thrown cube goes on turning and slows down. After a pause the cube turns again about the same axis
+ * off the cube rolls it. A thrown cube goes on turning and slows down. After a pause the cube turns again about the same axis
  * as at the start, from the orientation that it was left in. The biome under the mouse shows as a tooltip, and a
  * highlighted biome keeps its color while the others dim.
  */
@@ -57,18 +57,22 @@ final class CubePreviewWidget extends AbstractWidget {
 	private static final float THROW_DEADZONE = 0.003F;
 	/** A release this long after the last drag movement throws nothing. */
 	private static final long THROW_WINDOW_MS = 100L;
-	/** A drag that starts this far from the center, in cube radii, rolls the cube. */
-	private static final float ROLL_START = 0.85F;
 	private static final float START_YAW = Mth.PI / 4.0F;
 	private static final float START_PITCH = Mth.PI / 12.0F;
 	/** The axis of the turn of the cube, in the view. */
 	private static final Vector3f TURN_AXIS = new Matrix3f().rotateX(START_PITCH).transform(new Vector3f(0.0F, 1.0F, 0.0F));
 	private static final float DIMMED = 0.35F;
 	private static final int PIN_COLOR = 0xFFFFD83A;
-	/** Heights above the center of the cube, in cube radii, of the start of the stem over the top face and of the label. */
-	private static final float UP_STEM_START = 1.04F;
-	private static final float UP_LABEL_HEIGHT = 1.36F;
-	private static final Component UP_LABEL = Component.translatable("cubeworld.customize.preview.up");
+	private static final int PIN_COLOR_DIMMED = 0x60FFD83A;
+	/** The height above the center of the cube, in cube radii, of the label of a direction. */
+	private static final float LABEL_HEIGHT = 1.3F;
+	private static final int DIMMED_LABEL = 0x90FFFFFF;
+	private static final Component[] DIRECTION_LABELS = {
+		Component.translatable("cubeworld.customize.preview.up"),
+		Component.translatable("cubeworld.customize.preview.west"),
+		Component.translatable("cubeworld.customize.preview.north")
+	};
+	private static final Vector3f[] DIRECTION_AXES = {new Vector3f(0.0F, 1.0F, 0.0F), new Vector3f(-1.0F, 0.0F, 0.0F), new Vector3f(0.0F, 0.0F, -1.0F)};
 	private static final Vector3f LIGHT = new Vector3f(-0.4F, 0.7F, 0.6F).normalize();
 	/**
 	 * The lean of the cube on its turn axis. The view looks down by less than this, so the bottom face also comes into
@@ -87,7 +91,7 @@ final class CubePreviewWidget extends AbstractWidget {
 	private final Vector3f spin = new Vector3f();
 	private boolean dragging;
 	private List<Vector3f> pins = List.of();
-	/** Whether the drag in progress started at the rim, and rolls the cube instead of tilting it. */
+	/** Whether the drag in progress started off the cube, and rolls the cube instead of tilting it. */
 	private boolean rolling;
 	private long lastFrame;
 	private long lastActive;
@@ -191,7 +195,7 @@ final class CubePreviewWidget extends AbstractWidget {
 			new Matrix3x2f(graphics.pose()), quads, colors, count, scissor, scissor != null ? scissor.intersection(area) : area
 		));
 		this.extractPins(graphics, view);
-		this.extractUpMarker(graphics, view);
+		this.extractDirectionMarkers(graphics, view);
 		if (this.loading) {
 			Font font = Minecraft.getInstance().font;
 			int x = this.getX() + this.width / 2;
@@ -210,46 +214,41 @@ final class CubePreviewWidget extends AbstractWidget {
 		float cx = this.getX() + this.width / 2.0F;
 		float cy = this.getY() + this.height / 2.0F;
 		for (Vector3f pin : this.pins) {
-			// The face of a place is the one that its largest coordinate points to. A face in view has its normal toward the eye.
+			// The face of a place is the one that its largest coordinate points to. A pin on a face that turns away is dim.
 			float ax = Math.abs(pin.x);
 			float ay = Math.abs(pin.y);
 			float az = Math.abs(pin.z);
 			Vector3f normal = ax >= ay && ax >= az ? new Vector3f(Math.signum(pin.x), 0.0F, 0.0F)
 				: ay >= az ? new Vector3f(0.0F, Math.signum(pin.y), 0.0F) : new Vector3f(0.0F, 0.0F, Math.signum(pin.z));
-			if (view.transform(normal).z * EYE_DISTANCE <= 1.0F) {
-				continue;
-			}
+			boolean visible = view.transform(normal).z * EYE_DISTANCE > 1.0F;
 			Vector3f p = view.transform(new Vector3f(pin));
 			float k = scale / (EYE_DISTANCE - p.z);
 			int x = Math.round(cx + p.x * k);
 			int y = Math.round(cy - p.y * k);
-			graphics.fill(x - 3, y - 3, x + 3, y + 3, 0xFF000000);
-			graphics.fill(x - 2, y - 2, x + 2, y + 2, PIN_COLOR);
+			graphics.fill(x - 3, y - 3, x + 3, y + 3, visible ? 0xFF000000 : 0x60000000);
+			graphics.fill(x - 2, y - 2, x + 2, y + 2, visible ? PIN_COLOR : PIN_COLOR_DIMMED);
 		}
 	}
 
 	/**
-	 * A short stem that stands on the middle of the top face and ends in the label "UP", so that it covers no biome. It
-	 * is dim while the top face turns away from the viewer.
+	 * The labels UP, WEST and NORTH, each floating over the middle of its face so that it covers no biome. A label is
+	 * dim while its face turns away from the viewer.
 	 */
-	private void extractUpMarker(GuiGraphicsExtractor graphics, Matrix3f view) {
+	private void extractDirectionMarkers(GuiGraphicsExtractor graphics, Matrix3f view) {
 		float scale = this.scale();
 		float cx = this.getX() + this.width / 2.0F;
 		float cy = this.getY() + this.height / 2.0F;
-		int color = view.transform(new Vector3f(0.0F, 1.0F, 0.0F)).z * EYE_DISTANCE > 1.0F ? 0xFFFFFFFF : 0x90FFFFFF;
-		for (float height = UP_STEM_START; height <= UP_LABEL_HEIGHT - 0.08F; height += 0.04F) {
-			Vector3f p = view.transform(new Vector3f(0.0F, height, 0.0F));
-			float k = scale / (EYE_DISTANCE - p.z);
-			int x = Math.round(cx + p.x * k);
-			int y = Math.round(cy - p.y * k);
-			graphics.fill(x, y, x + 2, y + 2, color);
-		}
-		Vector3f p = view.transform(new Vector3f(0.0F, UP_LABEL_HEIGHT, 0.0F));
-		float k = scale / (EYE_DISTANCE - p.z);
 		Font font = Minecraft.getInstance().font;
-		int x = Mth.clamp(Math.round(cx + p.x * k), this.getX() + 10, this.getX() + this.width - 10);
-		int y = Mth.clamp(Math.round(cy - p.y * k) - 4, this.getY() + 2, this.getY() + this.height - 10);
-		graphics.centeredText(font, UP_LABEL, x, y, color);
+		for (int i = 0; i < DIRECTION_LABELS.length; i++) {
+			Vector3f axis = DIRECTION_AXES[i];
+			int color = view.transform(new Vector3f(axis)).z * EYE_DISTANCE > 1.0F ? 0xFFFFFFFF : DIMMED_LABEL;
+			Vector3f p = view.transform(new Vector3f(axis).mul(LABEL_HEIGHT));
+			float k = scale / (EYE_DISTANCE - p.z);
+			int half = font.width(DIRECTION_LABELS[i]) / 2;
+			int x = Mth.clamp(Math.round(cx + p.x * k), this.getX() + half + 2, this.getX() + this.width - half - 2);
+			int y = Mth.clamp(Math.round(cy - p.y * k) - 4, this.getY() + 2, this.getY() + this.height - 10);
+			graphics.centeredText(font, DIRECTION_LABELS[i], x, y, color);
+		}
 	}
 
 	/** Moves the cube by one frame: a thrown spin, or its own turn after a pause, from the orientation it is in. */
@@ -367,19 +366,43 @@ final class CubePreviewWidget extends AbstractWidget {
 		return new Vector3f(v.getX(), v.getY(), v.getZ());
 	}
 
+	/** Whether the ray from the eye through a screen position meets the cube, which has its faces at 1 from the center. */
+	private boolean overCube(double x, double y) {
+		float scale = this.scale();
+		Matrix3f toCube = new Matrix3f().set(this.orientation).transpose();
+		Vector3f origin = toCube.transform(new Vector3f(0.0F, 0.0F, EYE_DISTANCE));
+		Vector3f ray = toCube.transform(new Vector3f(
+			(float) (x - (this.getX() + this.width / 2.0)) / scale, (float) -(y - (this.getY() + this.height / 2.0)) / scale, -1.0F
+		));
+		float near = Float.NEGATIVE_INFINITY;
+		float far = Float.POSITIVE_INFINITY;
+		for (int axis = 0; axis < 3; axis++) {
+			float o = origin.get(axis);
+			float d = ray.get(axis);
+			if (d == 0.0F) {
+				if (Math.abs(o) > 1.0F) {
+					return false;
+				}
+				continue;
+			}
+			float t0 = (-1.0F - o) / d;
+			float t1 = (1.0F - o) / d;
+			near = Math.max(near, Math.min(t0, t1));
+			far = Math.min(far, Math.max(t0, t1));
+		}
+		return near <= far && far > 0.0F;
+	}
+
 	@Override
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
-		float radius = Math.min(this.width, this.height) / 2.0F;
-		float x = (float) (event.x() - (this.getX() + this.width / 2.0)) / radius;
-		float y = (float) (event.y() - (this.getY() + this.height / 2.0)) / radius;
-		this.rolling = Mth.length(x, y) > ROLL_START;
+		this.rolling = !this.overCube(event.x(), event.y());
 		this.spin.zero();
 		this.dragging = true;
 		this.lastDragMove = Util.getMillis();
 	}
 
 	/**
-	 * A drag turns the cube about the axis across the movement. A drag that started at the rim turns it about the look
+	 * A drag turns the cube about the axis across the movement. A drag that started off the cube turns it about the look
 	 * instead, by the angle that the mouse goes around the center. The cube keeps the turn of the last movement as its
 	 * speed. The mode stays for the whole drag, so that no distance of the mouse ends the turn.
 	 */

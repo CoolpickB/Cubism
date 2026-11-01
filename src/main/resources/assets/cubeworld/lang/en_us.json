@@ -4,6 +4,8 @@
   "cubeworld.customize.preview": "Cube Preview",
   "cubeworld.customize.preview.loading": "Loading...",
   "cubeworld.customize.preview.up": "UP",
+  "cubeworld.customize.preview.west": "WEST",
+  "cubeworld.customize.preview.north": "NORTH",
   "cubeworld.customize.search": "Search",
   "cubeworld.customize.search.stop": "Stop (%s)",
   "cubeworld.customize.search.progress": "Stop %s/%s (%s)",

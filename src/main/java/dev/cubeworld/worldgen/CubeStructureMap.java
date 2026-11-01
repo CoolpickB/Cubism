@@ -66,9 +66,10 @@ public final class CubeStructureMap {
 		CubeBiomeMap.Sampler sampler, CubeSettings cube, HolderLookup<StructureSet> sets, MultiNoiseBiomeSource biomes, Holder<StructureSet> set
 	) {
 		List<Vector3f> points = new ArrayList<>();
-		float radius = new SeamLayout(cube.diameterChunks()).radius;
+		SeamLayout layout = new SeamLayout(cube.diameterChunks());
 		scan(sampler, cube, sets, biomes, List.of(set), (hit, point) -> {
-			points.add(new Vector3f(point[0], point[1], point[2]).div(radius));
+			// The position is a block position of the level: the cube center is at the center height.
+			points.add(new Vector3f(point[0], point[1] - layout.centerY, point[2]).div(layout.radius));
 			return false;
 		});
 		return points;
