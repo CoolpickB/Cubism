@@ -33,6 +33,8 @@ import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
 import net.minecraft.world.level.levelgen.structure.pools.JigsawJunction;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -208,46 +210,59 @@ public final class FoldedStarts {
 			List<StructureStart> starts = new ArrayList<>();
 			Climate.Sampler climate = state.randomState().createClimateSampler(SamplerContext.builder().enableCaches().build());
 			for (Holder<StructureSet> set : state.possibleStructureSets()) {
-				if (!set.value().placement().isStructureChunk(state, chunkX, chunkZ)) {
-					continue;
-				}
-				List<StructureSet.StructureSelectionEntry> options = new ArrayList<>(set.value().structures());
-				WorldgenRandom random = new WorldgenRandom(new LegacyRandomSource(0L));
-				random.setLargeFeatureSeed(state.getLevelSeed(), chunkX, chunkZ);
-				int total = 0;
-				for (StructureSet.StructureSelectionEntry option : options) {
-					total += option.weight();
-				}
-				while (!options.isEmpty()) {
-					int choice = options.size() == 1 ? 0 : random.nextInt(total);
-					int index = 0;
-					if (options.size() > 1) {
-						for (StructureSet.StructureSelectionEntry option : options) {
-							choice -= option.weight();
-							if (choice < 0) {
-								break;
-							}
-							index++;
-						}
-					}
-					StructureSet.StructureSelectionEntry selected = options.get(index);
-					Structure structure = selected.structure().value();
-					Predicate<Holder<Biome>> validBiome = structure.biomes()::contains;
-					StructureStart start = structure.generate(
-						selected.structure(), level, registries, generator, generator.getBiomeSource(), climate, state.randomState(),
-						templates, state.getLevelSeed(), new ChunkPos(chunkX, chunkZ), 0, heights, validBiome
-					);
-					if (start.isValid()) {
-						if (structure.type() == StructureType.JIGSAW || structure.type() == StructureType.MINESHAFT) {
-							starts.add(start);
-						}
-						break;
-					}
-					options.remove(index);
-					total -= selected.weight();
+				StructureStart start = startOf(set, generator, registries, state, templates, level, heights, climate, chunkX, chunkZ);
+				if (start != null && (start.getStructure().type() == StructureType.JIGSAW || start.getStructure().type() == StructureType.MINESHAFT)) {
+					starts.add(start);
 				}
 			}
 			return starts;
 		});
+	}
+
+	/**
+	 * The valid start that a structure set makes in a chunk, chosen as {@link ChunkGenerator#createStructures} chooses it:
+	 * the options are tried by weight until one generates. Returns null when the chunk is no placement chunk of the set or
+	 * no option generates.
+	 */
+	public static @Nullable StructureStart startOf(
+		Holder<StructureSet> set, ChunkGenerator generator, RegistryAccess registries, ChunkGeneratorStructureState state,
+		StructureTemplateManager templates, ResourceKey<Level> level, LevelHeightAccessor heights, Climate.Sampler climate, int chunkX, int chunkZ
+	) {
+		if (!set.value().placement().isStructureChunk(state, chunkX, chunkZ)) {
+			return null;
+		}
+		List<StructureSet.StructureSelectionEntry> options = new ArrayList<>(set.value().structures());
+		WorldgenRandom random = new WorldgenRandom(new LegacyRandomSource(0L));
+		random.setLargeFeatureSeed(state.getLevelSeed(), chunkX, chunkZ);
+		int total = 0;
+		for (StructureSet.StructureSelectionEntry option : options) {
+			total += option.weight();
+		}
+		while (!options.isEmpty()) {
+			int choice = options.size() == 1 ? 0 : random.nextInt(total);
+			int index = 0;
+			if (options.size() > 1) {
+				for (StructureSet.StructureSelectionEntry option : options) {
+					choice -= option.weight();
+					if (choice < 0) {
+						break;
+					}
+					index++;
+				}
+			}
+			StructureSet.StructureSelectionEntry selected = options.get(index);
+			Structure structure = selected.structure().value();
+			Predicate<Holder<Biome>> validBiome = structure.biomes()::contains;
+			StructureStart start = structure.generate(
+				selected.structure(), level, registries, generator, generator.getBiomeSource(), climate, state.randomState(),
+				templates, state.getLevelSeed(), new ChunkPos(chunkX, chunkZ), 0, heights, validBiome
+			);
+			if (start.isValid()) {
+				return start;
+			}
+			options.remove(index);
+			total -= selected.weight();
+		}
+		return null;
 	}
 }

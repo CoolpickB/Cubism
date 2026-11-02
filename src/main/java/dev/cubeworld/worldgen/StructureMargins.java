@@ -38,8 +38,6 @@ public final class StructureMargins {
 	private static final int MONUMENT = 45;
 	private static final int MANSION = 86;
 
-	/** The layout that the code on this thread places structures for, instead of the active one: the Customize map uses it. */
-	private static final ThreadLocal<SeamLayout> FORCED = new ThreadLocal<>();
 	private static final Map<StructurePlacement, Integer> MARGINS = Collections.synchronizedMap(new WeakHashMap<>());
 	/** The structure states of cube generators. The Nether and the End of a cube world share placements but not the cube. */
 	private static final Set<ChunkGeneratorStructureState> CUBE_STATES = Collections.newSetFromMap(Collections.synchronizedMap(new WeakHashMap<>()));
@@ -52,19 +50,7 @@ public final class StructureMargins {
 		if (OTHER_GENERATOR.get()) {
 			return null;
 		}
-		SeamLayout forced = FORCED.get();
-		return forced != null ? forced : SeamLayout.active();
-	}
-
-	/** Runs {@code action} with the placement of structures worked out for {@code layout}. */
-	public static void withLayout(SeamLayout layout, Runnable action) {
-		SeamLayout before = FORCED.get();
-		FORCED.set(layout);
-		try {
-			action.run();
-		} finally {
-			FORCED.set(before);
-		}
+		return SeamLayout.active();
 	}
 
 	public static boolean isCube(ChunkGeneratorStructureState state) {

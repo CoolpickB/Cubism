@@ -1,8 +1,10 @@
 package dev.cubeworld.client.gui;
 
+import com.mojang.logging.LogUtils;
 import dev.cubeworld.worldgen.CubeBiomeMap;
 import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.CubeStructureMap;
+import dev.cubeworld.worldgen.StructureVerifier;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -16,6 +18,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.CommonComponents;
@@ -27,7 +30,10 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.LevelHeightAccessor;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.WorldDimensions;
@@ -35,8 +41,10 @@ import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import org.joml.Vector3f;
+import org.slf4j.Logger;
 import org.jspecify.annotations.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -58,6 +66,7 @@ import java.util.function.BooleanSupplier;
  * biomes and structures and starts a search. Done writes the seed and the {@link CubeSettings} into the world.
  */
 public class CustomizeCubeWorldScreen extends Screen {
+	private static final Logger LOGGER = LogUtils.getLogger();
 	/** Cells along each face edge for the preview, and for the quick test of each seed in a search. */
 	private static final int PREVIEW_CELLS = 64;
 	private static final int SEARCH_CELLS = 24;
@@ -102,6 +111,11 @@ public class CustomizeCubeWorldScreen extends Screen {
 	private final HolderGetter<NormalNoise> noises;
 	private final HolderLookup<StructureSet> structureSets;
 	private final NoiseGeneratorSettings noiseSettings;
+	private final Holder<NoiseGeneratorSettings> noiseSettingsHolder;
+	private final RegistryAccess registries;
+	private final LevelHeightAccessor heights;
+	/** The templates for the generator check, made when the first check needs them. */
+	private @Nullable StructureTemplateManager templates;
 	private final MultiNoiseBiomeSource biomeSource;
 	private final List<Holder<StructureSet>> structureCandidates;
 	private final Set<Holder<Biome>> requiredBiomes = new HashSet<>();
@@ -155,7 +169,11 @@ public class CustomizeCubeWorldScreen extends Screen {
 		NoiseBasedChunkGenerator generator = (NoiseBasedChunkGenerator) context.selectedDimensions().overworld();
 		this.noises = context.worldgenLoadContext().lookupOrThrow(Registries.NOISE);
 		this.structureSets = context.worldgenLoadContext().lookupOrThrow(Registries.STRUCTURE_SET);
-		this.noiseSettings = generator.generatorSettings().value();
+		this.noiseSettingsHolder = generator.generatorSettings();
+		this.noiseSettings = this.noiseSettingsHolder.value();
+		this.registries = context.worldgenRegistries().compositeAccess();
+		DimensionType dimension = context.selectedDimensions().get(LevelStem.OVERWORLD).orElseThrow().type().value();
+		this.heights = LevelHeightAccessor.create(dimension.minY(), dimension.height());
 		this.biomeSource = (MultiNoiseBiomeSource) generator.getBiomeSource();
 		this.structureCandidates = CubeStructureMap.candidates(this.structureSets, this.biomeSource);
 		// An empty seed field gives the world the random seed that the options already hold.
@@ -442,8 +460,9 @@ public class CustomizeCubeWorldScreen extends Screen {
 				}
 			}
 			// The structures cost much more than the biomes. A seed that cannot beat the best so far is not worth them.
+			Set<ResourceKey<StructureSet>> structures = Set.of();
 			if (!wantedStructures.isEmpty() && score + wantedStructures.size() > stats.best().get().score()) {
-				Set<ResourceKey<StructureSet>> structures = this.structures(sampler, settings, wantedStructures);
+				structures = this.structures(sampler, settings, wantedStructures, null);
 				stats.structuresChecked().incrementAndGet();
 				structures.forEach(key -> stats.structureHits().get(key).incrementAndGet());
 				score += structures.size();
@@ -451,6 +470,16 @@ public class CustomizeCubeWorldScreen extends Screen {
 			if (score < stats.total()) {
 				stats.offer(score, seed);
 				continue;
+			}
+			// The map finds a structure from its placement and its biome. The generator decides if it generates, so a winner
+			// keeps only the structures that it makes. A seed that loses one goes on with a lower score.
+			StructureVerifier verifier = this.verifier(settings, seed);
+			if (verifier != null && !wantedStructures.isEmpty()) {
+				score -= structures.size() - this.structures(sampler, settings, wantedStructures, verifier).size();
+				if (score < stats.total()) {
+					stats.offer(score, seed);
+					continue;
+				}
 			}
 			if (!stats.finished().compareAndSet(false, true)) {
 				return;
@@ -462,7 +491,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			// Both maps are samples of the same world, so a biome in either one is in the world.
 			Set<Holder<Biome>> biomes = new HashSet<>(full.present);
 			biomes.addAll(quick.present);
-			Found result = new Found(full, biomes, this.structures(sampler, settings, null));
+			Found result = new Found(full, biomes, this.structures(sampler, settings, null, verifier));
 			this.minecraft.execute(() -> {
 				if (!stop.getAsBoolean()) {
 					this.searching = false;
@@ -516,7 +545,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			CubeBiomeMap.Sampler sampler = this.sampler(settings, seed);
 			CubeBiomeMap map = sampler.sample(PREVIEW_CELLS, null, stop);
 			if (map != null) {
-				Found result = new Found(map, map.present, this.structures(sampler, settings, null));
+				Found result = new Found(map, map.present, this.structures(sampler, settings, null, this.verifier(settings, seed)));
 						this.minecraft.execute(() -> {
 					if (!stop.getAsBoolean()) {
 						this.setFound(result, seed, settings);
@@ -527,9 +556,26 @@ public class CustomizeCubeWorldScreen extends Screen {
 	}
 
 	private Set<ResourceKey<StructureSet>> structures(
-		CubeBiomeMap.Sampler sampler, CubeSettings settings, @Nullable Set<ResourceKey<StructureSet>> wanted
+		CubeBiomeMap.Sampler sampler, CubeSettings settings, @Nullable Set<ResourceKey<StructureSet>> wanted, @Nullable StructureVerifier verifier
 	) {
-		return CubeStructureMap.find(sampler, settings, this.structureSets, this.biomeSource, this.structureCandidates, wanted);
+		return CubeStructureMap.find(sampler, settings, this.structureSets, this.biomeSource, this.structureCandidates, wanted, verifier);
+	}
+
+	/** The generator check for a seed, or null when the templates of structures cannot load: the map then shows where structures can start. */
+	private @Nullable StructureVerifier verifier(CubeSettings settings, long seed) {
+		try {
+			synchronized (this) {
+				if (this.templates == null) {
+					this.templates = StructureVerifier.templates(this.registries);
+				}
+			}
+			return new StructureVerifier(
+				this.registries, this.noiseSettingsHolder, this.noises, this.biomeSource, this.structureSets, settings, seed, this.templates, this.heights
+			);
+		} catch (IOException | RuntimeException e) {
+			LOGGER.error("Cannot set up the generator check for structures", e);
+			return null;
+		}
 	}
 
 	private CubeBiomeMap.Sampler sampler(CubeSettings settings, long seed) {
@@ -579,7 +625,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 		long seed = this.foundSeed;
 		run(() -> {
 			Holder<StructureSet> set = this.structureCandidates.stream().filter(candidate -> candidate.is(key)).findFirst().orElseThrow();
-			List<Vector3f> points = CubeStructureMap.positions(this.sampler(settings, seed), settings, this.structureSets, this.biomeSource, set);
+			List<Vector3f> points = CubeStructureMap.positions(this.sampler(settings, seed), settings, this.structureSets, this.biomeSource, set, this.verifier(settings, seed));
 			this.minecraft.execute(() -> {
 				if (this.pinned == key && this.pinnedFound == found) {
 					this.pins = points;

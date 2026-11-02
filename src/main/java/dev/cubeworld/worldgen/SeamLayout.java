@@ -13,6 +13,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import org.jspecify.annotations.Nullable;
+import java.util.function.Supplier;
 
 /**
  * Where each cube face is stored in the level. Every face is stored upright, as the pyramid wedge
@@ -26,6 +27,7 @@ public final class SeamLayout {
 
 	private static volatile @Nullable SeamLayout active;
 	private static volatile @Nullable SeamLayout client;
+	private static final ThreadLocal<SeamLayout> FORCED = new ThreadLocal<>();
 
 	public final int radius;
 	public final int centerY;
@@ -46,8 +48,24 @@ public final class SeamLayout {
 		this.fold = new SeamFold(this);
 	}
 
+	/** The layout of the server, or the layout that {@link #withActive} sets for this thread. */
 	public static @Nullable SeamLayout active() {
-		return active;
+		SeamLayout forced = FORCED.get();
+		return forced != null ? forced : active;
+	}
+
+	/**
+	 * Runs {@code action} with {@code layout} as the active layout of this thread only. The Customize screen uses it to
+	 * generate structures for the settings that it shows, while no level exists or the settings of a search differ.
+	 */
+	public static <T> T withActive(SeamLayout layout, Supplier<T> action) {
+		SeamLayout before = FORCED.get();
+		FORCED.set(layout);
+		try {
+			return action.get();
+		} finally {
+			FORCED.set(before);
+		}
 	}
 
 	public static void setActive(SeamLayout layout) {
