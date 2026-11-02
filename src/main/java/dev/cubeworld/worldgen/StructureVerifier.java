@@ -7,7 +7,9 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.ServerPacksSource;
+import net.minecraft.server.packs.resources.FallbackResourceManager;
 import net.minecraft.util.datafix.DataFixers;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -78,8 +80,10 @@ public final class StructureVerifier {
 	public static StructureTemplateManager templates(RegistryAccess registries) throws IOException {
 		Path directory = Files.createTempDirectory("cubeworld-verify");
 		try (LevelStorageSource.LevelStorageAccess access = LevelStorageSource.createDefault(directory).createAccess("verify")) {
+			FallbackResourceManager data = new FallbackResourceManager(PackType.SERVER_DATA, "minecraft");
+			data.push(ServerPacksSource.createVanillaPackSource().fullResources());
 			return new StructureTemplateManager(
-				ServerPacksSource.createVanillaPackSource().asResourceManager(),
+				data,
 				access, DataFixers.getDataFixer(), registries.lookupOrThrow(Registries.BLOCK)
 			);
 		} finally {

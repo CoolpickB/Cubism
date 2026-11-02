@@ -43,6 +43,7 @@
 		"ServerGamePacketListenerImplMixin",
 		"ServerLevelMixin",
 		"StructureMixin",
+		"JigsawStructureMixin",
 		"StructureStartMixin",
 		"PoolElementStructurePieceAccessor",
 		"JigsawPlacerMixin",

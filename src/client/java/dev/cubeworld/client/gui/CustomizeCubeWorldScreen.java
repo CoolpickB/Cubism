@@ -460,9 +460,11 @@ public class CustomizeCubeWorldScreen extends Screen {
 				}
 			}
 			// The structures cost much more than the biomes. A seed that cannot beat the best so far is not worth them.
-			Set<ResourceKey<StructureSet>> structures = Set.of();
+			// The generator decides if a structure generates, so the hits and the score count only what it makes.
+			StructureVerifier verifier = null;
 			if (!wantedStructures.isEmpty() && score + wantedStructures.size() > stats.best().get().score()) {
-				structures = this.structures(sampler, settings, wantedStructures, null);
+				verifier = this.verifier(settings, seed);
+				Set<ResourceKey<StructureSet>> structures = this.structures(sampler, settings, wantedStructures, verifier);
 				stats.structuresChecked().incrementAndGet();
 				structures.forEach(key -> stats.structureHits().get(key).incrementAndGet());
 				score += structures.size();
@@ -470,16 +472,6 @@ public class CustomizeCubeWorldScreen extends Screen {
 			if (score < stats.total()) {
 				stats.offer(score, seed);
 				continue;
-			}
-			// The map finds a structure from its placement and its biome. The generator decides if it generates, so a winner
-			// keeps only the structures that it makes. A seed that loses one goes on with a lower score.
-			StructureVerifier verifier = this.verifier(settings, seed);
-			if (verifier != null && !wantedStructures.isEmpty()) {
-				score -= structures.size() - this.structures(sampler, settings, wantedStructures, verifier).size();
-				if (score < stats.total()) {
-					stats.offer(score, seed);
-					continue;
-				}
 			}
 			if (!stats.finished().compareAndSet(false, true)) {
 				return;
@@ -491,7 +483,7 @@ public class CustomizeCubeWorldScreen extends Screen {
 			// Both maps are samples of the same world, so a biome in either one is in the world.
 			Set<Holder<Biome>> biomes = new HashSet<>(full.present);
 			biomes.addAll(quick.present);
-			Found result = new Found(full, biomes, this.structures(sampler, settings, null, verifier));
+			Found result = new Found(full, biomes, this.structures(sampler, settings, null, verifier != null ? verifier : this.verifier(settings, seed)));
 			this.minecraft.execute(() -> {
 				if (!stop.getAsBoolean()) {
 					this.searching = false;

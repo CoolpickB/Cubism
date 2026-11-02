@@ -27,7 +27,7 @@ import java.util.WeakHashMap;
  * generates whole where the placement of vanilla put its cell, and no start is lost.
  *
  * <p>Jigsaw structures that grow over the surface (villages), mineshafts and strongholds have no margin: the fold or
- * their own placement handles the edge. The ancient city has none either. It lies about 115 blocks down, where the
+ * their own placement handles the edge. The ancient city has none either. It lies 90 to 150 blocks down (see JigsawStructureMixin), where the
  * wedge of a face is much narrower than the surface, so moving every cell inward would put several times as many
  * cities in that narrow space as the cells hold. A city whose center is not whole in its wedge does not generate
  * (see {@link #fits}).
@@ -149,7 +149,7 @@ public final class StructureMargins {
 	/**
 	 * Whether a generated start lies where the layout can show it whole. A structure with a margin must lie in the square
 	 * of its face. The ancient city must have its center piece, with the portal, in the wedge of its face, down to its
-	 * lowest block. The wedge there is 115 blocks narrower on each side than the face.
+	 * lowest block. The wedge there is narrower on each side than the face by the depth of the city.
 	 */
 	public static boolean fits(SeamLayout layout, Holder<Structure> structure, StructureStart start) {
 		if (structure.is(BuiltinStructures.ANCIENT_CITY)) {
