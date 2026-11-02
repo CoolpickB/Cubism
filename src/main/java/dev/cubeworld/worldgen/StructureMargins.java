@@ -135,15 +135,18 @@ public final class StructureMargins {
 	/**
 	 * Makes a generated start fit where the layout can show it, and returns false when it cannot. A mineshaft is lifted
 	 * until its first room is in the wedge: vanilla puts it anywhere from 10 to 190 blocks down, and the wedge of a
-	 * face is narrow down there, so nearly every mineshaft would start outside it. Otherwise this is {@link #fits}.
+	 * face is narrow down there, so nearly every mineshaft would start outside it. A stronghold is lifted until all of
+	 * it is in the wedge, so that its portal room is never cut off. Otherwise this is {@link #fits}.
 	 */
 	public static boolean settle(SeamLayout layout, Holder<Structure> structure, StructureStart start) {
-		if (structure.value().type() != StructureType.MINESHAFT) {
+		StructureType<?> type = structure.value().type();
+		if (type != StructureType.MINESHAFT && type != StructureType.STRONGHOLD) {
 			return fits(layout, structure, start);
 		}
 		List<StructurePiece> pieces = start.getPieces();
-		BoundingBox room = pieces.getFirst().getBoundingBox();
-		int top = pieces.stream().mapToInt(piece -> piece.getBoundingBox().maxY()).max().orElse(room.maxY());
+		BoundingBox whole = StructurePiece.createBoundingBox(pieces.stream());
+		BoundingBox room = type == StructureType.MINESHAFT ? pieces.getFirst().getBoundingBox() : whole;
+		int top = whole.maxY();
 		for (int lift = 0; lift <= Math.max(0, MINESHAFT_TOP - top); lift++) {
 			if (insideWedge(layout, new BoundingBox(room.minX(), room.minY() + lift, room.minZ(), room.maxX(), room.minY() + lift, room.maxZ()))) {
 				if (lift > 0) {

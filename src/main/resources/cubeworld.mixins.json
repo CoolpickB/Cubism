@@ -15,6 +15,7 @@
 		"ChunkGeneratorAccessor",
 		"ChunkGeneratorMixin",
 		"RandomSpreadStructurePlacementMixin",
+		"ChunkGeneratorStructureStateMixin",
 		"ChunkMapMixin",
 		"ChunkMapTrackedEntityMixin",
 		"ChunkStatusTasksMixin",
