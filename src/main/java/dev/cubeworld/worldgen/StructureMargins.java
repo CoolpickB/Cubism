@@ -1,6 +1,5 @@
 package dev.cubeworld.worldgen;
 
-import dev.cubeworld.math.CubePlanetMath;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
@@ -27,21 +26,16 @@ import java.util.WeakHashMap;
  * generates whole where the placement of vanilla put its cell, and no start is lost.
  *
  * <p>Jigsaw structures that grow over the surface (villages), mineshafts and strongholds have no margin: the fold or
- * their own placement handles the edge.
+ * their own placement handles the edge. The ancient city has none either. It lies about 115 blocks down, where the
+ * wedge of a face is much narrower than the surface, so moving every cell inward would put several times as many
+ * cities in that narrow space as the cells hold. A city whose center is not whole in its wedge does not generate
+ * (see {@link #fits}).
  */
 public final class StructureMargins {
 	public static final int NONE = -1;
 	private static final int DEFAULT = 40;
 	private static final int MONUMENT = 45;
 	private static final int MANSION = 86;
-	/**
-	 * The ancient city has to keep its center whole, because the portal is in it. The lowest block of the center is
-	 * 115 below the surface (the start is at y -27, the anchor is 24 blocks above the foot of the template, and the
-	 * surface is at y 64). The wedge of a face is 115 blocks narrower there, on each side. The template is 41 long, and
-	 * the anchor is up to 4 blocks off its middle, so the center reaches 25 blocks from the start. Half a chunk more
-	 * comes from measuring from the chunk center.
-	 */
-	private static final int ANCIENT_CITY = CubePlanetMath.TOP_SURFACE_Y + 27 + 24 + 25 + 8;
 
 	/** The layout that the code on this thread places structures for, instead of the active one: the Customize map uses it. */
 	private static final ThreadLocal<SeamLayout> FORCED = new ThreadLocal<>();
@@ -103,9 +97,6 @@ public final class StructureMargins {
 
 	public static int of(Holder<Structure> structure) {
 		StructureType<?> type = structure.value().type();
-		if (structure.is(BuiltinStructures.ANCIENT_CITY)) {
-			return ANCIENT_CITY;
-		}
 		if (type == StructureType.JIGSAW || type == StructureType.MINESHAFT || type == StructureType.STRONGHOLD || type == StructureType.BURIED_TREASURE) {
 			return NONE;
 		}
@@ -139,7 +130,8 @@ public final class StructureMargins {
 
 	/**
 	 * Whether a generated start lies where the layout can show it whole. A structure with a margin must lie in the square
-	 * of its face. The ancient city must have its center piece in the wedge of its face, down to the lowest block.
+	 * of its face. The ancient city must have its center piece, with the portal, in the wedge of its face, down to its
+	 * lowest block. The wedge there is 115 blocks narrower on each side than the face.
 	 */
 	public static boolean fits(SeamLayout layout, Holder<Structure> structure, StructureStart start) {
 		if (structure.is(BuiltinStructures.ANCIENT_CITY)) {
