@@ -1,11 +1,16 @@
 package dev.cubeworld.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.sugar.Local;
 import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.worldgen.SeamLayout;
+import dev.cubeworld.worldgen.StructureMargins;
+import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -26,5 +31,21 @@ public abstract class StructureMixin {
 		}
 		BlockPos start = stub.get().position();
 		return layout.insideWedge(start.getX(), start.getY(), start.getZ()) ? stub : Optional.empty();
+	}
+
+	/**
+	 * The start chunk moves inward by a margin (see {@link StructureMargins}), and this is the last check: a structure
+	 * that is larger than its margin, or an ancient city whose center is not whole in its wedge, does not generate.
+	 */
+	@ModifyReturnValue(method = "generate", at = @At("RETURN"))
+	private StructureStart cubeworld$startFits(
+		StructureStart start, @Local(argsOnly = true) Holder<Structure> selected, @Local(argsOnly = true) ChunkGenerator chunkGenerator
+	) {
+		SeamLayout layout = SeamLayout.active();
+		if (!start.isValid() || layout == null || !(chunkGenerator instanceof NoiseBasedChunkGenerator generator)
+			|| !generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+			return start;
+		}
+		return StructureMargins.fits(layout, selected, start) ? start : StructureStart.INVALID_START;
 	}
 }

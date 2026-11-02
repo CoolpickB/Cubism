@@ -2,8 +2,10 @@ package dev.cubeworld.worldgen;
 
 import dev.cubeworld.mixin.PoolElementStructurePieceAccessor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
@@ -26,6 +28,8 @@ import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.StructureType;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
 import net.minecraft.world.level.levelgen.structure.pools.JigsawJunction;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 
@@ -33,12 +37,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * Lets a jigsaw structure (a village, an outpost, an ancient city) cross an edge of the cube. The structure is laid
+ * Lets a jigsaw structure (a village, an outpost, an ancient city) or a mineshaft cross an edge of the cube. The structure is laid
  * out on the flat plane of its face. The part past the edge goes to the neighbor face as a copy of the start, folded
  * over the edge (see {@link SeamFold}). The copy is a start in a chunk of the neighbor face, so the references, the
  * terrain adaptation and the placement of vanilla find it like any other start, and it is saved with that chunk.
@@ -46,6 +51,9 @@ import java.util.function.Predicate;
 public final class FoldedStarts {
 	/** How far a structure reaches from the chunk where it starts: eight chunks, the range of the references. */
 	private static final int REACH = 8 * 16;
+	private static final Set<StructurePieceType> MINESHAFT_PIECES = Set.of(
+		StructurePieceType.MINE_SHAFT_CORRIDOR, StructurePieceType.MINE_SHAFT_CROSSING, StructurePieceType.MINE_SHAFT_ROOM, StructurePieceType.MINE_SHAFT_STAIRS
+	);
 	private static final Map<ChunkGeneratorStructureState, Map<Long, List<StructureStart>>> STARTS = Collections.synchronizedMap(new WeakHashMap<>());
 
 	private FoldedStarts() {
@@ -98,7 +106,7 @@ public final class FoldedStarts {
 					continue;
 				}
 				for (StructureStart source : startsOf(generator, registries, state, templates, level, host, chunkX, chunkZ)) {
-					StructureStart copy = copy(source, fold, strip, host.getPos(), templates);
+					StructureStart copy = copy(source, fold, strip, host.getPos(), registries, templates);
 					if (copy != null && manager.getStartForStructure(source.getStructure(), host) == null) {
 						manager.setStartForStructure(source.getStructure(), copy, host);
 					}
@@ -108,20 +116,27 @@ public final class FoldedStarts {
 	}
 
 	/** The copy of a start folded over an edge, or null when no piece reaches the strip or the copy is centered in another chunk. */
-	private static StructureStart copy(StructureStart source, SeamFold.Fold fold, BoundingBox strip, ChunkPos host, StructureTemplateManager templates) {
+	private static StructureStart copy(
+		StructureStart source, SeamFold.Fold fold, BoundingBox strip, ChunkPos host, RegistryAccess registries, StructureTemplateManager templates
+	) {
 		List<StructurePiece> pieces = new ArrayList<>();
 		BoundingBox visible = null;
 		for (StructurePiece piece : source.getPieces()) {
-			if (!(piece instanceof PoolElementStructurePiece pool)) {
-				return null;
-			}
 			BoundingBox folded = fold.apply(piece.getBoundingBox());
 			if (!folded.intersects(strip)) {
 				continue;
 			}
+			StructurePiece foldedPiece;
+			if (piece instanceof PoolElementStructurePiece pool) {
+				foldedPiece = copyOf(pool, fold, templates);
+			} else if (MINESHAFT_PIECES.contains(piece.getType())) {
+				foldedPiece = mineshaftCopyOf(piece, folded, fold, registries, templates);
+			} else {
+				return null;
+			}
 			BoundingBox inside = intersection(folded, strip);
 			visible = visible == null ? inside : BoundingBox.encapsulating(visible, inside);
-			pieces.add(copyOf(pool, fold, templates));
+			pieces.add(foldedPiece);
 		}
 		if (visible == null) {
 			return null;
@@ -149,6 +164,27 @@ public final class FoldedStarts {
 			copy.addJunction(new JigsawJunction(source.getX(), junction.getSourceGroundY(), source.getZ(), junction.getDeltaY(), junction.getDestProjection()));
 		}
 		return copy;
+	}
+
+	/**
+	 * A mineshaft piece keeps its place and shape in its save tag: the box, the facing, and for a crossing its direction
+	 * and for a room the boxes of its entrances. The copy is the piece loaded from that tag with all of them folded.
+	 */
+	private static StructurePiece mineshaftCopyOf(
+		StructurePiece piece, BoundingBox folded, SeamFold.Fold fold, RegistryAccess registries, StructureTemplateManager templates
+	) {
+		// Mineshaft pieces do not read from the resource manager.
+		StructurePieceSerializationContext context = new StructurePieceSerializationContext(null, registries, templates);
+		CompoundTag tag = piece.createTag(context);
+		tag.store("BB", BoundingBox.CODEC, folded);
+		int facing = tag.getIntOr("O", -1);
+		if (facing != -1) {
+			tag.putInt("O", fold.rotation().rotate(Direction.from2DDataValue(facing)).get2DDataValue());
+		}
+		tag.read("D", Direction.LEGACY_ID_CODEC_2D).ifPresent(direction -> tag.store("D", Direction.LEGACY_ID_CODEC_2D, fold.rotation().rotate(direction)));
+		tag.read("Entrances", BoundingBox.CODEC.listOf()).ifPresent(entrances ->
+			tag.store("Entrances", BoundingBox.CODEC.listOf(), entrances.stream().map(fold::apply).toList()));
+		return piece.getType().load(context, tag);
 	}
 
 	private static BoundingBox intersection(BoundingBox a, BoundingBox b) {
@@ -202,7 +238,7 @@ public final class FoldedStarts {
 						templates, state.getLevelSeed(), new ChunkPos(chunkX, chunkZ), 0, heights, validBiome
 					);
 					if (start.isValid()) {
-						if (structure.type() == StructureType.JIGSAW) {
+						if (structure.type() == StructureType.JIGSAW || structure.type() == StructureType.MINESHAFT) {
 							starts.add(start);
 						}
 						break;

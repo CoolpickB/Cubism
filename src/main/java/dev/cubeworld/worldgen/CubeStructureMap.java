@@ -95,6 +95,13 @@ public final class CubeStructureMap {
 	) {
 		ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForNormal(sampler.randomState(), sampler.seed(), ChunkPos.ZERO, biomes, sets);
 		SeamLayout layout = new SeamLayout(cube.diameterChunks());
+		StructureMargins.register(state);
+		StructureMargins.withLayout(layout, () -> scan(sampler, layout, state, open, hit));
+	}
+
+	private static void scan(
+		CubeBiomeMap.Sampler sampler, SeamLayout layout, ChunkGeneratorStructureState state, List<Holder<StructureSet>> open, Hit hit
+	) {
 		Set<Holder<StructureSet>> remaining = new HashSet<>(open);
 		int r = layout.radius;
 		int[] cube3 = new int[3];

@@ -7,6 +7,7 @@ import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
 import dev.cubeworld.worldgen.SeamRandomState;
 import dev.cubeworld.worldgen.FoldedStarts;
+import dev.cubeworld.worldgen.StructureMargins;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceKey;
@@ -45,6 +46,18 @@ public abstract class ChunkGeneratorMixin {
 				RandomStateAccessor router = (RandomStateAccessor) (Object) randomState;
 				router.cubeworld$setRouter(CubeDensityFunctions.withClimateShift(router.cubeworld$getRouter(), settings.temperature(), settings.humidity()));
 			}
+		}
+	}
+
+	@Inject(method = "createState", at = @At("RETURN"))
+	private void cubeworld$registerMargins(
+		HolderLookup<StructureSet> structureSets,
+		RandomState randomState,
+		long legacyLevelSeed,
+		CallbackInfoReturnable<ChunkGeneratorStructureState> cir
+	) {
+		if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+			StructureMargins.register(cir.getReturnValue());
 		}
 	}
 
