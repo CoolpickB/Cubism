@@ -1,6 +1,7 @@
 package dev.cubeworld.worldgen;
 
 import net.minecraft.core.Holder;
+import dev.cubeworld.math.CubePlanetMath;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -126,6 +127,34 @@ public final class StructureMargins {
 		int low = Math.ceilDiv(center - limit - 8, 16);
 		int high = Math.floorDiv(center + limit - 8, 16);
 		return low > high ? chunk : Math.max(low, Math.min(high, chunk));
+	}
+
+	/** The top of a mineshaft, as vanilla keeps it: 10 blocks below sea level. */
+	private static final int MINESHAFT_TOP = CubePlanetMath.TOP_SURFACE_Y - 11;
+
+	/**
+	 * Makes a generated start fit where the layout can show it, and returns false when it cannot. A mineshaft is lifted
+	 * until its first room is in the wedge: vanilla puts it anywhere from 10 to 190 blocks down, and the wedge of a
+	 * face is narrow down there, so nearly every mineshaft would start outside it. Otherwise this is {@link #fits}.
+	 */
+	public static boolean settle(SeamLayout layout, Holder<Structure> structure, StructureStart start) {
+		if (structure.value().type() != StructureType.MINESHAFT) {
+			return fits(layout, structure, start);
+		}
+		List<StructurePiece> pieces = start.getPieces();
+		BoundingBox room = pieces.getFirst().getBoundingBox();
+		int top = pieces.stream().mapToInt(piece -> piece.getBoundingBox().maxY()).max().orElse(room.maxY());
+		for (int lift = 0; lift <= Math.max(0, MINESHAFT_TOP - top); lift++) {
+			if (insideWedge(layout, new BoundingBox(room.minX(), room.minY() + lift, room.minZ(), room.maxX(), room.minY() + lift, room.maxZ()))) {
+				if (lift > 0) {
+					for (StructurePiece piece : pieces) {
+						piece.move(0, lift, 0);
+					}
+				}
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
