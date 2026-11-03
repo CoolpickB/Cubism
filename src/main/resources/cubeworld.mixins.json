@@ -13,6 +13,7 @@
 		"BlockPlaceContextMixin",
 		"BlockScanUtilsMixin",
 		"ChunkGeneratorAccessor",
+		"ChunkGeneratorDistanceMixin",
 		"ChunkGeneratorMixin",
 		"RandomSpreadStructurePlacementMixin",
 		"ChunkGeneratorStructureStateMixin",
@@ -26,6 +27,7 @@
 		"LakeFeatureMixin",
 		"MultifaceGrowthFeatureMixin",
 		"NaturalSpawnerMixin",
+		"EyeOfEnderMixin",
 		"NoiseBasedChunkGeneratorMixin",
 		"CollectingNeighborUpdaterMixin",
 		"CollectingShapeUpdateMixin",
@@ -74,7 +76,9 @@
 		"PistonStructureResolverMixin",
 		"PhantomSpawnerMixin",
 		"ServerChunkCacheMixin",
-		"ServerPlayerMixin"
+		"ServerPlayerMixin",
+		"LocateCommandMixin",
+		"WorldCoordinatesMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

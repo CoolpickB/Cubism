@@ -158,6 +158,44 @@ public final class SeamLayout {
 	}
 
 	/**
+	 * The cube position, in the convention of the F3 screen, of a continuous storage position in the region of the
+	 * given face: centered on the cube, the same axes on every face. The center of the cube is the center of a block.
+	 */
+	public Vec3 storageToCube(int faceIndex, double x, double y, double z) {
+		int[] m = this.rotations[faceIndex];
+		double lx = x - this.offsetX(faceIndex) - 0.5;
+		double ly = y - this.centerY - 0.5;
+		double lz = z - 0.5;
+		return new Vec3(
+			m[0] * lx + m[1] * ly + m[2] * lz + 0.5,
+			m[3] * lx + m[4] * ly + m[5] * lz + 0.5,
+			m[6] * lx + m[7] * ly + m[8] * lz + 0.5
+		);
+	}
+
+	/** The cube position of a continuous storage position, or null when it lies in no region. */
+	public @Nullable Vec3 storageToCube(Vec3 storage) {
+		if (!this.inRegion(Mth.floor(storage.x), Mth.floor(storage.z))) {
+			return null;
+		}
+		return this.storageToCube(this.faceIndexAt(Mth.floor(storage.x)), storage.x, storage.y, storage.z);
+	}
+
+	/** The storage position, in the region of the face that owns it, of a cube position in the convention of {@link #storageToCube}. */
+	public Vec3 cubeToStorage(double cx, double cy, double cz) {
+		double x = cx - 0.5;
+		double y = cy - 0.5;
+		double z = cz - 0.5;
+		int face = dominantFace(x, y, z);
+		int[] m = this.rotations[face];
+		return new Vec3(
+			m[0] * x + m[3] * y + m[6] * z + this.offsetX(face) + 0.5,
+			m[1] * x + m[4] * y + m[7] * z + this.centerY + 0.5,
+			m[2] * x + m[5] * y + m[8] * z + 0.5
+		);
+	}
+
+	/**
 	 * Face that owns a cube position. Positions on a diagonal between faces go to the first face in the order
 	 * Y, X, Z, so that every position has exactly one owner.
 	 */
