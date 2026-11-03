@@ -47,6 +47,13 @@ These rules apply to every system in the mod:
 
 - Sky light comes from the local up direction of each sector. The bottom face is not dark at noon, and caves on side faces are dark.
 
+### Navigation
+
+- Absolute command coordinates are cube coordinates, the same as F3 shows. All-relative coordinates stay in the local frame of the face.
+- `/locate`, F3 + C, F3 + I and F3 + B give cube coordinates. `/locate` gives the distance over the surface.
+- Compasses and eyes of ender point along the straight line in the unfolded plane of the face: over one edge for a neighbor face, over two for the opposite face.
+- The clock shows the local time of the face. Maps show blank past the edge of a face.
+
 ### Structures
 
 - Structures generate on all faces. A feature or a structure that the diagonal between two faces would cut is whole or not placed at all: features are undone when cut, and rigid structures move inward from the edge or do not generate.

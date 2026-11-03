@@ -32,6 +32,7 @@
 		"LevelExtractorMixin",
 		"LightingMixin",
 		"LevelRendererMixin",
+		"KeyboardHandlerMixin",
 		"LocalPlayerMixin",
 		"MinecraftMixin",
 		"ModelBlockRendererMixin",
