@@ -54,6 +54,12 @@ public abstract class WorldGenRegionMixin {
 	private void cubeworld$outsideBlock(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
 		BlockState state = this.cubeworld$outsideState(pos);
 		if (state != null) {
+			// A feature that reads stone here skips the cell without a write, as an iceberg does for the fake stone
+			// under the sea. For the cut test that counts as a refused write.
+			FeatureTransaction transaction = state.is(Blocks.STONE) ? FeatureTransaction.open() : null;
+			if (transaction != null) {
+				transaction.refused(pos);
+			}
 			cir.setReturnValue(state);
 		}
 	}

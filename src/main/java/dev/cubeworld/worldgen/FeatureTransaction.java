@@ -15,7 +15,9 @@ import java.util.function.BooleanSupplier;
  * Places a feature whole or not at all. Near the diagonal of a face, the wedge rule refuses the writes that fall into the
  * space of the next face. A feature cut there, such as an ice spike that loses its base or a dungeon that loses a wall,
  * would leave a sliver, so all of its writes are undone. A cut feature is one with a refused block next to a block that
- * it kept. A feature that loses only loose blocks, such as a flower at the side of a patch, stays.
+ * it kept. A block that the feature read as the stone of another face, and so skipped without a write, counts as refused:
+ * an iceberg under the sea is cut that way. A feature that loses only loose blocks, such as a flower at the side of a
+ * patch, stays.
  */
 public final class FeatureTransaction {
 	/**
