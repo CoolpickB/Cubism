@@ -110,7 +110,9 @@ public final class FoldedStarts {
 			for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
 				// A jigsaw structure starts at the corner of its chunk with the lowest x and z, and that position
 				// lies in the square of its face. The corner can be on the edge row while the chunk reaches past it.
-				if (Math.abs(chunkX * 16 - offset) > r || Math.abs(chunkZ * 16) > r) {
+				int cornerX = chunkX * 16 - offset;
+				int cornerZ = chunkZ * 16;
+				if (cornerX < -r || cornerX >= r || cornerZ < -r || cornerZ >= r) {
 					continue;
 				}
 				for (StructureStart source : startsOf(generator, registries, state, templates, level, host, chunkX, chunkZ)) {

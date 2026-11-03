@@ -29,10 +29,11 @@ import java.util.WeakHashMap;
  * inward (see {@link #inward}).
  *
  * <p>Jigsaw structures that grow over the surface (villages), mineshafts and strongholds have no margin: the fold or
- * their own placement handles the edge. The ancient city has none either. It lies 90 to 150 blocks down (see JigsawStructureMixin), where the
- * wedge of a face is much narrower than the surface, so moving every cell inward would put several times as many
- * cities in that narrow space as the cells hold. A city whose center is not whole in its wedge does not generate
- * (see {@link #fits}).
+ * their own placement handles the edge. The ancient city has none either. It lies 90 to 150 blocks down (see
+ * JigsawStructureMixin), where the wedge of a face is much narrower than the surface, so moving every cell inward would
+ * put several times as many cities in that narrow space as the cells hold. Its passages fold across the diagonal and its
+ * rooms stay whole (see {@link WholeRooms}). A city whose center piece is not whole in its wedge does not generate (see
+ * {@link #fits}).
  */
 public final class StructureMargins {
 	public static final int NONE = -1;
