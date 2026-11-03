@@ -16,7 +16,7 @@ final class CompassToggle extends AbstractWidget {
 	private static final int SIZE = 20;
 	private static final Identifier ICON = Identifier.withDefaultNamespace("textures/item/compass_16.png");
 	private final Consumer<Boolean> onChange;
-	private boolean on;
+	private boolean on = true;
 
 	CompassToggle(Consumer<Boolean> onChange) {
 		super(0, 0, SIZE, SIZE, Component.translatable("cubeworld.customize.compass"));

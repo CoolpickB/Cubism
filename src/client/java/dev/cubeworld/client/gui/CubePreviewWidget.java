@@ -92,7 +92,7 @@ final class CubePreviewWidget extends AbstractWidget {
 	private final Vector3f spin = new Vector3f();
 	private boolean dragging;
 	private List<Vector3f> pins = List.of();
-	private boolean showDirections;
+	private boolean showDirections = true;
 	private final List<AbstractWidget> overlays = new ArrayList<>();
 	/** Whether the drag in progress started off the cube, and rolls the cube instead of tilting it. */
 	private boolean rolling;
