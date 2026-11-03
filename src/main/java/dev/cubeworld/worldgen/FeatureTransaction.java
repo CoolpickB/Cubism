@@ -18,8 +18,11 @@ import java.util.function.BooleanSupplier;
  * it kept. A feature that loses only loose blocks, such as a flower at the side of a patch, stays.
  */
 public final class FeatureTransaction {
-	/** Only a feature that starts this close to the side of its wedge can reach past it. */
-	private static final int REACH = 32;
+	/**
+	 * Only a feature that starts this close to the side of its wedge can reach past it. The side leans inward with depth,
+	 * so a feature that reaches far down, such as an iceberg under the sea, is cut from further away than its width.
+	 */
+	private static final int REACH = 64;
 	private static final ThreadLocal<@Nullable FeatureTransaction> OPEN = new ThreadLocal<>();
 
 	private final Long2ObjectLinkedOpenHashMap<BlockState> previous = new Long2ObjectLinkedOpenHashMap<>();

@@ -155,7 +155,7 @@ public final class StructureMargins {
 		BoundingBox room = type == StructureType.MINESHAFT ? pieces.getFirst().getBoundingBox() : whole;
 		int top = whole.maxY();
 		for (int lift = 0; lift <= Math.max(0, MINESHAFT_TOP - top); lift++) {
-			if (insideWedge(layout, new BoundingBox(room.minX(), room.minY() + lift, room.minZ(), room.maxX(), room.minY() + lift, room.maxZ()))) {
+			if (WholeRooms.inWedge(layout, new BoundingBox(room.minX(), room.minY() + lift, room.minZ(), room.maxX(), room.minY() + lift, room.maxZ()))) {
 				if (lift > 0) {
 					for (StructurePiece piece : pieces) {
 						piece.move(0, lift, 0);
@@ -176,7 +176,7 @@ public final class StructureMargins {
 	public static boolean fits(SeamLayout layout, Holder<Structure> structure, StructureStart start) {
 		if (structure.is(BuiltinStructures.ANCIENT_CITY)) {
 			List<StructurePiece> pieces = start.getPieces();
-			return pieces.isEmpty() || insideWedge(layout, pieces.getFirst().getBoundingBox());
+			return pieces.isEmpty() || WholeRooms.inWedge(layout, pieces.getFirst().getBoundingBox());
 		}
 		if (of(structure) == NONE) {
 			return true;
@@ -184,19 +184,6 @@ public final class StructureMargins {
 		int offset = layout.offsetX(layout.faceIndexAt(start.getChunkPos().getMiddleBlockX()));
 		BoundingBox box = start.getBoundingBox();
 		return box.minX() >= offset - layout.radius && box.maxX() <= offset + layout.radius
-			&& box.minZ() >= -layout.radius && box.maxZ() <= layout.radius && insideWedge(layout, box);
-	}
-
-	private static boolean insideWedge(SeamLayout layout, BoundingBox box) {
-		for (int y : new int[] {box.minY(), box.maxY()}) {
-			for (int x : new int[] {box.minX(), box.maxX()}) {
-				for (int z : new int[] {box.minZ(), box.maxZ()}) {
-					if (!layout.insideWedge(x, y, z)) {
-						return false;
-					}
-				}
-			}
-		}
-		return true;
+			&& box.minZ() >= -layout.radius && box.maxZ() <= layout.radius && WholeRooms.inWedge(layout, box);
 	}
 }
