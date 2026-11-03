@@ -1,6 +1,7 @@
 package dev.cubeworld.mixin;
 
 import dev.cubeworld.CubeWorldMod;
+import dev.cubeworld.worldgen.FeatureTransaction;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -66,8 +67,14 @@ public abstract class WorldGenRegionMixin {
 
 	@Inject(method = "setBlock", at = @At("HEAD"), cancellable = true)
 	private void cubeworld$noWriteOutside(BlockPos pos, BlockState state, int flags, int updateLimit, CallbackInfoReturnable<Boolean> cir) {
+		FeatureTransaction transaction = this.cubeworld$layout() == null ? null : FeatureTransaction.open();
 		if (this.cubeworld$outsideState(pos) != null) {
+			if (transaction != null) {
+				transaction.refused(pos);
+			}
 			cir.setReturnValue(false);
+		} else if (transaction != null) {
+			transaction.accepted(pos, ((WorldGenRegion) (Object) this).getBlockState(pos));
 		}
 	}
 }

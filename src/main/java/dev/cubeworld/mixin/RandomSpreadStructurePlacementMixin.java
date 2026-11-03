@@ -13,8 +13,8 @@ import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * A structure that cannot cross an edge starts at least a margin from it (see {@link StructureMargins}). The start
- * chunk of a cell moves inward when the cell of vanilla puts it nearer to an edge, and the chunk that a cell picks is
- * the chunk that generates, so a chunk is a placement chunk when it is the moved chunk of a cell near it.
+ * chunk of a cell is squeezed toward the center of its face, and the chunk that a cell picks is the chunk that
+ * generates, so a chunk is a placement chunk when it is the moved chunk of a cell near it.
  */
 @Mixin(RandomSpreadStructurePlacement.class)
 public abstract class RandomSpreadStructurePlacementMixin {
@@ -22,7 +22,7 @@ public abstract class RandomSpreadStructurePlacementMixin {
 	private ChunkPos cubeworld$moveInward(ChunkPos chunk) {
 		SeamLayout layout = StructureMargins.layout();
 		int margin = layout == null ? StructureMargins.NONE : StructureMargins.of((RandomSpreadStructurePlacement) (Object) this);
-		return margin == StructureMargins.NONE ? chunk : StructureMargins.clamp(layout, margin, chunk);
+		return margin == StructureMargins.NONE ? chunk : StructureMargins.squeeze(layout, margin, chunk);
 	}
 
 	@WrapMethod(method = "isPlacementChunk")
@@ -44,7 +44,7 @@ public abstract class RandomSpreadStructurePlacementMixin {
 		int spacing = placement.spacing();
 		int cellX = Math.floorDiv(sourceX, spacing);
 		int cellZ = Math.floorDiv(sourceZ, spacing);
-		int reach = Math.ceilDiv(margin / 16 + 2, spacing);
+		int reach = Math.ceilDiv(StructureMargins.maxSqueeze(layout, margin) / 16 + 2, spacing);
 		for (int dx = -reach; dx <= reach; dx++) {
 			for (int dz = -reach; dz <= reach; dz++) {
 				ChunkPos chunk = placement.getPotentialStructureChunk(state.getLevelSeed(), (cellX + dx) * spacing, (cellZ + dz) * spacing);

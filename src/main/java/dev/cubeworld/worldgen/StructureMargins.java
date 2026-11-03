@@ -23,8 +23,10 @@ import java.util.WeakHashMap;
 /**
  * How far from the edge of a face a structure must start so that it lies on one face. A structure that crosses an
  * edge as one block cannot be folded without a cut: a piece that crosses the edge row lies on both sides of it. Such
- * a structure does not generate near an edge. Its start chunk moves inward to the margin instead, so the structure
- * generates whole where the placement of vanilla put its cell, and no start is lost.
+ * a structure does not generate near an edge. The start chunks of its placement are squeezed toward the center of
+ * their face, so that every start lies at least the margin from the edges and no start is lost. A start that still
+ * does not fit, because the structure reaches deep below the surface where the wedge is narrower, tries again further
+ * inward (see {@link #inward}).
  *
  * <p>Jigsaw structures that grow over the surface (villages), mineshafts and strongholds have no margin: the fold or
  * their own placement handles the edge. The ancient city has none either. It lies 90 to 150 blocks down (see JigsawStructureMixin), where the
@@ -96,23 +98,42 @@ public final class StructureMargins {
 		return DEFAULT;
 	}
 
-	/** The chunk, moved inward so that its center is {@code margin} blocks from the edges of its face. */
-	public static ChunkPos clamp(SeamLayout layout, int margin, ChunkPos chunk) {
+	/**
+	 * The chunk, moved toward the center of its face so that the whole region of the face maps onto the square that lies
+	 * {@code margin} blocks inside the edges. A uniform squeeze keeps the starts of a region spread out: moving only the
+	 * starts near an edge would put them all on the line at the margin.
+	 */
+	public static ChunkPos squeeze(SeamLayout layout, int margin, ChunkPos chunk) {
 		int centerX = chunk.getMiddleBlockX();
 		int centerZ = chunk.getMiddleBlockZ();
-		if (!layout.inRegion(centerX, centerZ)) {
+		if (!layout.inRegion(centerX, centerZ) || margin >= layout.radius) {
 			return chunk;
 		}
-		int limit = layout.radius - margin;
-		int x = clampAxis(chunk.x(), layout.offsetX(layout.faceIndexAt(centerX)), limit);
-		int z = clampAxis(chunk.z(), 0, limit);
+		int faceX = layout.offsetX(layout.faceIndexAt(centerX));
+		double scale = (double) (layout.radius - margin) / (layout.spacing / 2);
+		int x = Math.floorDiv(faceX + (int) Math.round((centerX - faceX) * scale), 16);
+		int z = Math.floorDiv((int) Math.round(centerZ * scale), 16);
 		return x == chunk.x() && z == chunk.z() ? chunk : new ChunkPos(x, z);
 	}
 
-	private static int clampAxis(int chunk, int center, int limit) {
-		int low = Math.ceilDiv(center - limit - 8, 16);
-		int high = Math.floorDiv(center + limit - 8, 16);
-		return low > high ? chunk : Math.max(low, Math.min(high, chunk));
+	/** How far, in blocks, {@link #squeeze} can move a start chunk. */
+	public static int maxSqueeze(SeamLayout layout, int margin) {
+		return Math.max(0, layout.spacing / 2 - (layout.radius - margin));
+	}
+
+	/** How many chunks a start that does not fit can move inward to try again. */
+	public static final int MAX_INWARD = 4;
+
+	/**
+	 * The chunk moved {@code steps} chunks toward the center of its face, on each axis where the start {@code box}
+	 * leaves its wedge or the square of its face.
+	 */
+	public static ChunkPos inward(SeamLayout layout, BoundingBox box, ChunkPos chunk, int steps) {
+		int faceX = layout.offsetX(layout.faceIndexAt(chunk.getMiddleBlockX()));
+		int width = Math.min(layout.radius, box.minY() - layout.centerY);
+		int dx = box.maxX() - faceX > width ? -1 : box.minX() - faceX < -width ? 1 : 0;
+		int dz = box.maxZ() > width ? -1 : box.minZ() < -width ? 1 : 0;
+		return new ChunkPos(chunk.x() + dx * steps, chunk.z() + dz * steps);
 	}
 
 	/** The top of a mineshaft, as vanilla keeps it: 10 blocks below sea level. */
@@ -148,8 +169,9 @@ public final class StructureMargins {
 
 	/**
 	 * Whether a generated start lies where the layout can show it whole. A structure with a margin must lie in the square
-	 * of its face. The ancient city must have its center piece, with the portal, in the wedge of its face, down to its
-	 * lowest block. The wedge there is narrower on each side than the face by the depth of the city.
+	 * of its face and in its wedge, down to its lowest block: the wedge is narrower than the face by the depth, so the
+	 * base of a monument or the basement of an igloo near an edge would be cut off. The ancient city must have its center
+	 * piece, with the portal, in the wedge of its face.
 	 */
 	public static boolean fits(SeamLayout layout, Holder<Structure> structure, StructureStart start) {
 		if (structure.is(BuiltinStructures.ANCIENT_CITY)) {
@@ -162,7 +184,7 @@ public final class StructureMargins {
 		int offset = layout.offsetX(layout.faceIndexAt(start.getChunkPos().getMiddleBlockX()));
 		BoundingBox box = start.getBoundingBox();
 		return box.minX() >= offset - layout.radius && box.maxX() <= offset + layout.radius
-			&& box.minZ() >= -layout.radius && box.maxZ() <= layout.radius;
+			&& box.minZ() >= -layout.radius && box.maxZ() <= layout.radius && insideWedge(layout, box);
 	}
 
 	private static boolean insideWedge(SeamLayout layout, BoundingBox box) {
