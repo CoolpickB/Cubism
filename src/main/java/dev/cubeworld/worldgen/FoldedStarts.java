@@ -114,7 +114,8 @@ public final class FoldedStarts {
 					continue;
 				}
 				for (StructureStart source : startsOf(generator, registries, state, templates, level, host, chunkX, chunkZ)) {
-					StructureStart copy = copy(source, fold, strip, host.getPos(), registries, templates);
+					SeamFold.Fold hinged = fold.atDepth(layout.hingeDepth(source.getBoundingBox().getCenter().getY()));
+					StructureStart copy = copy(source, hinged, strip, host.getPos(), registries, templates);
 					if (copy != null && manager.getStartForStructure(source.getStructure(), host) == null) {
 						manager.setStartForStructure(source.getStructure(), copy, host);
 					}
