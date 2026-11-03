@@ -1,5 +1,6 @@
 package dev.cubeworld.worldgen;
 
+import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.mixin.PoolElementStructurePieceAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -96,10 +97,15 @@ public final class FoldedStarts {
 	) {
 		int r = layout.radius;
 		int offset = layout.offsetX(fold.from);
-		int minChunkX = Math.floorDiv(flat.getX() - REACH, 16);
-		int maxChunkX = Math.floorDiv(flat.getX() + REACH, 16);
-		int minChunkZ = Math.floorDiv(flat.getZ() - REACH, 16);
-		int maxChunkZ = Math.floorDiv(flat.getZ() + REACH, 16);
+		// An underground structure folds about a hinge at its depth (see SeamFold.Fold#atDepth), so the flat place of this chunk
+		// moves along the edge normal by twice the depth. The window spans all depths down to the bottom of the cube.
+		int deepest = Math.min(r, CubePlanetMath.TOP_SURFACE_Y - host.getMinY());
+		BlockPos hostMiddle = new BlockPos(host.getPos().getMiddleBlockX(), 0, host.getPos().getMiddleBlockZ());
+		BlockPos deepFlat = fold.atDepth(deepest).inverse(hostMiddle);
+		int minChunkX = Math.floorDiv(Math.min(flat.getX(), deepFlat.getX()) - REACH, 16);
+		int maxChunkX = Math.floorDiv(Math.max(flat.getX(), deepFlat.getX()) + REACH, 16);
+		int minChunkZ = Math.floorDiv(Math.min(flat.getZ(), deepFlat.getZ()) - REACH, 16);
+		int maxChunkZ = Math.floorDiv(Math.max(flat.getZ(), deepFlat.getZ()) + REACH, 16);
 		for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
 			for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
 				// A jigsaw structure starts at the corner of its chunk with the lowest x and z, and that position

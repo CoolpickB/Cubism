@@ -48,9 +48,11 @@ public final class SeamFold {
 		private final int d;
 		private final int tx;
 		private final int tz;
+		private final int upX;
+		private final int upZ;
 		private final BoundingBox strip;
 
-		private Fold(int from, int edge, int to, int[] map, BoundingBox strip) {
+		private Fold(int from, int edge, int to, int[] map, int upX, int upZ, BoundingBox strip) {
 			this.from = from;
 			this.edge = edge;
 			this.to = to;
@@ -60,7 +62,22 @@ public final class SeamFold {
 			this.d = map[3];
 			this.tx = map[4];
 			this.tz = map[5];
-				this.strip = strip;
+			this.upX = upX;
+			this.upZ = upZ;
+			this.strip = strip;
+		}
+
+		/**
+		 * The fold that turns about the hinge {@code depth} blocks below the surface instead of about the edge row. Under
+		 * an edge the wedge of a face ends at the diagonal, which lies {@code depth} rows short of the edge row on each
+		 * side, so a turn about the edge row would leave a dead band of twice that width. The hinge lies on the diagonal:
+		 * the part past it goes down the neighbor face at the same depth, and its heights are kept.
+		 */
+		public Fold atDepth(int depth) {
+			if (depth == 0) {
+				return this;
+			}
+			return new Fold(this.from, this.edge, this.to, new int[] {this.a, this.b, this.c, this.d, this.tx - 2 * depth * this.upX, this.tz - 2 * depth * this.upZ}, this.upX, this.upZ, this.strip);
 		}
 
 		public int x(int x, int z) {
@@ -129,7 +146,9 @@ public final class SeamFold {
 		int[] xr = this.range(up, m[0], m[3], m[6], r);
 		int[] zr = this.range(up, m[2], m[5], m[8], r);
 		BoundingBox strip = new BoundingBox(off + xr[0], 0, zr[0], off + xr[1], 0, zr[1]);
-		return new Fold(from, edge, to, new int[] {a, b, c, d, tx, tz}, strip);
+		int[] gx = {m[0], m[3], m[6]};
+		int[] gz = {m[2], m[5], m[8]};
+		return new Fold(from, edge, to, new int[] {a, b, c, d, tx, tz}, dot(up, gx), dot(up, gz), strip);
 	}
 
 	/** The range of one local axis of the target face over the strip: one row from the edge row to the far edge, and the face width along the edge. */

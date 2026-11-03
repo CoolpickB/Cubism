@@ -20,7 +20,9 @@ import org.spongepowered.asm.mixin.injection.At;
  * A jigsaw structure is laid out on the flat plane of its face, and the part past an edge is folded onto the next face
  * (see {@link dev.cubeworld.worldgen.FoldedStarts}). The fold opens a gap above an edge, so a house on both sides of it
  * would show a cut. The placer does not take such a piece and tries another one for the connector. A flat piece, such
- * as a road or a field, bends over the edge without a cut and stays.
+ * as a road or a field, bends over the edge without a cut and stays. An underground structure folds about the diagonal
+ * at its depth (see {@link dev.cubeworld.worldgen.SeamFold.Fold#atDepth}), so it takes pieces of any height and refuses
+ * only the corner.
  */
 @Mixin(targets = "net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement$Placer")
 public abstract class JigsawPlacerMixin {

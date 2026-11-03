@@ -304,20 +304,35 @@ public final class SeamLayout {
 		throw new IllegalArgumentException(face.toString());
 	}
 
+	/** A structure whose middle lies deeper below the top of a face than this folds about a hinge at its depth. */
+	private static final int UNDERGROUND = 32;
+
+	/** The depth of the hinge for a structure whose middle is at {@code y}, or 0 for a structure on the surface (see {@link SeamFold.Fold#atDepth}). */
+	public int hingeDepth(int y) {
+		int depth = CubePlanetMath.TOP_SURFACE_Y - y;
+		return depth > UNDERGROUND ? depth : 0;
+	}
+
 	/**
 	 * Whether a piece of a structure, laid out on the flat plane of a face, cannot be folded without a cut: it lies in
 	 * the corner past two edges, which has no ground on any face, or it is {@code tall} and lies on both sides of an
-	 * edge row. The fold opens a gap above an edge, so a tall piece there would show a cut.
+	 * edge row. The fold opens a gap above an edge, so a tall piece there would show a cut. An underground piece folds
+	 * about the diagonal at its depth, which cuts a piece of any height along the diagonal, so only the corner counts
+	 * for it, and the corner starts at the hinge.
 	 */
 	public boolean splitsAtEdge(BoundingBox box, boolean tall) {
 		int offset = this.offsetX(this.faceIndexAt((box.minX() + box.maxX()) / 2));
-		int r = this.radius;
+		int depth = this.hingeDepth((box.minY() + box.maxY()) / 2);
+		int r = this.radius - depth;
 		int minX = box.minX() - offset;
 		int maxX = box.maxX() - offset;
 		boolean pastX = maxX > r || minX < -r;
 		boolean pastZ = box.maxZ() > r || box.minZ() < -r;
 		if (pastX && pastZ) {
 			return true;
+		}
+		if (depth > 0) {
+			return false;
 		}
 		boolean straddlesX = maxX > r && minX <= r || minX < -r && maxX >= -r;
 		boolean straddlesZ = box.maxZ() > r && box.minZ() <= r || box.minZ() < -r && box.maxZ() >= -r;
