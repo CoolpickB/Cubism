@@ -3,6 +3,7 @@ package dev.cubeworld.seam;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
+import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -102,6 +103,20 @@ public final class SeamCrossing {
 		}
 	}
 
+	/** False on the server while a chunk under the box is not loaded, where a block read would wait for it. */
+	private static boolean loaded(Level level, AABB box) {
+		if (level instanceof ServerLevel server) {
+			for (int chunkX = SectionPos.blockToSectionCoord(box.minX); chunkX <= SectionPos.blockToSectionCoord(box.maxX); chunkX++) {
+				for (int chunkZ = SectionPos.blockToSectionCoord(box.minZ); chunkZ <= SectionPos.blockToSectionCoord(box.maxZ); chunkZ++) {
+					if (!server.getChunkSource().hasChunk(chunkX, chunkZ)) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
 	/** A path holds block positions of the old region. The mob plans a new one on its next tick. */
 	private static void stopPath(@Nullable Entity entity) {
 		if (entity instanceof Mob mob) {
@@ -118,14 +133,8 @@ public final class SeamCrossing {
 		AABB box = entity.getBoundingBox().move(feet.subtract(entity.position()));
 		// A block read in a chunk that is not loaded makes the server thread wait for it, and a chunk that has to
 		// generate first held a tick for 8 s. The entity crosses once the chunk is there.
-		if (level instanceof ServerLevel server) {
-			for (int chunkX = SectionPos.blockToSectionCoord(box.minX); chunkX <= SectionPos.blockToSectionCoord(box.maxX); chunkX++) {
-				for (int chunkZ = SectionPos.blockToSectionCoord(box.minZ); chunkZ <= SectionPos.blockToSectionCoord(box.maxZ); chunkZ++) {
-					if (!server.getChunkSource().hasChunk(chunkX, chunkZ)) {
-						return false;
-					}
-				}
-			}
+		if (!loaded(level, box)) {
+			return false;
 		}
 		return level.noBlockCollision(entity, box)
 			&& (!level.noBlockCollision(entity, box.move(0.0, -GROUND_DEPTH, 0.0)) || level.containsAnyLiquid(box));
@@ -260,8 +269,35 @@ public final class SeamCrossing {
 			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
 			xRot = entity.getXRot();
 		}
-		return new Turned(center.subtract(0.0, halfHeight, 0.0), rotate(m, entity.getDeltaMovement()), yRot, xRot);
+		return new Turned(free(entity, center.subtract(0.0, halfHeight, 0.0)), rotate(m, entity.getDeltaMovement()), yRot, xRot);
 	}
+
+	/**
+	 * The nearest place to the turned feet where the body box is free of blocks, up to {@link #FREE_SEARCH} away. The box
+	 * stands upright in the new frame, and before the crossing it lay along the old one, so a tall box can stick into
+	 * a block beside it. On the client the server then refused the move and set the player back, and the camera looked
+	 * through the world for a frame. A box that stays stuck keeps the turned feet.
+	 */
+	private static Vec3 free(Entity entity, Vec3 feet) {
+		Level level = entity.level();
+		AABB box = entity.getBoundingBox().move(feet.subtract(entity.position()));
+		if (!loaded(level, box.inflate(FREE_SEARCH)) || level.noBlockCollision(entity, box)) {
+			return feet;
+		}
+		for (double d = FREE_STEP; d <= FREE_SEARCH + 1.0E-9; d += FREE_STEP) {
+			for (Direction direction : FREE_ORDER) {
+				Vec3 offset = new Vec3(direction.getStepX() * d, direction.getStepY() * d, direction.getStepZ() * d);
+				if (level.noBlockCollision(entity, box.move(offset))) {
+					return feet.add(offset);
+				}
+			}
+		}
+		return feet;
+	}
+
+	private static final double FREE_STEP = 0.05;
+	private static final double FREE_SEARCH = 1.0;
+	private static final Direction[] FREE_ORDER = {Direction.UP, Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST};
 
 	private static Vec3 rotate(int[] m, Vec3 v) {
 		return new Vec3(

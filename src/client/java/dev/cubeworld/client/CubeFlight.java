@@ -471,6 +471,7 @@ public final class CubeFlight {
 		Vec3 old = SeamInteraction.move(m, new Vec3(player.xo, player.yo + halfHeight, player.zo));
 		Vec3 walked = SeamInteraction.move(m, new Vec3(player.xOld, player.yOld + halfHeight, player.zOld));
 		Vector3f oldLook = turnLook(m, look(player.yRotO, player.xRotO));
+		Vec3 here = SeamInteraction.move(m, new Vec3(player.getX(), player.getY() + halfHeight, player.getZ()));
 		SeamCrossing.Turned turned = SeamCrossing.turned(layout, player, toFace);
 		player.setPos(turned.position());
 		// The chunk cache sorts chunks into the vanilla and the seam store by this center. The server moves it only when
@@ -492,12 +493,15 @@ public final class CubeFlight {
 		player.yHeadRotO += yawChange;
 		player.setYRot(turned.yRot());
 		player.setXRot(turned.xRot());
-		player.xo = old.x;
-		player.yo = old.y - halfHeight;
-		player.zo = old.z;
-		player.xOld = walked.x;
-		player.yOld = walked.y - halfHeight;
-		player.zOld = walked.z;
+		// The crossing can move the body off a block (see SeamCrossing.turned). The last positions move with it, or the
+		// camera passes through that block on the way during the first tick.
+		Vec3 nudge = turned.position().subtract(here.subtract(0.0, halfHeight, 0.0));
+		player.xo = old.x + nudge.x;
+		player.yo = old.y - halfHeight + nudge.y;
+		player.zo = old.z + nudge.z;
+		player.xOld = walked.x + nudge.x;
+		player.yOld = walked.y - halfHeight + nudge.y;
+		player.zOld = walked.z + nudge.z;
 		player.yRotO = yaw(oldLook, turned.yRot());
 		player.xRotO = pitch(oldLook);
 		screenUp.set(turnLook(m, screenUp));
