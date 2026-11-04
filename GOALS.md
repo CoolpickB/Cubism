@@ -8,15 +8,15 @@ The overworld is one cube planet that floats in empty space. Each of the six fac
 
 These rules apply to every system in the mod:
 
-1. **Geometry.** The cube center is `(0, centerY, 0)`. The surface (sea level) is at Chebyshev distance `R` from the center. The diameter is 24 to 128 chunks.
-2. **Sectors.** The pyramid sector of a position is the face of the axis with the largest offset from the center. The sector gives the default orientation of a block at that position.
-3. **Local frame.** Each face has a local frame in which the outward face normal is "up". Each face behaves like a vanilla world turned so that its local up is world up.
-4. **Each block has an orientation.** Block states store their local orientation. A `type=bottom` slab with east orientation sits against the local floor (world west side). Each system that reads a block state turns it by the orientation of the block: rendering, collision shapes, block logic, and worldgen. Most blocks use the default orientation of their sector. Each chunk stores a list of the blocks that have a different orientation. The server syncs this list to clients.
-5. **Orientation is sticky too.** A block that a player places gets the orientation of the gravity of that player. A worldgen feature (tree, ore vein, gravel patch, structure) gets the orientation of the face at its origin. A feature that the diagonal into the next sector would cut is not placed (see Structures).
-6. **Gravity is discrete and sticky.** Gravity always points along one of the six axes, toward the center. Each face has a surface plane at distance `R` along its axis. An entity keeps its gravity while it stays outside the plane of its current face. Inside that plane, a face takes the entity only if the entity is inside the square of that face and the column above the entity, in the frame of that face, is open to the sky. If the current face matches, the entity keeps its gravity. If no face matches (a cave, or inside the cube), the entity keeps its gravity. If more than one face matches, the entity takes the face where it is highest. Example: a player walks off a cliff at the edge of the top face. The player flips when the player gets into the open air of the side face, not at the sea plane. A player in a closed tunnel under an edge does not flip.
-7. **Gravity changes are safe.** A gravity change turns the hitbox and the velocity with the frame. If the turned hitbox does not fit, the change waits until it fits. The camera turns smoothly over a few ticks.
-8. **New entities.** A new entity starts with the gravity of the sector that it spawns in. An item that a player drops gets the gravity of that player.
-9. **Server authority.** The server owns the gravity direction of each entity and sends it to clients. Client and server use the same movement code.
+1. **Geometry.** The cube center is `(0, centerY, 0)`. The surface (sea level) is at Chebyshev distance `R` from the center. The diameter is 24 to 128 chunks. The edges of the surface are rounded by `edge_rounding`.
+2. **Storage.** Each face is stored upright in its own region along +X, as the pyramid wedge `max(|x|, |z|) <= y - centerY`. Thus each face is a vanilla world in which the local up is world up. `SeamLayout` maps storage positions to cube positions.
+3. **Seams.** The diagonal between two wedges is a seam. Rendering, light, block updates and entity tracking cross a seam with a 90 degree turn. A block next to a seam reads the turned states of the blocks across it. A state that cannot turn reads as air from the other face.
+4. **Worldgen stays in the wedge.** Writes outside the wedge of a face are refused. A feature or a structure that the diagonal would cut is whole or not placed (see Structures).
+5. **Gravity.** On a face, gravity points straight down in the frame of the face. When a fall leaves the face that it started from, gravity follows `SeamLayout.airGravity`. This field points along the inward normal of nested rounded cubes, so a jump off an edge arcs onto the next face. The field is continuous across the seams, above and below the surface.
+6. **Crossing.** When the center of an entity is 1 block past the diagonal, the entity moves into the region of the next face. Its position, velocity and look turn with the same rigid motion as the seam rendering, so the view does not jump. If the turned body touches blocks, it moves to the nearest free position, at most 1 block away.
+7. **Camera.** On the ground over a rounded edge, the camera tilts with the ground. With **Edge Camera Tilt** off (Accessibility options), the camera stays upright on the face and turns over 8 ticks at the seam. In flight the camera always tilts. The eye never goes into a block.
+8. **Server authority.** The server crosses entities other than players. A player crosses on its own client, and the server follows with the next movement. The server crosses a player itself only 4 blocks past the diagonal.
+9. **New entities.** A new entity starts upright in the wedge where it spawns. An item that a player drops gets the gravity of that player.
 
 ## Goals for version 1
 
@@ -29,8 +29,8 @@ These rules apply to every system in the mod:
 
 ### Blocks
 
-- Block models, outline shapes, and collision shapes turn with the sector. Slabs, stairs, snow layers, and paths collide correctly on all faces.
-- Placement direction comes from the local frame. A torch, log, or stair placed on a side face points the same way as on the top face.
+- Block models, shapes and placement act as vanilla on each face, because each face is stored upright.
+- Next to a seam, blocks see the turned blocks across it. Blocks that cannot turn 90 degrees (repeaters, dust, slabs, stairs and more) read as air from the other face.
 - Gravity blocks (sand, gravel, concrete powder) fall toward the center.
 - Water and lava flow downhill in the local frame on all faces.
 - Plants, torches, and other attached blocks survive or break against their local support.
@@ -63,10 +63,10 @@ These rules apply to every system in the mod:
 
 ## Phases
 
-1. Movement core: discrete gravity, oriented movement, server sync, smooth camera.
+1. Movement core: crossing, edge gravity, server sync, camera.
 2. Terrain and decoration: correct density mapping, oceans, vanilla feature placement.
-3. Block orientation: shapes, placement, falling blocks, fluids, plant support.
-4. Sky light per sector.
+3. Seams: block updates, falling blocks, fluids and plant support across a seam.
+4. Light across seams.
 5. Mobs: spawn, move, and path-find on all faces.
 
 ## Not in version 1
