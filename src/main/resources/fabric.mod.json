@@ -24,6 +24,14 @@
 			"environment": "client"
 		}
 	],
+	"custom": {
+		"lithium:options": {
+			"mixin.entity.collisions.movement": false,
+			"mixin.entity.collisions.intersection": false,
+			"mixin.minimal_nonvanilla.collisions.empty_space": false,
+			"mixin.experimental.entity.block_caching.block_support": false
+		}
+	},
 	"depends": {
 		"fabricloader": ">=0.20.1",
 		"minecraft": "~26.3",
