@@ -53,8 +53,120 @@ public final class CubeFlight {
 		if (flies || !player.isPassenger() && !player.isSpectator()) {
 			cross(player, flies);
 		}
+		carryLook(player);
 		traceTick(player);
 		traceLook(player);
+	}
+
+	/** The up of the view frame at the end of the last tick, in the face frame, and the face region it was in. */
+	private static final Vector3f lastUp = new Vector3f(0.0F, 1.0F, 0.0F);
+	private static int lastUpFace = -1;
+
+	/**
+	 * Turns the look with the up of the view frame, by the shortest turn from the last up to this one, as games with
+	 * round planets do. The look then keeps its angle to the up: a look that stood still in the face while the frame
+	 * tilted under it went over straight down of the frame, where the yaw in the frame flips, so the keys walked the
+	 * other way and the camera rolled over, back and forth each tick.
+	 */
+	private static void carryLook(LocalPlayer player) {
+		SeamLayout layout = SeamLayout.of(player.level());
+		int blockX = Mth.floor(player.getX());
+		int face = layout != null && layout.inRegion(blockX, Mth.floor(player.getZ())) ? layout.faceIndexAt(blockX) : -1;
+		Quaternionf view = viewFrame(player, 1.0F);
+		Vector3f up = view.transform(new Vector3f(0.0F, 1.0F, 0.0F));
+		Vector3f last = new Vector3f(lastUp);
+		int lastFace = lastUpFace;
+		lastUp.set(up);
+		lastUpFace = face;
+		if (inFrame || face < 0) {
+			return;
+		}
+		syncScreenUp(player, view);
+		screenUpO.set(screenUp);
+		if (lastFace < 0) {
+			return;
+		}
+		if (face != lastFace) {
+			// The crossing turned the look by the face motion, so the last up turns the same way.
+			int[] m = layout.motion(lastFace, face);
+			last.set(m[0] * last.x + m[1] * last.y + m[2] * last.z, m[3] * last.x + m[4] * last.y + m[5] * last.z, m[6] * last.x + m[7] * last.y + m[8] * last.z);
+		}
+		if (last.distanceSquared(up) < 1.0E-12F) {
+			return;
+		}
+		float yRot = player.getYRot();
+		Quaternionf carry = new Quaternionf().rotationTo(last, up);
+		Vector3f carried = carry.transform(look(yRot, player.getXRot()));
+		player.setYRot(yaw(carried, yRot));
+		player.setXRot(pitch(carried));
+		carry.transform(screenUp);
+		syncedLook.set(look(player.getYRot(), player.getXRot()));
+		upright(screenUp, syncedLook, view);
+	}
+
+	/**
+	 * The up of the screen for the local player in the face frame, at the end of this tick and at its start. It is kept
+	 * as a direction and turned with the look, as games with round planets keep the camera. Worked out from the
+	 * angles, it comes from the small part of a look close to straight down that is not straight down, so near there
+	 * a small change spun the screen, and the screen shook or rolled over.
+	 */
+	private static final Vector3f screenUp = new Vector3f(0.0F, 1.0F, 0.0F);
+	private static final Vector3f screenUpO = new Vector3f(0.0F, 1.0F, 0.0F);
+	/** The look that {@link #screenUp} belongs to. */
+	private static final Vector3f syncedLook = new Vector3f(0.0F, 0.0F, 1.0F);
+	private static boolean hasScreenUp;
+
+	/** The up of the screen that vanilla shows for a look of yaw and pitch in the face frame. */
+	private static Vector3f faceScreenUp(float yRot, float xRot) {
+		return new Quaternionf().rotationYXZ((float) Math.PI - yRot * Mth.DEG_TO_RAD, -xRot * Mth.DEG_TO_RAD, 0.0F).transform(new Vector3f(0.0F, 1.0F, 0.0F));
+	}
+
+	/**
+	 * Brings the screen up in line with the look of the player. Over a flat face it is the up that vanilla shows. A
+	 * change of the look from elsewhere, such as vanilla or the server, carries it along by the shortest turn.
+	 */
+	private static void syncScreenUp(LocalPlayer player, Quaternionf view) {
+		Vector3f look = look(player.getYRot(), player.getXRot());
+		if (!hasScreenUp || isIdentity(view)) {
+			screenUp.set(faceScreenUp(player.getYRot(), player.getXRot()));
+			screenUpO.set(faceScreenUp(player.yRotO, player.xRotO));
+			hasScreenUp = true;
+		} else if (!look.equals(syncedLook, 1.0E-6F)) {
+			new Quaternionf().rotationTo(syncedLook, look).transform(screenUp);
+			upright(screenUp, look, view);
+		}
+		syncedLook.set(look);
+	}
+
+	/**
+	 * Makes the screen up upright in the view frame where that is clear. Within 10 degrees of straight down or up it
+	 * only stays square to the look, as every turn here keeps it upright already.
+	 */
+	private static void upright(Vector3f up, Vector3f look, Quaternionf view) {
+		Vector3f viewUp = view.transform(new Vector3f(0.0F, 1.0F, 0.0F));
+		float along = viewUp.dot(look);
+		if (Math.abs(along) < 0.985F) {
+			up.set(viewUp).fma(-along, look).normalize();
+		} else {
+			up.fma(-up.dot(look), look).normalize();
+		}
+	}
+
+	/** The direction the screen faces level in the view frame, from the look and the screen up. */
+	private static Vector3f heading(Vector3f look, Quaternionf view) {
+		Vector3f viewUp = view.transform(new Vector3f(0.0F, 1.0F, 0.0F));
+		return new Vector3f(look).mul(screenUp.dot(viewUp)).fma(-look.dot(viewUp), screenUp).normalize();
+	}
+
+	/** The up of the screen of the local player for the camera, in the face frame. */
+	public static Vector3f screenUp(LocalPlayer player, float partialTicks) {
+		syncScreenUp(player, viewFrame(player, 1.0F));
+		return new Vector3f(screenUpO).lerp(screenUp, partialTicks);
+	}
+
+	/** The up of the screen that vanilla shows, for the camera. */
+	public static Vector3f vanillaScreenUp(float yRot, float xRot) {
+		return faceScreenUp(yRot, xRot);
 	}
 
 	private static java.io.PrintWriter lookLog;
@@ -194,15 +306,26 @@ public final class CubeFlight {
 		}
 		float yawChange = (float) xo * 0.15F;
 		float pitchChange = (float) yo * 0.15F;
-		Vector3f look = turnIn(frame, player.getYRot(), player.getXRot(), yawChange, pitchChange);
-		Vector3f oldLook = turnIn(frame, player.yRotO, player.xRotO, yawChange, pitchChange);
-		float newYRot = yaw(look, player.getYRot());
+		syncScreenUp(player, frame);
+		Vector3f look = look(player.getYRot(), player.getXRot());
+		Vector3f up = frame.transform(new Vector3f(0.0F, 1.0F, 0.0F));
+		// The pitch from the look and the screen up, which goes past 90 where the look went over straight down.
+		float pitch = (float) Math.toDegrees(Math.atan2(-look.dot(up), screenUp.dot(up)));
+		float change = Mth.clamp(pitch + pitchChange, -MAX_PITCH, MAX_PITCH) - pitch;
+		// Down about the right of the screen, then right about the up of the frame. Both keep the screen upright. The
+		// last look turns the same way, as vanilla adds the change to both.
+		Quaternionf turn = new Quaternionf().rotationAxis(-yawChange * Mth.DEG_TO_RAD, up)
+			.mul(new Quaternionf().rotationAxis(change * Mth.DEG_TO_RAD, new Vector3f(screenUp).cross(look).normalize()));
+		Vector3f turned = turn.transform(new Vector3f(look));
+		Vector3f oldLook = turn.transform(look(player.yRotO, player.xRotO));
+		turn.transform(screenUp);
+		turn.transform(screenUpO);
+		float newYRot = yaw(turned, player.getYRot());
 		player.setYRot(newYRot);
-		player.setXRot(pitch(look));
-		// The last look turns the same way, as vanilla adds the change to both. Past straight down or up of the face, the
-		// yaw flips, and a change added to the old angles would point the old look elsewhere.
+		player.setXRot(pitch(turned));
 		player.yRotO = yaw(oldLook, newYRot);
 		player.xRotO = pitch(oldLook);
+		syncedLook.set(look(player.getYRot(), player.getXRot()));
 		return true;
 	}
 
@@ -217,13 +340,8 @@ public final class CubeFlight {
 		if (inFrame || isIdentity(frame)) {
 			return player.getYRot();
 		}
-		float[] angles = anglesIn(frame, player.getYRot(), player.getXRot());
-		return yaw(frame.transform(look(angles[0], 0.0F)), player.getYRot());
-	}
-
-	private static Vector3f turnIn(Quaternionf frame, float yRot, float xRot, float yawChange, float pitchChange) {
-		float[] angles = anglesIn(frame, yRot, xRot);
-		return frame.transform(look(angles[0] + yawChange, Mth.clamp(angles[1] + pitchChange, -MAX_PITCH, MAX_PITCH)));
+		syncScreenUp(player, frame);
+		return yaw(heading(look(player.getYRot(), player.getXRot()), frame), player.getYRot());
 	}
 
 	/**
@@ -239,10 +357,14 @@ public final class CubeFlight {
 		physicsFrame.set(frame);
 		worldYRot = player.getYRot();
 		worldXRot = player.getXRot();
-		float[] angles = anglesIn(frame, worldYRot, worldXRot);
-		player.setDeltaMovement(turn(new Quaternionf(frame).conjugate(), player.getDeltaMovement()));
-		player.setYRot(angles[0]);
-		player.setXRot(angles[1]);
+		syncScreenUp(player, viewFrame(player, 1.0F));
+		// The yaw comes from the heading of the screen, which a look close to straight down of the frame still has.
+		Quaternionf toAir = new Quaternionf(frame).conjugate();
+		Vector3f look = look(worldYRot, worldXRot);
+		Vector3f heading = toAir.transform(heading(look, frame));
+		player.setDeltaMovement(turn(toAir, player.getDeltaMovement()));
+		player.setYRot(yaw(heading, worldYRot));
+		player.setXRot(pitch(toAir.transform(look)));
 		inFrame = true;
 		return true;
 	}
@@ -360,6 +482,8 @@ public final class CubeFlight {
 		player.zOld = walked.z;
 		player.yRotO = yaw(oldLook, turned.yRot());
 		player.xRotO = pitch(oldLook);
+		screenUp.set(turnLook(m, screenUp));
+		syncedLook.set(look(player.getYRot(), player.getXRot()));
 		((TurnableAvatarState) player.avatarState()).cubeworld$turn(m, halfHeight);
 		if (LoadTrace.active()) {
 			RECENT_TICKS.forEach(LoadTrace::event);

@@ -120,6 +120,18 @@ public abstract class CameraMixin {
 		}
 		float yRot = this.entity.getViewYRot(partialTicks);
 		float xRot = this.entity.getViewXRot(partialTicks);
+		if (this.entity instanceof LocalPlayer player) {
+			// The roll that turns the up of vanilla to the kept up of the screen, about the look.
+			Vector3f look = CubeFlight.look(yRot, xRot);
+			Vector3f shown = CubeFlight.vanillaScreenUp(yRot, xRot);
+			Vector3f wanted = CubeFlight.screenUp(player, partialTicks);
+			wanted.fma(-wanted.dot(look), look);
+			if (wanted.lengthSquared() < 1.0E-8F) {
+				return new Quaternionf();
+			}
+			float angle = (float) Math.atan2(new Vector3f(shown).cross(wanted).dot(look), shown.dot(wanted.normalize()));
+			return new Quaternionf().rotationAxis(angle, look);
+		}
 		float[] angles = CubeFlight.anglesIn(air, yRot, xRot);
 		return new Quaternionf(air).mul(cubeworld$view(angles[0], angles[1])).mul(cubeworld$view(yRot, xRot).conjugate());
 	}
