@@ -21,6 +21,16 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
 import net.minecraft.client.renderer.oit.OitStage;
+import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.ChunkRenderList;
+import net.caffeinemc.mods.sodium.client.render.chunk.region.RenderRegion;
+import net.caffeinemc.mods.sodium.client.util.iterator.ByteIterator;
+import dev.cubeworld.client.render.SeamRenderer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
@@ -232,5 +242,56 @@ public final class SeamFaces {
 		Vector3d p, FogParameters fog, boolean sorting, RenderPass renderPass, GpuSampler sampler, @Nullable OitStage stage) {
 		manager.getChunkRenderer().render(matrices, manager.getRenderLists(), pass, new CameraTransform(p.x, p.y, p.z), fog, sorting,
 			renderPass, sampler, ubm.getUniformBuffer(), ubm.getSectionTimeInfo(), stage);
+	}
+
+	/**
+	 * Adds the block entities of the faces that were drawn this frame. Each state remembers the motion that carries its
+	 * face to the camera face, and the dispatcher computes its camera distance in the frame of its face.
+	 */
+	public static void extractBlockEntities(Camera camera, float tickDelta, LevelRenderState levelRenderState) {
+		BlockEntityRenderDispatcher dispatcher = Minecraft.getInstance().getBlockEntityRenderDispatcher();
+		try {
+			for (int f = 0; f < FACES; f++) {
+				if (!drawn[f]) {
+					continue;
+				}
+				Vector3d p = position[f];
+				dispatcher.prepare(new Vec3(p.x, p.y, p.z));
+				RenderSectionManager manager = managers[f];
+				var lists = manager.getRenderLists().iterator(false);
+				while (lists.hasNext()) {
+					ChunkRenderList renderList = lists.next();
+					RenderRegion region = renderList.getRegion();
+					ByteIterator ids = renderList.sectionsWithEntitiesIterator();
+					while (ids != null && ids.hasNext()) {
+						BlockEntity[] blockEntities = region.getCulledBlockEntities(ids.nextByteAsInt());
+						if (blockEntities != null) {
+							for (BlockEntity blockEntity : blockEntities) {
+								addBlockEntity(dispatcher, blockEntity, tickDelta, false, motion[f], levelRenderState);
+							}
+						}
+					}
+				}
+				for (RenderSection section : manager.getSectionsWithGlobalEntities()) {
+					BlockEntity[] blockEntities = section.getRegion().getGlobalBlockEntities(section.getSectionIndex());
+					if (blockEntities != null) {
+						for (BlockEntity blockEntity : blockEntities) {
+							addBlockEntity(dispatcher, blockEntity, tickDelta, true, motion[f], levelRenderState);
+						}
+					}
+				}
+			}
+		} finally {
+			dispatcher.prepare(camera.position());
+		}
+	}
+
+	private static void addBlockEntity(BlockEntityRenderDispatcher dispatcher, BlockEntity blockEntity, float tickDelta, boolean global,
+		int[] toCamera, LevelRenderState levelRenderState) {
+		BlockEntityRenderState state = dispatcher.tryExtractRenderState(blockEntity, tickDelta, null, global);
+		if (state != null) {
+			levelRenderState.blockEntityRenderStates.add(state);
+			SeamRenderer.setBlockEntityMotion(state, toCamera);
+		}
 	}
 }

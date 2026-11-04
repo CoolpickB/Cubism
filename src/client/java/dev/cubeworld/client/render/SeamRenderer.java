@@ -581,6 +581,9 @@ public final class SeamRenderer {
 	 * block entities too, or banners and signs vanish while the terrain around them shows.
 	 */
 	public static void extractBlockEntities(BlockEntityRenderDispatcher dispatcher, Vec3 cameraPos, float partialTicks, List<BlockEntityRenderState> out) {
+		if (SeamClient.SODIUM) {
+			return;
+		}
 		blockEntityMotions.clear();
 		SeamLayout layout = SeamClient.layout;
 		if (layout == null || sections.isEmpty() && adopted.isEmpty() && bridging.isEmpty()) {
@@ -690,6 +693,15 @@ public final class SeamRenderer {
 		if (SeamClient.layout != null) {
 			poseStack.last().normal().rotateLocal(SeamClient.lightFrame);
 		}
+	}
+
+	/** Remembers the motion into the camera frame for a block entity state that Sodium extracted from a seam section. */
+	public static void setBlockEntityMotion(BlockEntityRenderState state, int[] motion) {
+		blockEntityMotions.put(state, motion);
+	}
+
+	public static void clearBlockEntityMotions() {
+		blockEntityMotions.clear();
 	}
 
 	/** The motion into the camera frame for a block entity state of a seam section, or null for a vanilla state. */

@@ -161,4 +161,18 @@ public abstract class SodiumWorldRendererMixin {
 			cir.setReturnValue(manager != null && manager.isSectionBuilt(x, y, z));
 		}
 	}
+
+	@Inject(method = "extractBlockEntities", at = @At("HEAD"))
+	private void cubeworld$clearBlockEntityMotions(Camera camera, float tickDelta, it.unimi.dsi.fastutil.longs.Long2ObjectMap<?> progression,
+		net.minecraft.client.renderer.state.level.LevelRenderState state, CallbackInfo ci) {
+		dev.cubeworld.client.render.SeamRenderer.clearBlockEntityMotions();
+	}
+
+	@Inject(method = "extractBlockEntities", at = @At("TAIL"))
+	private void cubeworld$extractFaceBlockEntities(Camera camera, float tickDelta, it.unimi.dsi.fastutil.longs.Long2ObjectMap<?> progression,
+		net.minecraft.client.renderer.state.level.LevelRenderState state, CallbackInfo ci) {
+		if (SeamFaces.active()) {
+			SeamFaces.extractBlockEntities(camera, tickDelta, state);
+		}
+	}
 }

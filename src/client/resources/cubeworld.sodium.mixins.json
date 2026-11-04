@@ -4,6 +4,8 @@
 	"plugin": "dev.cubeworld.client.sodium.SodiumMixinPlugin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"ChunkBuilderMeshingTaskMixin",
+		"LevelSliceMixin",
 		"SodiumWorldRendererMixin",
 		"ViewportAccessor"
 	],
