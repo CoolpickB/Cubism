@@ -200,7 +200,7 @@ public final class SeamCrossing {
 	}
 
 	/** How much a look of this pitch, in degrees, keeps to the ground over an edge: 0 below 50 and 1 above 75. */
-	public static float groundWeight(float pitch) {
+	private static float groundWeight(float pitch) {
 		float t = Mth.clamp((pitch - 50.0F) / 25.0F, 0.0F, 1.0F);
 		return t * t * (3.0F - 2.0F * t);
 	}
