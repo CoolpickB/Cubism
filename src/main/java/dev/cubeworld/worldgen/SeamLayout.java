@@ -444,7 +444,12 @@ public final class SeamLayout {
 
 	/** True when a storage column lies over the rounded part of an edge, where {@link #seaLevelAt} drops with the column. */
 	public boolean inRoundedEdgeBand(int sx, int sz) {
-		double core = this.radius - CubePlanetMath.edgeRounding();
+		return this.nearEdge(sx, sz, CubePlanetMath.edgeRounding());
+	}
+
+	/** True when a storage column lies within {@code reach} blocks of an edge of its face, measured along the face. */
+	public boolean nearEdge(int sx, int sz, int reach) {
+		double core = this.radius - reach;
 		return Math.abs(sx - this.offsetX(this.faceIndexAt(sx))) > core || Math.abs(sz) > core;
 	}
 

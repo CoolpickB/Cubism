@@ -10,6 +10,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamFold;
+import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LevelHeightAccessor;
@@ -66,6 +67,10 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 
 	@Unique
 	private static final int SEA_SURFACE_DEPTH = 8;
+
+	/** The width of an aquifer cell along the face. */
+	@Unique
+	private static final int AQUIFER_CELL_WIDTH = 16;
 
 	/**
 	 * The vanilla codec, with the cube settings as an optional field. The chunk generator registry takes the codec
@@ -128,7 +133,9 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 	 * once per aquifer cell. The sea was then flat over each cell, with cliffs of water and pockets of air between
 	 * cells, and the ice of a cold sea showed them as broken shelves. It also built a stone barrier between the water
 	 * of one cell and the air of the next, which stood as a ridge in the open sea. In the rounded band, the open space
-	 * near the sea surface takes the sea of its own column.
+	 * near the sea surface takes the sea of its own column. A barrier near the sea also turns to sea up to one aquifer
+	 * cell in from the band: a cell centered past the edge has no sea, and with a small rounding its barrier stood on
+	 * the face, short of the band, as strips of land along the diagonal.
 	 */
 	@WrapOperation(
 		method = "doFill",
@@ -141,13 +148,20 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 		}
 		SeamLayout layout = SeamLayout.active();
 		NoiseBasedChunkGenerator generator = (NoiseBasedChunkGenerator) (Object) this;
-		if (layout == null || !layout.inRoundedEdgeBand(x, z) || !generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+		if (layout == null || !generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS)) {
+			return state;
+		}
+		if (state == null) {
+			if (!layout.nearEdge(x, z, CubePlanetMath.edgeRounding() + AQUIFER_CELL_WIDTH)) {
+				return state;
+			}
+			Aquifer.FluidStatus sea = this.globalFluidPicker.get().computeFluid(x, y, z);
+			return Math.abs(y - sea.fluidLevel()) <= SEA_BARRIER_RANGE ? sea.at(y) : state;
+		}
+		if (!layout.inRoundedEdgeBand(x, z)) {
 			return state;
 		}
 		Aquifer.FluidStatus sea = this.globalFluidPicker.get().computeFluid(x, y, z);
-		if (state == null) {
-			return Math.abs(y - sea.fluidLevel()) <= SEA_BARRIER_RANGE ? sea.at(y) : state;
-		}
 		// Above the flat sea level and deeper than the surface layer, the aquifer keeps its own water and dry caves.
 		return y >= sea.fluidLevel() - SEA_SURFACE_DEPTH && y < generator.generatorSettings().value().seaLevel() ? sea.at(y) : state;
 	}
