@@ -14,3 +14,6 @@ out/
 cubeworld github token.txt
 *token*.txt
 world_phase1_backup/
+
+# Local compile-only copies of other mods (not redistributed)
+libs/

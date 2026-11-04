@@ -9,6 +9,8 @@ import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 
 public final class SeamClient {
+	/** True when Sodium draws the terrain. Sodium replaces the vanilla section renderer that the seam renderer hooks. */
+	public static final boolean SODIUM = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium");
 	/** The seam layout of the level the client plays in, or null when the level has no seams. */
 	public static volatile @Nullable SeamLayout layout;
 	/**

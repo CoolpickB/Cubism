@@ -52,6 +52,9 @@ public abstract class LevelRendererMixin {
 	private ChunkSectionsToRender cubeworld$prepareSeams(
 		LevelRenderer self, Matrix4fc modelView, boolean respectTranslucentOrder, Operation<ChunkSectionsToRender> original
 	) {
+		if (SeamClient.SODIUM) {
+			return original.call(self, modelView, respectTranslucentOrder);
+		}
 		Vec3 camera = this.levelRenderState.cameraRenderState.pos;
 		SeamRenderer.hideOtherFacesFromVanilla(self, camera);
 		ChunkSectionsToRender vanilla = original.call(self, modelView, respectTranslucentOrder);
