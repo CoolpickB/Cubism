@@ -48,7 +48,9 @@ public abstract class AvatarRendererMixin {
 		}
 		AIR.put(state, new Pose(air, CubeFlight.flightWeight(partialTicks)));
 		float headRot = Mth.rotLerp(partialTicks, entity.yHeadRotO, entity.yHeadRot);
-		float[] head = CubeFlight.anglesIn(air, headRot, entity.getXRot(partialTicks));
+		// The look of this frame. The head yaw follows it a tick late, and close to straight down in a tilted frame the
+		// yaw turns far for a small turn of the look, so the late yaw with the pitch of this frame jerked the model.
+		float[] head = CubeFlight.anglesIn(air, player.getViewYRot(partialTicks), player.getViewXRot(partialTicks));
 		// The body keeps its yaw relative to the head. Its own direction turned into the air frame would point off the
 		// look, because the horizontal of the face is not the horizontal of the air frame. In a glide, vanilla turns the
 		// body toward the horizontal flight of the face frame, which next to an edge points away from the look, and

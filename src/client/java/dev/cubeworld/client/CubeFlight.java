@@ -51,9 +51,13 @@ public final class CubeFlight {
 		weightO = weight;
 		boolean flies = SeamLayout.of(player.level()) != null && SeamCrossing.flies(player);
 		weight = Mth.clamp(weight + (flies ? 1.0F : -1.0F) / EASE_TICKS, 0.0F, 1.0F);
+		float startYRot = player.getYRot();
+		float startXRot = player.getXRot();
 		if (flies || !player.isPassenger() && !player.isSpectator() || SeamCrossing.ridden(player.getRootVehicle()) == player) {
 			cross(player, flies);
 		}
+		float crossYRot = player.getYRot();
+		float crossXRot = player.getXRot();
 		carryLook(player);
 		traceTick(player);
 		traceLook(player);
@@ -72,7 +76,14 @@ public final class CubeFlight {
 	/** The cosine of the largest turn of the up at a crossing that the look turns with: 30 degrees. */
 	private static final float SEAM_CARRY_MIN_COS = 0.866F;
 
+	/** The roll of the screen about the look that eases out after a glide tilted the view frame, in radians. */
+	private static float glideRoll;
+	private static float glideRollO;
+	private static final float GLIDE_ROLL_KEEP = 0.9F;
+
 	private static void carryLook(LocalPlayer player) {
+		glideRollO = glideRoll;
+		glideRoll *= GLIDE_ROLL_KEEP;
 		SeamLayout layout = SeamLayout.of(player.level());
 		int blockX = Mth.floor(player.getX());
 		int face = layout != null && layout.inRegion(blockX, Mth.floor(player.getZ())) ? layout.faceIndexAt(blockX) : -1;
@@ -85,9 +96,20 @@ public final class CubeFlight {
 		if (inFrame || face < 0) {
 			return;
 		}
+		if (BarrelRoll.rolling(player)) {
+			// The roll of the mod holds the screen up. When it stops, the screen up starts again from the yaw.
+			hasScreenUp = false;
+			screenUpTilted = false;
+			glideRoll = 0.0F;
+			glideRollO = 0.0F;
+			return;
+		}
+		boolean tiltEnds = screenUpTilted && isIdentity(view);
 		syncScreenUp(player, view);
 		screenUpO.set(screenUp);
-		if (lastFace < 0) {
+		// The tilt ended and the yaw took the screen heading. The last step of the tilt is a fraction of a degree, but
+		// carried after that it moved a yaw close to straight down by 20 degrees, and the screen rolled with it.
+		if (lastFace < 0 || tiltEnds) {
 			return;
 		}
 		if (face != lastFace) {
@@ -98,16 +120,32 @@ public final class CubeFlight {
 		if (last.distanceSquared(up) < 1.0E-12F) {
 			return;
 		}
+		// A glide keeps its look where the player put it: carried, a fast glide over a small rounding turned the look 90
+		// degrees in a few ticks, down to the new face and into the ground there. The screen still levels with the tilt.
+		// The level comes over some ticks: at once, a fast glide over a small rounding rolled the screen with a jerk.
+		if (player.isFallFlying()) {
+			Vector3f before = new Vector3f(screenUp);
+			upright(screenUp, syncedLook, view);
+			glideRoll += (float) Math.atan2(new Vector3f(screenUp).cross(before).dot(syncedLook), screenUp.dot(before));
+			return;
+		}
 		if (face != lastFace && last.dot(up) < SEAM_CARRY_MIN_COS) {
 			// The view did not tilt with the ground, so the up turns by a whole face at the seam. The camera eases that
 			// turn (see CameraMixin), and the look keeps its direction. Carried, it turned 90 degrees in one tick.
 			return;
 		}
 		float yRot = player.getYRot();
+		float xRot = player.getXRot();
 		Quaternionf carry = new Quaternionf().rotationTo(last, up);
-		Vector3f carried = carry.transform(look(yRot, player.getXRot()));
+		Vector3f carried = carry.transform(look(yRot, xRot));
 		player.setYRot(yaw(carried, yRot));
 		player.setXRot(pitch(carried));
+		// The camera shows the carry from the last look over the tick, so the sway moves only at the end of the tick.
+		player.yBob += player.getYRot() - yRot;
+		player.xBob += player.getXRot() - xRot;
+		// The head and body keep their yaw relative to the look, or the model in third person turns a tick late.
+		player.yHeadRot += player.getYRot() - yRot;
+		player.yBodyRot += player.getYRot() - yRot;
 		carry.transform(screenUp);
 		syncedLook.set(look(player.getYRot(), player.getXRot()));
 		upright(screenUp, syncedLook, view);
@@ -137,6 +175,18 @@ public final class CubeFlight {
 		float change = yaw(heading(look(yRot, player.getXRot()), new Quaternionf()), yRot) - yRot;
 		player.setYRot(yRot + change);
 		player.yRotO += change;
+		swayHand(player, change, 0.0F);
+	}
+
+	/**
+	 * Moves the sway of the held item with a change of the look that the screen does not show. The sway trails the yaw
+	 * and pitch, so a yaw that jumps half a turn at a look close to straight down swung the hand across the screen.
+	 */
+	private static void swayHand(LocalPlayer player, float yawChange, float pitchChange) {
+		player.yBob += yawChange;
+		player.yBobO += yawChange;
+		player.xBob += pitchChange;
+		player.xBobO += pitchChange;
 	}
 
 	/** The up of the screen that vanilla shows for a look of yaw and pitch in the face frame. */
@@ -192,6 +242,11 @@ public final class CubeFlight {
 		return new Vector3f(screenUpO).lerp(screenUp, partialTicks);
 	}
 
+	/** The roll about the look that the camera adds to {@link #screenUp}, in radians. */
+	public static float glideRoll(float partialTicks) {
+		return Mth.lerp(partialTicks, glideRollO, glideRoll);
+	}
+
 	/** The up of the screen that vanilla shows, for the camera. */
 	public static Vector3f vanillaScreenUp(float yRot, float xRot) {
 		return faceScreenUp(yRot, xRot);
@@ -214,7 +269,7 @@ public final class CubeFlight {
 			return;
 		}
 		Quaternionf view = viewFrame(player, 1.0F);
-		if (!isIdentity(view)) {
+		if (!isIdentity(view) || BarrelRoll.rolling(player)) {
 			lookTicksLeft = 20;
 		} else if (lookTicksLeft > 0) {
 			lookTicksLeft--;
@@ -230,8 +285,8 @@ public final class CubeFlight {
 			int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
 			float[] angles = anglesIn(view, player.getYRot(), player.getXRot());
 			Vec3 delta = player.getDeltaMovement();
-			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b",
-				player.tickCount, face, player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), angles[0], angles[1], moveYaw(player),
+			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f roll=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b",
+				player.tickCount, face, player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), BarrelRoll.roll(player), angles[0], angles[1], moveYaw(player),
 				Math.toDegrees(view.angle()), delta.x, delta.y, delta.z, player.input.getMoveVector(), player.onGround()));
 		} catch (java.io.IOException e) {
 			lookLog = null;
@@ -313,7 +368,7 @@ public final class CubeFlight {
 	 */
 	public static Quaternionf viewFrame(Entity entity, float partialTicks) {
 		SeamLayout layout = SeamLayout.of(entity.level());
-		if (layout == null) {
+		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity)) {
 			return new Quaternionf();
 		}
 		// With the tilt off the view tilts only in flight, as the flight frame does, and on the ground it turns at the seam.
@@ -359,8 +414,11 @@ public final class CubeFlight {
 		turn.transform(screenUp);
 		turn.transform(screenUpO);
 		float newYRot = yaw(turned, player.getYRot());
+		float newXRot = pitch(turned);
+		// The hand sways by the turn the screen shows, as in vanilla, and not by the larger turn of the yaw near straight down.
+		swayHand(player, newYRot - player.getYRot() - yawChange, newXRot - player.getXRot() - change);
 		player.setYRot(newYRot);
-		player.setXRot(pitch(turned));
+		player.setXRot(newXRot);
 		player.yRotO = yaw(oldLook, newYRot);
 		player.xRotO = pitch(oldLook);
 		syncedLook.set(look(player.getYRot(), player.getXRot()));
@@ -529,6 +587,11 @@ public final class CubeFlight {
 			RECENT_TICKS.clear();
 			traceTicksLeft = 30;
 		}
+	}
+
+	/** The camera rotation that vanilla, with the roll of the Do a Barrel Roll mod, shows for a look in the face frame. */
+	public static Quaternionf rolledView(float yRot, float xRot, float roll) {
+		return new Quaternionf().rotationYXZ((float) Math.PI - yRot * Mth.DEG_TO_RAD, -xRot * Mth.DEG_TO_RAD, -roll * Mth.DEG_TO_RAD);
 	}
 
 	/**

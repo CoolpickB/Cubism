@@ -1,5 +1,6 @@
 package dev.cubeworld.client.mixin;
 
+import dev.cubeworld.client.BarrelRoll;
 import dev.cubeworld.client.CubeFlight;
 import dev.cubeworld.seam.SeamCrossing;
 import dev.cubeworld.debug.LoadTrace;
@@ -45,6 +46,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Camera.class)
 public abstract class CameraMixin {
 	@Unique private static final float SMOOTH_TICKS = 8.0F;
+	/** A crossing while the Do a Barrel Roll mod rolls the player leaves a larger turn of the screen, which eases slower so the bank does not snap back. */
+	@Unique private static final float ROLL_SMOOTH_TICKS = 20.0F;
+	@Unique private float cubeworld$smoothTicks = SMOOTH_TICKS;
 	/** A seam crossing moves the entity less than this far from where the face motion puts it, in blocks. */
 	@Unique private static final double SEAM_TURN_MAX_JUMP = 8.0;
 
@@ -104,6 +108,7 @@ public abstract class CameraMixin {
 			Quaternionf shown = this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(this.cubeworld$lastFrame));
 			this.cubeworld$correction.set(shown.mul(CubePlanetMath.getCameraRotation(frame).conjugate()));
 			this.cubeworld$flipTime = now;
+			this.cubeworld$smoothTicks = SMOOTH_TICKS;
 		}
 		this.cubeworld$lastFrame = frame;
 		this.cubeworld$turnAcrossSeam(partialTicks, now, airTurn);
@@ -124,11 +129,17 @@ public abstract class CameraMixin {
 	@Unique
 	private Quaternionf cubeworld$airTurn(float partialTicks) {
 		Quaternionf air = this.cubeworld$view;
-		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F) {
-			return new Quaternionf();
-		}
+		// The kept screen up also holds in the frames before the view tilts within the tick. A look close to straight
+		// down that the first tilt carried over it has a yaw half a turn from the last one, and the yaw of vanilla
+		// spun the screen between the two.
+		Quaternionf now = this.entity instanceof LocalPlayer ? CubeFlight.viewFrame(this.entity, 1.0F) : air;
+		float glideRoll = this.entity instanceof LocalPlayer ? CubeFlight.glideRoll(partialTicks) : 0.0F;
 		float yRot = this.entity.getViewYRot(partialTicks);
 		float xRot = this.entity.getViewXRot(partialTicks);
+		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F
+			&& Math.abs(now.x) < 1.0E-6F && Math.abs(now.y) < 1.0E-6F && Math.abs(now.z) < 1.0E-6F) {
+			return new Quaternionf().rotationAxis(glideRoll, CubeFlight.look(yRot, xRot));
+		}
 		if (this.entity instanceof LocalPlayer player) {
 			// The roll that turns the up of vanilla to the kept up of the screen, about the look.
 			Vector3f look = CubeFlight.look(yRot, xRot);
@@ -139,7 +150,7 @@ public abstract class CameraMixin {
 				return new Quaternionf();
 			}
 			float angle = (float) Math.atan2(new Vector3f(shown).cross(wanted).dot(look), shown.dot(wanted.normalize()));
-			return new Quaternionf().rotationAxis(angle, look);
+			return new Quaternionf().rotationAxis(angle + glideRoll, look);
 		}
 		float[] angles = CubeFlight.anglesIn(air, yRot, xRot);
 		return new Quaternionf(air).mul(cubeworld$view(angles[0], angles[1])).mul(cubeworld$view(yRot, xRot).conjugate());
@@ -178,12 +189,15 @@ public abstract class CameraMixin {
 				float xRot = this.entity.getViewXRot(partialTicks);
 				// The front view of vanilla looks back at the entity, and the last rotation holds that view.
 				boolean mirrored = Minecraft.getInstance().options.getCameraType().isMirrored();
-				Quaternionf view = new Quaternionf(airTurn).mul(mirrored ? cubeworld$view(yRot + 180.0F, -xRot) : cubeworld$view(yRot, xRot));
+				// The camera holds the roll of the Do a Barrel Roll mod, which the crossing keeps. The correction eases only the face turn.
+				float roll = BarrelRoll.rolling(this.entity) ? BarrelRoll.roll(this.entity) : 0.0F;
+				Quaternionf view = new Quaternionf(airTurn).mul(mirrored ? CubeFlight.rolledView(yRot + 180.0F, -xRot, roll) : CubeFlight.rolledView(yRot, xRot, roll));
 				this.cubeworld$correction.set(shown.mul(view.conjugate()));
 				// The eye stands along the air frame. The correction keeps it where the motion carries the last eye.
 				this.cubeworld$eyeCorrection.set(motion.mul(this.cubeworld$smoothed(this.cubeworld$eyeCorrection, now))
 					.mul(this.cubeworld$lastView).mul(new Quaternionf(this.cubeworld$view).conjugate()));
 				this.cubeworld$flipTime = now;
+				this.cubeworld$smoothTicks = roll != 0.0F ? ROLL_SMOOTH_TICKS : SMOOTH_TICKS;
 			}
 		}
 		this.cubeworld$lastFace = face;
@@ -197,7 +211,7 @@ public abstract class CameraMixin {
 
 	@Unique
 	private Quaternionf cubeworld$smoothed(Quaternionf correction, float now) {
-		float t = Mth.clamp((now - this.cubeworld$flipTime) / SMOOTH_TICKS, 0.0F, 1.0F);
+		float t = Mth.clamp((now - this.cubeworld$flipTime) / this.cubeworld$smoothTicks, 0.0F, 1.0F);
 		float eased = t * t * (3.0F - 2.0F * t);
 		return new Quaternionf(correction).slerp(new Quaternionf(), eased);
 	}
