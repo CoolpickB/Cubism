@@ -124,6 +124,20 @@ public final class CubeFlight {
 	/** The look that {@link #screenUp} belongs to. */
 	private static final Vector3f syncedLook = new Vector3f(0.0F, 0.0F, 1.0F);
 	private static boolean hasScreenUp;
+	/** Whether {@link #screenUp} was last synced in a tilted view frame. */
+	private static boolean screenUpTilted;
+
+	/**
+	 * Gives the yaw the heading of the screen when the view frame turns back to the face frame, where the screen up
+	 * comes from the yaw again. A look near straight down can be a little past it, and its yaw then points away from
+	 * the screen heading: the screen spun half a turn the tick the tilt ended, and the keys walked the other way.
+	 */
+	private static void yawToScreenHeading(LocalPlayer player) {
+		float yRot = player.getYRot();
+		float change = yaw(heading(look(yRot, player.getXRot()), new Quaternionf()), yRot) - yRot;
+		player.setYRot(yRot + change);
+		player.yRotO += change;
+	}
 
 	/** The up of the screen that vanilla shows for a look of yaw and pitch in the face frame. */
 	private static Vector3f faceScreenUp(float yRot, float xRot) {
@@ -135,8 +149,13 @@ public final class CubeFlight {
 	 * change of the look from elsewhere, such as vanilla or the server, carries it along by the shortest turn.
 	 */
 	private static void syncScreenUp(LocalPlayer player, Quaternionf view) {
+		boolean identity = isIdentity(view);
+		if (identity && hasScreenUp && screenUpTilted) {
+			yawToScreenHeading(player);
+		}
+		screenUpTilted = !identity;
 		Vector3f look = look(player.getYRot(), player.getXRot());
-		if (!hasScreenUp || isIdentity(view)) {
+		if (!hasScreenUp || identity) {
 			screenUp.set(faceScreenUp(player.getYRot(), player.getXRot()));
 			screenUpO.set(faceScreenUp(player.yRotO, player.xRotO));
 			hasScreenUp = true;
