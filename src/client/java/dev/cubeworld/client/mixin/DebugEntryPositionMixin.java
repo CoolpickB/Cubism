@@ -1,5 +1,6 @@
 package dev.cubeworld.client.mixin;
 
+import dev.cubeworld.client.ClientConfig;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
@@ -26,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * On the cube the position lines show cube coordinates: 0 0 0 is the block at the center of the cube, and X, Y and Z
- * are the same axes on every face. The storage position, which commands use, follows on its own line.
+ * are the same axes on every face. The storage position follows on its own line when the client option showStorageLine is on.
  */
 @Mixin(DebugEntryPosition.class)
 public abstract class DebugEntryPositionMixin {
@@ -62,8 +63,10 @@ public abstract class DebugEntryPositionMixin {
 		replaced.set(3, String.format(Locale.ROOT, "Facing: %s (Towards %s %s) (%.1f / %.1f)", cubeFacing,
 			cubeFacing.getAxisDirection() == Direction.AxisDirection.POSITIVE ? "positive" : "negative",
 			cubeFacing.getAxis().getName().toUpperCase(Locale.ROOT), Mth.wrapDegrees(camera.getYRot()), Mth.wrapDegrees(camera.getXRot())));
-		replaced.add(2, String.format(Locale.ROOT, "Storage: %.3f / %.5f / %.3f (block %d %d %d)",
-			camera.getX(), camera.getY(), camera.getZ(), feet.getX(), feet.getY(), feet.getZ()));
+		if (ClientConfig.showStorageLine) {
+			replaced.add(2, String.format(Locale.ROOT, "Storage: %.3f / %.5f / %.3f (block %d %d %d)",
+				camera.getX(), camera.getY(), camera.getZ(), feet.getX(), feet.getY(), feet.getZ()));
+		}
 		return replaced;
 	}
 

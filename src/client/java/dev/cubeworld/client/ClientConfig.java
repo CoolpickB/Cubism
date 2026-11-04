@@ -1,0 +1,42 @@
+package dev.cubeworld.client;
+
+import net.fabricmc.loader.api.FabricLoader;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Properties;
+
+/** The client options in {@code config/cubeworld-client.properties}. The file is written with the defaults on first start. */
+public final class ClientConfig {
+	private static final String SHOW_STORAGE_LINE = "showStorageLine";
+
+	/** Whether F3 shows the line with the storage position, which is only of use when debugging the mod. */
+	public static final boolean showStorageLine = load();
+
+	private ClientConfig() {
+	}
+
+	private static boolean load() {
+		Path file = FabricLoader.getInstance().getConfigDir().resolve("cubeworld-client.properties");
+		Properties properties = new Properties();
+		if (Files.exists(file)) {
+			try (Reader reader = Files.newBufferedReader(file)) {
+				properties.load(reader);
+			} catch (IOException e) {
+				return false;
+			}
+		}
+		if (properties.getProperty(SHOW_STORAGE_LINE) == null) {
+			properties.setProperty(SHOW_STORAGE_LINE, "false");
+			try (Writer writer = Files.newBufferedWriter(file)) {
+				properties.store(writer, "Cube World client options. showStorageLine: show the storage position on the F3 screen.");
+			} catch (IOException ignored) {
+				// The default applies when the file cannot be written.
+			}
+		}
+		return Boolean.parseBoolean(properties.getProperty(SHOW_STORAGE_LINE));
+	}
+}

@@ -25,6 +25,18 @@ public final class SeamPaths {
 		return flat == null ? target : flat;
 	}
 
+	/**
+	 * The heading {@code yaw} of something at {@code target}, as seen in the unfolded plane of the face of {@code from}.
+	 * Unfolding turns a face by a multiple of 90 degrees, so the heading turns with it.
+	 */
+	public static float aimYaw(SeamLayout layout, Vec3 from, Vec3 target, float yaw) {
+		double radians = Math.toRadians(yaw);
+		Vec3 ahead = target.add(-Math.sin(radians), 0.0, Math.cos(radians));
+		Vec3 flat = aim(layout, from, target);
+		Vec3 flatAhead = aim(layout, from, ahead);
+		return (float) Math.toDegrees(Math.atan2(-(flatAhead.x - flat.x), flatAhead.z - flat.z));
+	}
+
 	/** The distance over the surface, which is the length of the straight line in the unfolded plane, or -1 outside the regions. */
 	public static double distance(SeamLayout layout, Vec3 from, Vec3 target) {
 		Vec3 flat = unfold(layout, from, target);
