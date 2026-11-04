@@ -7,6 +7,7 @@ import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.material.FluidState;
@@ -36,7 +37,9 @@ public abstract class RenderSectionRegionMixin implements BlockAndTintGetter {
 	private void cubeworld$readBlockAcrossSeam(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
 		BlockPos owner = cubeworld$ownerPos(pos);
 		if (owner != null) {
-			cir.setReturnValue(this.level.getBlockState(owner));
+			BlockState state = this.level.getBlockState(owner);
+			// A partial shape would cull its neighbors by a turned shape. See LevelSliceMixin.
+			cir.setReturnValue(state.isSolidRender() || !state.getFluidState().isEmpty() ? state : Blocks.AIR.defaultBlockState());
 		}
 	}
 

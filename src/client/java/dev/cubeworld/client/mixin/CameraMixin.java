@@ -242,8 +242,14 @@ public abstract class CameraMixin {
 			Vector3f eye = eyeTurn.transform(new Vector3f(0.0F, eyeHeight - halfHeight, 0.0F));
 			Vec3 position = this.entity.getPosition(partialTicks);
 			Vec3 vanillaEye = position.add(0.0, eyeHeight, 0.0);
-			Vec3 clear = SeamCrossing.clearEye(this.entity, vanillaEye, position.add(eye.x, halfHeight + eye.y, eye.z));
+			Vec3 wantedEye = position.add(eye.x, halfHeight + eye.y, eye.z);
 			float now = this.entity.tickCount + partialTicks;
+			if (this.entity.isSpectator()) {
+				this.cubeworld$eyeReach = Double.MAX_VALUE;
+				this.setPosition(wantedEye.x, wantedEye.y, wantedEye.z);
+				return;
+			}
+			Vec3 clear = SeamCrossing.clearEye(this.entity, vanillaEye, wantedEye);
 			double reach = clear.distanceTo(vanillaEye);
 			double eased = this.cubeworld$eyeReach + EYE_EASE_OUT * Math.max(0.0F, now - this.cubeworld$eyeReachTime);
 			this.cubeworld$eyeReachTime = now;
