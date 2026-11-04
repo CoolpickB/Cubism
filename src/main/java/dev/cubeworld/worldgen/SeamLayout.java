@@ -284,53 +284,71 @@ public final class SeamLayout {
 	}
 
 	/**
-	 * The direction of gravity in the air at a continuous storage position, or null where it is straight down. It
-	 * points to the nearest point of the core box, the cube that the rounded edges are rounded about. Above the flat
-	 * part of a face that is straight down. Over an edge it turns about the edge, and over a corner it points to the
-	 * corner, so the field is continuous across the diagonals and a jump off an edge arcs onto the next face.
+	 * The direction of gravity in the air at a continuous storage position, or null where it is straight down. It is
+	 * the inward normal of the level through the position, one of a nested family of rounded cubes, so the field is
+	 * continuous everywhere, also across the diagonals, and a jump off an edge arcs onto the next face. On a seam it
+	 * is half way between the two faces, over a corner it points to the corner.
 	 *
-	 * <p>Inside the core box the pull turns toward the nearest face of the box, by the inverse square of the distance to
-	 * each face. On a seam between two wedges it is half way between the two faces, at the top of the core it is
-	 * straight down, and deep in a wedge away from the seams it is close to straight down. A fixed band around the
-	 * seams would not do: at the top of the core the field must be straight down, also next to a seam, so the turn
-	 * must narrow toward the edges of the core box, as the turn over an edge does above them.
+	 * <p>The surface is the level with the edge rounding. Above it each level lies a fixed distance out, so the
+	 * rounding grows with the height and far out the pull is close to round. Below it each level is the surface
+	 * scaled toward the center, so the rounding shrinks with the depth in proportion and is gone only at the center.
+	 * The turn over an edge is then as wide as the rounding at the surface and narrows smoothly with depth, at any
+	 * size of cube. A fixed distance in for the levels below the surface too would leave no rounding at all one
+	 * rounding deep, where the pull flipped from one face to the next at once.
 	 */
 	public @Nullable Vec3 airGravity(double x, double y, double z) {
 		int bx = Mth.floor(x);
 		if (!this.inRegion(bx, Mth.floor(z))) {
 			return null;
 		}
-		double core = this.radius - CubePlanetMath.edgeRounding();
 		double cx = x - this.offsetX(this.faceIndexAt(bx)) - 0.5;
 		double cy = y - this.centerY - 0.5;
 		double cz = z - 0.5;
-		if (Math.abs(cx) <= core && Math.abs(cz) <= core) {
-			return Math.abs(cy) < core ? coreGravity(cx, cy, cz, core) : null;
-		}
+		double core = levelCore(Math.abs(cx), Math.abs(cy), Math.abs(cz), this.radius, CubePlanetMath.edgeRounding());
 		double dx = cx - Math.clamp(cx, -core, core);
 		double dy = cy - Math.clamp(cy, -core, core);
 		double dz = cz - Math.clamp(cz, -core, core);
-		double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-		return length < 1.0E-6 ? null : new Vec3(-dx / length, -dy / length, -dz / length);
-	}
-
-	private static @Nullable Vec3 coreGravity(double x, double y, double z, double core) {
-		double gx = corePull(x, core);
-		double gy = corePull(y, core);
-		double gz = corePull(z, core);
 		// Close to straight down is straight down, which saves the callers the turn on most of a wedge.
-		if (gy > 0.0 && gx * gx + gz * gz < 1.0E-6 * gy * gy) {
+		if (dy > 0.0 && dx * dx + dz * dz < 1.0E-6 * dy * dy) {
 			return null;
 		}
-		double length = Math.sqrt(gx * gx + gy * gy + gz * gz);
-		return length < 1.0E-12 ? null : new Vec3(-gx / length, -gy / length, -gz / length);
+		double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		return length < 1.0E-9 ? null : new Vec3(-dx / length, -dy / length, -dz / length);
 	}
 
-	/** The pull along one axis toward the two faces of the core box on it, which cancel at the center. */
-	private static double corePull(double p, double core) {
-		double toPositive = core - p;
-		double toNegative = core + p;
-		return 1.0 / (toPositive * toPositive) - 1.0 / (toNegative * toNegative);
+	/**
+	 * The half size of the box that the level through a point of the positive octant is rounded about. Without
+	 * rounding the levels are plain cubes, and a box a hair smaller gives the direction of the largest axis.
+	 */
+	private static double levelCore(double ax, double ay, double az, double radius, double rounding) {
+		if (rounding <= 0.0) {
+			return Math.max(ax, Math.max(ay, az)) - 1.0E-6;
+		}
+		double surfaceCore = radius - rounding;
+		if (boxDistance(ax, ay, az, surfaceCore) >= rounding) {
+			return surfaceCore;
+		}
+		// The level of scale s has the core (1 - k) s and the rounding k s. The distance to its core less its rounding
+		// falls as s grows, so halving finds the level through the point.
+		double k = rounding / radius;
+		double low = 0.0;
+		double high = radius;
+		for (int i = 0; i < 48; i++) {
+			double mid = (low + high) * 0.5;
+			if (boxDistance(ax, ay, az, (1.0 - k) * mid) > k * mid) {
+				low = mid;
+			} else {
+				high = mid;
+			}
+		}
+		return (1.0 - k) * (low + high) * 0.5;
+	}
+
+	private static double boxDistance(double ax, double ay, double az, double half) {
+		double dx = Math.max(ax - half, 0.0);
+		double dy = Math.max(ay - half, 0.0);
+		double dz = Math.max(az - half, 0.0);
+		return Math.sqrt(dx * dx + dy * dy + dz * dz);
 	}
 
 	public static int indexOf(Direction face) {

@@ -1,6 +1,7 @@
 package dev.cubeworld.client.mixin;
 
 import dev.cubeworld.client.CubeFlight;
+import dev.cubeworld.seam.SeamCrossing;
 import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.gravity.GravityEntityAccess;
@@ -76,6 +77,14 @@ public abstract class CameraMixin {
 	/** The frame of the view of {@link CubeFlight#viewFrame} in this frame and the last one. The eye stands along it. */
 	@Unique private Quaternionf cubeworld$view = new Quaternionf();
 	@Unique private Quaternionf cubeworld$lastView = new Quaternionf();
+	/**
+	 * How far the shown eye stands from the vanilla eye, in blocks. It moves in at once when a wall comes near and out
+	 * at {@link #EYE_EASE_OUT} blocks per tick. A broken block loses its collision at once, but its chunk mesh is built
+	 * again a few frames later, so an eye that jumped into the gap would look through the old faces.
+	 */
+	@Unique private double cubeworld$eyeReach = Double.MAX_VALUE;
+	@Unique private float cubeworld$eyeReachTime;
+	@Unique private static final double EYE_EASE_OUT = 0.15;
 
 	@Inject(method = "alignWithEntity", at = @At("HEAD"))
 	private void cubeworld$updateFrameRotation(float partialTicks, CallbackInfo ci) {
@@ -215,9 +224,26 @@ public abstract class CameraMixin {
 		Quaternionf eyeTurn = this.cubeworld$smoothed(this.cubeworld$eyeCorrection, this.entity.tickCount + partialTicks).mul(this.cubeworld$view);
 		if (Math.abs(eyeTurn.x) > 1.0E-6F || Math.abs(eyeTurn.y) > 1.0E-6F || Math.abs(eyeTurn.z) > 1.0E-6F) {
 			float halfHeight = this.entity.getBbHeight() / 2.0F;
-			Vector3f eye = eyeTurn.transform(new Vector3f(0.0F, Mth.lerp(partialTicks, this.eyeHeightOld, this.eyeHeight) - halfHeight, 0.0F));
+			float eyeHeight = Mth.lerp(partialTicks, this.eyeHeightOld, this.eyeHeight);
+			Vector3f eye = eyeTurn.transform(new Vector3f(0.0F, eyeHeight - halfHeight, 0.0F));
 			Vec3 position = this.entity.getPosition(partialTicks);
-			this.setPosition(position.x + eye.x, position.y + halfHeight + eye.y, position.z + eye.z);
+			Vec3 vanillaEye = position.add(0.0, eyeHeight, 0.0);
+			Vec3 clear = SeamCrossing.clearEye(this.entity, vanillaEye, position.add(eye.x, halfHeight + eye.y, eye.z));
+			float now = this.entity.tickCount + partialTicks;
+			double reach = clear.distanceTo(vanillaEye);
+			double eased = this.cubeworld$eyeReach + EYE_EASE_OUT * Math.max(0.0F, now - this.cubeworld$eyeReachTime);
+			this.cubeworld$eyeReachTime = now;
+			if (eased < reach) {
+				clear = vanillaEye.add(clear.subtract(vanillaEye).scale(eased / reach));
+				reach = eased;
+			}
+			this.cubeworld$eyeReach = reach;
+			this.setPosition(clear.x, clear.y, clear.z);
+			Vec3 wanted = position.add(eye.x, halfHeight + eye.y, eye.z);
+			CubeFlight.traceLine(String.format(java.util.Locale.ROOT,
+				"  frame=%.3f wanted=%.3f %.3f %.3f shown=%.3f %.3f %.3f reach=%.3f of %.3f fwd=%.3f %.3f %.3f up=%.3f %.3f %.3f",
+				now, wanted.x, wanted.y, wanted.z, clear.x, clear.y, clear.z, reach, wanted.distanceTo(vanillaEye),
+				this.forwards.x, this.forwards.y, this.forwards.z, this.up.x, this.up.y, this.up.z));
 			return;
 		}
 		Quaternionf eyeFrame = this.cubeworld$eyeFrame;

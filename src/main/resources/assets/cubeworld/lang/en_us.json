@@ -96,5 +96,7 @@
   "cubeworld.customize.structure.villages": "Village",
   "cubeworld.customize.structure.woodland_mansions": "Woodland Mansion",
   "cubeworld.customize.history.back": "Previous seed",
-  "cubeworld.customize.history.forward": "Next seed"
+  "cubeworld.customize.history.forward": "Next seed",
+  "options.cubeworld.edgeCameraTilt": "Edge Camera Tilt",
+  "options.cubeworld.edgeCameraTilt.tooltip": "When on, the camera turns with the ground over a rounded cube edge. Turn it off if the tilt makes you feel sick. When off, the camera stays level with the face and turns quickly when you cross onto the next face. Flight still tilts."
 }

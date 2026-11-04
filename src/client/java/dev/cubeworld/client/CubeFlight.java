@@ -68,6 +68,9 @@ public final class CubeFlight {
 	 * tilted under it went over straight down of the frame, where the yaw in the frame flips, so the keys walked the
 	 * other way and the camera rolled over, back and forth each tick.
 	 */
+	/** The cosine of the largest turn of the up at a crossing that the look turns with: 30 degrees. */
+	private static final float SEAM_CARRY_MIN_COS = 0.866F;
+
 	private static void carryLook(LocalPlayer player) {
 		SeamLayout layout = SeamLayout.of(player.level());
 		int blockX = Mth.floor(player.getX());
@@ -92,6 +95,11 @@ public final class CubeFlight {
 			last.set(m[0] * last.x + m[1] * last.y + m[2] * last.z, m[3] * last.x + m[4] * last.y + m[5] * last.z, m[6] * last.x + m[7] * last.y + m[8] * last.z);
 		}
 		if (last.distanceSquared(up) < 1.0E-12F) {
+			return;
+		}
+		if (face != lastFace && last.dot(up) < SEAM_CARRY_MIN_COS) {
+			// The view did not tilt with the ground, so the up turns by a whole face at the seam. The camera eases that
+			// turn (see CameraMixin), and the look keeps its direction. Carried, it turned 90 degrees in one tick.
 			return;
 		}
 		float yRot = player.getYRot();
@@ -173,6 +181,14 @@ public final class CubeFlight {
 	private static int lookTicksLeft;
 
 	/** Writes one line per tick while the view frame is tilted and for 20 ticks after: for finding where the look and the keys disagree. */
+	/** Writes a line to the look log when {@link ClientConfig#traceLook} is on. */
+	public static void traceLine(String line) {
+		if (!ClientConfig.traceLook || lookLog == null || lookTicksLeft <= 0) {
+			return;
+		}
+		lookLog.println(line);
+	}
+
 	private static void traceLook(LocalPlayer player) {
 		if (!ClientConfig.traceLook) {
 			return;
@@ -280,7 +296,9 @@ public final class CubeFlight {
 		if (layout == null) {
 			return new Quaternionf();
 		}
-		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), 1.0F);
+		// With the tilt off the view tilts only in flight, as the flight frame does, and on the ground it turns at the seam.
+		float weight = ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer) ? 1.0F : flightWeight(partialTicks);
+		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), weight);
 	}
 
 	/** How far the body is in flight, from 0 on the ground to 1 in flight. */
@@ -415,7 +433,7 @@ public final class CubeFlight {
 		}
 		float halfHeight = entity.getBbHeight() / 2.0F;
 		Vector3f eye = frame.transform(new Vector3f(0.0F, entity.getEyeHeight() - halfHeight, 0.0F));
-		return entity.getPosition(partialTicks).add(eye.x, halfHeight + eye.y, eye.z);
+		return SeamCrossing.clearEye(entity, vanillaEye, entity.getPosition(partialTicks).add(eye.x, halfHeight + eye.y, eye.z));
 	}
 
 	/** A direction in the face frame, turned into the air frame. */

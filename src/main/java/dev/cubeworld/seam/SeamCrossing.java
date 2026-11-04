@@ -1,5 +1,6 @@
 package dev.cubeworld.seam;
 
+import net.minecraft.world.phys.shapes.VoxelShape;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
 import net.minecraft.core.SectionPos;
@@ -146,7 +147,79 @@ public final class SeamCrossing {
 		}
 		Vec3 center = player.position().add(0.0, player.getBbHeight() / 2.0, 0.0);
 		Vec3 gravity = layout.airGravity(center.x, center.y, center.z);
-		return gravity == null ? vanillaEye : center.subtract(gravity.scale(player.getEyeHeight() - player.getBbHeight() / 2.0));
+		return gravity == null ? vanillaEye : clearEye(player, vanillaEye, center.subtract(gravity.scale(player.getEyeHeight() - player.getBbHeight() / 2.0)));
+	}
+
+	/**
+	 * Room kept between the eye and a block, so that the corners of the near plane of the view (0.05 ahead) do not
+	 * reach into it either. With a field of view of 110 (Quake Pro) and the sprint widening on a wide screen they lie
+	 * about 0.21 from the eye. The vanilla eye keeps 0.3 to the side of the body box.
+	 */
+	private static final double EYE_MARGIN = 0.22;
+
+	/**
+	 * The eye along the up of the air frame, held out of blocks. That eye leaves the upright box of the body over an
+	 * edge, by up to 0.2 blocks at a seam, and against a wall it showed and picked through the wall. It goes back on the
+	 * way to the vanilla eye, which stays inside the box, to the last point where it is clear. The first step is
+	 * found walking, so that a thin block on the way still stops it.
+	 */
+	public static Vec3 clearEye(Entity entity, Vec3 vanillaEye, Vec3 wanted) {
+		if (vanillaEye.distanceToSqr(wanted) < 1.0E-8) {
+			return wanted;
+		}
+		Level level = entity.level();
+		// A block within the margin of the vanilla eye, such as a ceiling at the top of a jump, only stops the eye where
+		// it comes closer than the vanilla eye is. Vanilla shows it well there, and with the full margin the eye snapped
+		// back to the vanilla eye on every jump.
+		List<AABB> near = boxes(level, entity, vanillaEye);
+		int steps = 8;
+		for (int i = 1; i <= steps; i++) {
+			if (!eyeClear(level, entity, vanillaEye, vanillaEye.lerp(wanted, (double) i / steps), near)) {
+				double low = (i - 1.0) / steps;
+				double high = (double) i / steps;
+				for (int j = 0; j < 4; j++) {
+					double mid = (low + high) * 0.5;
+					if (eyeClear(level, entity, vanillaEye, vanillaEye.lerp(wanted, mid), near)) {
+						low = mid;
+					} else {
+						high = mid;
+					}
+				}
+				return vanillaEye.lerp(wanted, low);
+			}
+		}
+		return wanted;
+	}
+
+	private static boolean eyeClear(Level level, Entity entity, Vec3 vanillaEye, Vec3 eye, List<AABB> near) {
+		for (AABB box : boxes(level, entity, eye)) {
+			double allowed = near.contains(box) ? gap(vanillaEye, box) : EYE_MARGIN;
+			if (gap(eye, box) < allowed - 1.0E-6) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The distance from a point to a box along the axis where it is largest, as the margin cube measures it. */
+	private static double gap(Vec3 p, AABB box) {
+		double x = Math.max(Math.max(box.minX - p.x, p.x - box.maxX), 0.0);
+		double y = Math.max(Math.max(box.minY - p.y, p.y - box.maxY), 0.0);
+		double z = Math.max(Math.max(box.minZ - p.z, p.z - box.maxZ), 0.0);
+		return Math.max(x, Math.max(y, z));
+	}
+
+	private static List<AABB> boxes(Level level, Entity entity, Vec3 eye) {
+		AABB margin = AABB.ofSize(eye, 2.0 * EYE_MARGIN, 2.0 * EYE_MARGIN, 2.0 * EYE_MARGIN);
+		List<AABB> boxes = new ArrayList<>();
+		for (VoxelShape shape : level.getBlockCollisions(entity, margin)) {
+			for (AABB box : shape.toAabbs()) {
+				if (box.intersects(margin)) {
+					boxes.add(box);
+				}
+			}
+		}
+		return boxes;
 	}
 
 	/** Where a crossing to another face puts an entity: its position, velocity and look in the region of that face. */
