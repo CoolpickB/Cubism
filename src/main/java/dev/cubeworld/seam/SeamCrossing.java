@@ -167,12 +167,21 @@ public final class SeamCrossing {
 		Vec3 away = rotate(m, new Vec3(0.0, -1.0, 0.0));
 		float yRot;
 		float xRot;
-		if (entity instanceof Player) {
+		if (entity instanceof Player player) {
 			// The camera keeps the exact turned look. A look along the edge normal turns vertical, where it gives no
-			// yaw, so the away direction gives it.
-			Vec3 heading = look.x * look.x + look.z * look.z < 1.0E-6 ? away : look;
-			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
-			xRot = (float) Math.toDegrees(Math.asin(Mth.clamp(-look.y, -1.0, 1.0)));
+			// yaw, so the facing gives it: the part of the facing toward the edge, which turns up or down, points away
+			// from the edge or back toward it with the sign of the turned look. S then still walks on over the edge.
+			Vec3 facing = rotate(m, Vec3.directionFromRotation(0.0F, entity.getYRot()));
+			Vec3 rolled = new Vec3(facing.x + facing.y * away.x, 0.0, facing.z + facing.y * away.z);
+			float rolledYaw = (float) Math.toDegrees(Math.atan2(-rolled.x, rolled.z));
+			float exactYaw = look.x * look.x + look.z * look.z < 1.0E-6 ? rolledYaw : (float) Math.toDegrees(Math.atan2(-look.x, look.z));
+			float exactPitch = (float) Math.toDegrees(Math.asin(Mth.clamp(-look.y, -1.0, 1.0)));
+			// A steep look stays on the ground: it keeps its pitch and follows the facing over the edge, instead of
+			// turning to the side with the face. Else a player who looks down and walks backward over an edge ends
+			// up looking along the new face, with the view upside down or turned about.
+			float steep = SeamCrossing.flies(player) ? 0.0F : groundWeight(Math.abs(entity.getXRot()));
+			yRot = exactYaw + steep * Mth.wrapDegrees(rolledYaw - exactYaw);
+			xRot = exactPitch + steep * (entity.getXRot() - exactPitch);
 		} else if (entity instanceof Projectile && entity.getDeltaMovement().lengthSqr() > 1.0E-7) {
 			// A projectile points along its flight, with its own sign convention, and eases to that direction each
 			// tick. Any other rotation here shows as a swing after the crossing.
@@ -188,6 +197,12 @@ public final class SeamCrossing {
 			xRot = entity.getXRot();
 		}
 		return new Turned(center.subtract(0.0, halfHeight, 0.0), rotate(m, entity.getDeltaMovement()), yRot, xRot);
+	}
+
+	/** How much a look of this pitch, in degrees, keeps to the ground over an edge: 0 below 50 and 1 above 75. */
+	private static float groundWeight(float pitch) {
+		float t = Mth.clamp((pitch - 50.0F) / 25.0F, 0.0F, 1.0F);
+		return t * t * (3.0F - 2.0F * t);
 	}
 
 	private static Vec3 rotate(int[] m, Vec3 v) {

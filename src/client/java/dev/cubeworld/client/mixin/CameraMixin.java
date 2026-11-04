@@ -121,7 +121,13 @@ public abstract class CameraMixin {
 		float yRot = this.entity.getViewYRot(partialTicks);
 		float xRot = this.entity.getViewXRot(partialTicks);
 		float[] angles = CubeFlight.anglesIn(air, yRot, xRot);
-		return new Quaternionf(air).mul(cubeworld$view(angles[0], angles[1])).mul(cubeworld$view(yRot, xRot).conjugate());
+		Quaternionf roll = new Quaternionf(air).mul(cubeworld$view(angles[0], angles[1])).mul(cubeworld$view(yRot, xRot).conjugate());
+		// A look close to straight down or up has no upright roll in the air frame: its yaw there is the direction in which
+		// the frame tilts, which is the opposite of the facing when the player walks backward. On the ground the roll fades
+		// out with the pitch, so the screen keeps the facing as up. In flight the roll is the whole point of the frame.
+		float steep = Mth.clamp((Math.abs(xRot) - 50.0F) / 25.0F, 0.0F, 1.0F);
+		float ground = (1.0F - CubeFlight.flightWeight(partialTicks)) * steep * steep * (3.0F - 2.0F * steep);
+		return ground <= 0.0F ? roll : new Quaternionf().slerp(roll, 1.0F - ground);
 	}
 
 	/**
