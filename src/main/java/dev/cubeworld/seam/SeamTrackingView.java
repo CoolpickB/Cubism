@@ -15,13 +15,15 @@ import java.util.function.Consumer;
 
 /**
  * The vanilla square of chunks around a player, plus the chunks of neighbor faces that the player sees across seams.
+ * {@code nearSeamChunks} are the seam chunks closest to the player. They load without waiting for the square, as the
+ * ground across a seam is next to the player and the rest of the seam chunks are far off.
  * {@code simulatedSeamChunks} are the seam chunks within simulation distance, where entities and blocks tick.
  * The square counts only the chunks of the face region of the player, given in chunk coordinates with exclusive
  * maximums. A large view distance makes the square reach into the regions next to it in storage, which can be the
  * opposite face, and the chunks there are not across a seam from the player.
  */
 public record SeamTrackingView(
-	ChunkTrackingView.Positioned base, int regionMinX, int regionMaxX, int regionMinZ, int regionMaxZ, LongSet seamChunks, LongSet simulatedSeamChunks
+	ChunkTrackingView.Positioned base, int regionMinX, int regionMaxX, int regionMinZ, int regionMaxZ, LongSet seamChunks, LongSet nearSeamChunks, LongSet simulatedSeamChunks
 ) implements ChunkTrackingView {
 	public static final int REFRESH_TICKS = 20;
 
@@ -30,6 +32,9 @@ public record SeamTrackingView(
 	 * level. Entities tick only at the entity-ticking level, which needs radius 2.
 	 */
 	public void addTickets(ServerLevel level) {
+		for (long chunk : this.nearSeamChunks) {
+			level.getChunkSource().addTicketWithRadius(CubeWorldMod.SEAM_TICKET, ChunkPos.unpack(chunk), 1);
+		}
 		if (!this.baseLoaded(level)) {
 			return;
 		}
@@ -46,6 +51,8 @@ public record SeamTrackingView(
 	 * of the square. After a join, the seam chunks that were not generated yet held the tasks of the square back for
 	 * 15 s, and the player saw nothing of the ground around them. The seam tickets wait until the square is loaded.
 	 * A tenth of the square may stay behind, so that a chunk that does not load does not hold the seam chunks back.
+ * At a large view distance the square may never reach that share while the player moves, so the near seam chunks
+ * do not wait.
 	 */
 	private boolean baseLoaded(ServerLevel level) {
 		Long2ObjectLinkedOpenHashMap<ChunkHolder> visible = ((ChunkMapAccessor) level.getChunkSource().chunkMap).cubeworld$visibleChunkMap();

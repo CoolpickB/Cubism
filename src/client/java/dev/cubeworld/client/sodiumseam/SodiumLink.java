@@ -14,4 +14,9 @@ public final class SodiumLink {
 	public static void blockData(ClientLevel level, int chunkX, int chunkZ) {
 		ChunkTrackerHolder.get(level).onChunkStatusAdded(chunkX, chunkZ, 1);
 	}
+
+	/** True when Sodium draws the chunk: it and its eight neighbors have block data and light data. */
+	public static boolean isReady(ClientLevel level, int chunkX, int chunkZ) {
+		return ChunkTrackerHolder.get(level).getReadyChunks().contains(net.minecraft.world.level.ChunkPos.pack(chunkX, chunkZ));
+	}
 }

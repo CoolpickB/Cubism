@@ -98,6 +98,9 @@ public final class SeamRenderer {
 	public static final Map<CompiledSectionMesh, Long> COMPILED_FOR = Collections.synchronizedMap(new WeakHashMap<>());
 
 	public static void onChunkLoaded(ChunkPos pos) {
+		if (SeamClient.SODIUM) {
+			return;
+		}
 		chunks.add(pos.pack());
 		pendingChunks.add(pos.pack());
 		// The border faces of a neighbor chunk were built against a missing chunk.
@@ -228,6 +231,9 @@ public final class SeamRenderer {
 
 	public static void onChunkUnloaded(ChunkPos pos) {
 		LoadTraceClient.count("seamChunk.unloaded");
+		if (SeamClient.SODIUM) {
+			return;
+		}
 		chunks.remove(pos.pack());
 		pendingChunks.remove(pos.pack());
 		for (long node : sectionNodes(pos.x(), pos.z())) {
@@ -257,6 +263,9 @@ public final class SeamRenderer {
 
 	/** The chunk is now in the vanilla view area. Its seam meshes show there until vanilla compiles its own. */
 	public static void onChunkMovedToVanilla(ChunkPos pos) {
+		if (SeamClient.SODIUM) {
+			return;
+		}
 		chunks.remove(pos.pack());
 		pendingChunks.remove(pos.pack());
 		ViewArea viewArea = Minecraft.getInstance().levelRenderer.viewArea();
@@ -287,6 +296,9 @@ public final class SeamRenderer {
 	 * their position across a crossing, so their meshes stay for the seam renderer here, not in {@link #onVanillaSectionMoving}.
 	 */
 	public static void onChunkMovedToSeam(ChunkPos pos) {
+		if (SeamClient.SODIUM) {
+			return;
+		}
 		ViewArea viewArea = Minecraft.getInstance().levelRenderer.viewArea();
 		if (viewArea == null) {
 			return;
@@ -399,6 +411,9 @@ public final class SeamRenderer {
 	}
 
 	public static void markDirty(int sectionX, int sectionY, int sectionZ, boolean urgent) {
+		if (SeamClient.SODIUM) {
+			return;
+		}
 		long node = SectionPos.asLong(sectionX, sectionY, sectionZ);
 		if (sections.containsKey(node)) {
 			// While chunks load, light updates keep hundreds of sections in the queue. A changed block would wait

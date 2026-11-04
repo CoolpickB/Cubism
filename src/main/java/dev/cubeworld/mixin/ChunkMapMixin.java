@@ -32,6 +32,9 @@ import java.util.List;
 /** Sends a player the neighbor-face chunks that it can see across seams, together with the vanilla square. */
 @Mixin(ChunkMap.class)
 public abstract class ChunkMapMixin {
+	private static final int SEAM_HOLD_CHUNKS = 4;
+	private static final int SEAM_NEAR_CHUNKS = 8;
+
 	@Shadow @Final ServerLevel level;
 	@Shadow private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap;
 
@@ -72,6 +75,19 @@ public abstract class ChunkMapMixin {
 		int viewDistance = this.getPlayerViewDistance(player);
 		LongOpenHashSet seamChunks = new LongOpenHashSet();
 		layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), viewDistance, seamChunks);
+		if (player.getChunkTrackingView() instanceof SeamTrackingView previous) {
+			// A chunk that just left the distance stays for a few chunks of walking, so that moving along an edge does
+			// not drop and send the chunks at the border of the distance again and again.
+			LongOpenHashSet loose = new LongOpenHashSet();
+			layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), viewDistance + SEAM_HOLD_CHUNKS, loose);
+			for (long chunk : previous.seamChunks()) {
+				if (loose.contains(chunk)) {
+					seamChunks.add(chunk);
+				}
+			}
+		}
+		LongOpenHashSet nearSeamChunks = new LongOpenHashSet();
+		layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), Math.min(viewDistance, SEAM_NEAR_CHUNKS), nearSeamChunks);
 		LongOpenHashSet simulatedSeamChunks = new LongOpenHashSet();
 		int simulationDistance = Math.min(viewDistance, this.level.getServer().getPlayerList().getSimulationDistance());
 		layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), simulationDistance, simulatedSeamChunks);
@@ -80,7 +96,7 @@ public abstract class ChunkMapMixin {
 		SeamTrackingView next = new SeamTrackingView(
 			new ChunkTrackingView.Positioned(player.chunkPosition(), viewDistance),
 			regionMinX, regionMinX + regionChunks, -regionChunks / 2, regionChunks / 2,
-			seamChunks, simulatedSeamChunks
+			seamChunks, nearSeamChunks, simulatedSeamChunks
 		);
 		if (!next.equals(player.getChunkTrackingView())) {
 			next.addTickets(this.level);

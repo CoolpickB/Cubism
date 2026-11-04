@@ -81,5 +81,36 @@ public abstract class DebugEntryPositionMixin {
 		}
 		int face = SeamInteraction.regionFace(layout, camera.getX(), camera.getZ());
 		displayer.addToGroup(DebugEntryPosition.GROUP, "Cube face: " + (face < 0 ? "none" : SeamLayout.FACES[face].name()));
+		if (ClientConfig.showStorageLine && level instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel) {
+			displayer.addToGroup(DebugEntryPosition.GROUP, cubeworld$holes(layout, clientLevel, camera));
+		}
+	}
+
+	/** The chunks within 10 of the camera that the client lacks, and with Sodium those it has but does not draw. */
+	@org.spongepowered.asm.mixin.Unique
+	private static String cubeworld$holes(SeamLayout layout, net.minecraft.client.multiplayer.ClientLevel level, Entity camera) {
+		int cx = camera.getBlockX() >> 4;
+		int cz = camera.getBlockZ() >> 4;
+		StringBuilder missing = new StringBuilder();
+		StringBuilder waiting = new StringBuilder();
+		int missingCount = 0;
+		int waitingCount = 0;
+		for (int x = cx - 10; x <= cx + 10; x++) {
+			for (int z = cz - 10; z <= cz + 10; z++) {
+				if (!layout.inRegion(x * 16 + 8, z * 16 + 8)) {
+					continue;
+				}
+				if (level.getChunkSource().getChunk(x, z, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false) == null) {
+					if (missingCount++ < 4) {
+						missing.append(' ').append(x).append(',').append(z);
+					}
+				} else if (SeamClient.SODIUM && !dev.cubeworld.client.sodiumseam.SodiumLink.isReady(level, x, z)) {
+					if (waitingCount++ < 4) {
+						waiting.append(' ').append(x).append(',').append(z);
+					}
+				}
+			}
+		}
+		return "Chunks missing: " + missingCount + missing + " | not drawn: " + waitingCount + waiting;
 	}
 }
