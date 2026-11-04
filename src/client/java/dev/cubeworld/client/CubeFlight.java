@@ -150,7 +150,8 @@ public final class CubeFlight {
 	 */
 	public static boolean turn(LocalPlayer player, double xo, double yo) {
 		Quaternionf frame = viewFrame(player, 1.0F);
-		if (isIdentity(frame)) {
+		// A steep look on the ground turns about the up of the face, like the roll of the camera (see CameraMixin).
+		if (isIdentity(frame) || !inFrame && !SeamCrossing.flies(player) && SeamCrossing.groundWeight(Math.abs(player.getXRot())) >= 1.0F) {
 			return false;
 		}
 		// The mouse handler turns the player every frame, also by nothing. The look through the frame and back changes
@@ -184,7 +185,12 @@ public final class CubeFlight {
 			return player.getYRot();
 		}
 		float[] angles = anglesIn(frame, player.getYRot(), player.getXRot());
-		return yaw(frame.transform(look(angles[0], 0.0F)), player.getYRot());
+		float air = yaw(frame.transform(look(angles[0], 0.0F)), player.getYRot());
+		// Near straight down or up the air yaw is the direction in which the frame tilts, which is the opposite of the
+		// facing when the player walks backward over an edge. The keys would push the player out of the edge band and
+		// back in, so a steep look walks along the facing.
+		float ground = SeamCrossing.flies(player) ? 0.0F : SeamCrossing.groundWeight(Math.abs(player.getXRot()));
+		return air + ground * Mth.wrapDegrees(player.getYRot() - air);
 	}
 
 	private static Vector3f turnIn(Quaternionf frame, float yRot, float xRot, float yawChange, float pitchChange) {

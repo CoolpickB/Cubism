@@ -1,6 +1,7 @@
 package dev.cubeworld.client.mixin;
 
 import dev.cubeworld.client.CubeFlight;
+import dev.cubeworld.seam.SeamCrossing;
 import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.gravity.GravityEntityAccess;
@@ -125,8 +126,7 @@ public abstract class CameraMixin {
 		// A look close to straight down or up has no upright roll in the air frame: its yaw there is the direction in which
 		// the frame tilts, which is the opposite of the facing when the player walks backward. On the ground the roll fades
 		// out with the pitch, so the screen keeps the facing as up. In flight the roll is the whole point of the frame.
-		float steep = Mth.clamp((Math.abs(xRot) - 50.0F) / 25.0F, 0.0F, 1.0F);
-		float ground = (1.0F - CubeFlight.flightWeight(partialTicks)) * steep * steep * (3.0F - 2.0F * steep);
+		float ground = (1.0F - CubeFlight.flightWeight(partialTicks)) * SeamCrossing.groundWeight(Math.abs(xRot));
 		return ground <= 0.0F ? roll : new Quaternionf().slerp(roll, 1.0F - ground);
 	}
 
