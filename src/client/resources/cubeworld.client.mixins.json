@@ -38,6 +38,7 @@
 		"MinecraftMixin",
 		"ModelBlockRendererMixin",
 		"PresetEditorMixin",
+		"RiddenRotationMixin",
 		"RenderSectionRegionMixin",
 		"SectionCompilerMixin",
 		"MultiPlayerGameModeMixin",

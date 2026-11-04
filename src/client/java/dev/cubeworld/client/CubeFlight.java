@@ -9,6 +9,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -50,7 +51,7 @@ public final class CubeFlight {
 		weightO = weight;
 		boolean flies = SeamLayout.of(player.level()) != null && SeamCrossing.flies(player);
 		weight = Mth.clamp(weight + (flies ? 1.0F : -1.0F) / EASE_TICKS, 0.0F, 1.0F);
-		if (flies || !player.isPassenger() && !player.isSpectator()) {
+		if (flies || !player.isPassenger() && !player.isSpectator() || SeamCrossing.ridden(player.getRootVehicle()) == player) {
 			cross(player, flies);
 		}
 		carryLook(player);
@@ -456,28 +457,34 @@ public final class CubeFlight {
 		if (layout == null) {
 			return;
 		}
-		Vec3 center = player.getBoundingBox().getCenter();
+		// A ridden vehicle carries the player over, as the player alone would cross.
+		Entity body = player.isPassenger() ? player.getRootVehicle() : player;
+		Vec3 center = body.getBoundingBox().getCenter();
 		int toFace = layout.crossingFace(center.x, center.y, center.z, SeamCrossing.MARGIN);
 		if (toFace < 0) {
 			return;
 		}
 		// A walker crosses by the rule of the server: far enough past the diagonal, or with ground under it in the new frame.
 		if (!flies && layout.crossingFace(center.x, center.y, center.z, SeamCrossing.FORCED_MARGIN) < 0
-			&& !SeamCrossing.landsOn(player.level(), player, SeamCrossing.turned(layout, player, toFace).position())) {
+			&& !SeamCrossing.landsOn(player.level(), body, SeamCrossing.turned(layout, body, toFace).position())) {
 			return;
 		}
-		int[] m = layout.motion(layout.faceIndexAt(Mth.floor(player.getX())), toFace);
-		double halfHeight = player.getBbHeight() / 2.0;
-		Vec3 old = SeamInteraction.move(m, new Vec3(player.xo, player.yo + halfHeight, player.zo));
-		Vec3 walked = SeamInteraction.move(m, new Vec3(player.xOld, player.yOld + halfHeight, player.zOld));
+		int[] m = layout.motion(layout.faceIndexAt(Mth.floor(body.getX())), toFace);
 		Vector3f oldLook = turnLook(m, look(player.yRotO, player.xRotO));
-		Vec3 here = SeamInteraction.move(m, new Vec3(player.getX(), player.getY() + halfHeight, player.getZ()));
 		SeamCrossing.Turned turned = SeamCrossing.turned(layout, player, toFace);
-		player.setPos(turned.position());
+		if (body != player) {
+			float yawChange = turnBody(body, m, SeamCrossing.turned(layout, body, toFace));
+			if (body instanceof LivingEntity living) {
+				living.yBodyRot += yawChange;
+				living.yBodyRotO += yawChange;
+				living.yHeadRot += yawChange;
+				living.yHeadRotO += yawChange;
+			}
+		}
+		turnBody(player, m, turned);
 		// The chunk cache sorts chunks into the vanilla and the seam store by this center. The server moves it only when
 		// it follows the crossing, and until then the chunks of the new region would be seam chunks.
 		((ClientLevel) player.level()).getChunkSource().updateViewCenter(SectionPos.blockToSectionCoord(player.getX()), SectionPos.blockToSectionCoord(player.getZ()));
-		player.setDeltaMovement(turned.velocity());
 		// The hand sways behind the look. It keeps the same lag behind the turned look, or it swings at the crossing.
 		float yRot = player.getYRot();
 		float xRot = player.getXRot();
@@ -493,25 +500,45 @@ public final class CubeFlight {
 		player.yHeadRotO += yawChange;
 		player.setYRot(turned.yRot());
 		player.setXRot(turned.xRot());
-		// The crossing can move the body off a block (see SeamCrossing.turned). The last positions move with it, or the
-		// camera passes through that block on the way during the first tick.
-		Vec3 nudge = turned.position().subtract(here.subtract(0.0, halfHeight, 0.0));
-		player.xo = old.x + nudge.x;
-		player.yo = old.y - halfHeight + nudge.y;
-		player.zo = old.z + nudge.z;
-		player.xOld = walked.x + nudge.x;
-		player.yOld = walked.y - halfHeight + nudge.y;
-		player.zOld = walked.z + nudge.z;
 		player.yRotO = yaw(oldLook, turned.yRot());
 		player.xRotO = pitch(oldLook);
 		screenUp.set(turnLook(m, screenUp));
 		syncedLook.set(look(player.getYRot(), player.getXRot()));
-		((TurnableAvatarState) player.avatarState()).cubeworld$turn(m, halfHeight);
+		((TurnableAvatarState) player.avatarState()).cubeworld$turn(m, player.getBbHeight() / 2.0);
 		if (LoadTrace.active()) {
 			RECENT_TICKS.forEach(LoadTrace::event);
 			RECENT_TICKS.clear();
 			traceTicksLeft = 30;
 		}
+	}
+
+	/**
+	 * Puts a body where the crossing turns it, with its velocity and yaw. The last positions turn along, so the frame
+	 * between the two ticks stays in place. The crossing can move the body off a block (see SeamCrossing.turned); the
+	 * last positions move with it, or the camera passes through that block on the way during the first tick.
+	 */
+	/** Returns how far the yaw of a body other than the player turned, in degrees. */
+	private static float turnBody(Entity body, int[] m, SeamCrossing.Turned turned) {
+		double halfHeight = body.getBbHeight() / 2.0;
+		Vec3 old = SeamInteraction.move(m, new Vec3(body.xo, body.yo + halfHeight, body.zo));
+		Vec3 walked = SeamInteraction.move(m, new Vec3(body.xOld, body.yOld + halfHeight, body.zOld));
+		Vec3 here = SeamInteraction.move(m, new Vec3(body.getX(), body.getY() + halfHeight, body.getZ()));
+		body.setPos(turned.position());
+		body.setDeltaMovement(turned.velocity());
+		Vec3 nudge = turned.position().subtract(here.subtract(0.0, halfHeight, 0.0));
+		body.xo = old.x + nudge.x;
+		body.yo = old.y - halfHeight + nudge.y;
+		body.zo = old.z + nudge.z;
+		body.xOld = walked.x + nudge.x;
+		body.yOld = walked.y - halfHeight + nudge.y;
+		body.zOld = walked.z + nudge.z;
+		if (body instanceof LocalPlayer) {
+			return 0.0F;
+		}
+		float yawChange = Mth.wrapDegrees(turned.yRot() - body.getYRot());
+		body.setYRot(turned.yRot());
+		body.yRotO += yawChange;
+		return yawChange;
 	}
 
 	private static Vector3f turnLook(int[] m, Vector3f v) {

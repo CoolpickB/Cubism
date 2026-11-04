@@ -43,7 +43,7 @@ public final class SeamCrossing {
 	/**
 	 * A player crosses on its own client, at {@link #MARGIN}, and the server follows with the first movement in the new
 	 * region. The server crosses a player itself only when the client did not, so that its late teleport does not pull
-	 * back a client that crossed already.
+	 * back a client that crossed already. The same goes for a vehicle that a player steers.
 	 */
 	private static final double PLAYER_BACKUP_MARGIN = 4.0;
 	/** How far below the feet the ground must be in the new frame, in blocks. */
@@ -69,7 +69,7 @@ public final class SeamCrossing {
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();
 			boolean spectator = entity.isSpectator();
-			int face = layout.crossingFace(center.x, center.y, center.z, spectator ? SPECTATOR_MARGIN : entity instanceof ServerPlayer ? PLAYER_BACKUP_MARGIN : MARGIN);
+			int face = layout.crossingFace(center.x, center.y, center.z, spectator ? SPECTATOR_MARGIN : entity instanceof ServerPlayer || ridden(entity) != null ? PLAYER_BACKUP_MARGIN : MARGIN);
 			if (face < 0) {
 				continue;
 			}
@@ -138,6 +138,11 @@ public final class SeamCrossing {
 		}
 		return level.noBlockCollision(entity, box)
 			&& (!level.noBlockCollision(entity, box.move(0.0, -GROUND_DEPTH, 0.0)) || level.containsAnyLiquid(box));
+	}
+
+	/** The player that steers a vehicle, whose client moves the vehicle and so makes its crossing, else null. */
+	public static @Nullable Player ridden(Entity vehicle) {
+		return vehicle.getControllingPassenger() instanceof Player player ? player : null;
 	}
 
 	/** True when the player flies with an elytra or in creative or spectator mode, which uses the frame of the air. */

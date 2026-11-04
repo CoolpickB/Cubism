@@ -9,6 +9,7 @@ import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.entity.Relative;
@@ -73,6 +74,40 @@ public abstract class ServerGamePacketListenerImplMixin {
 		this.firstGoodX = this.lastGoodX = position.x;
 		this.firstGoodY = this.lastGoodY = position.y;
 		this.firstGoodZ = this.lastGoodZ = position.z;
+	}
+
+	@Shadow private double vehicleFirstGoodX;
+	@Shadow private double vehicleFirstGoodY;
+	@Shadow private double vehicleFirstGoodZ;
+	@Shadow private double vehicleLastGoodX;
+	@Shadow private double vehicleLastGoodY;
+	@Shadow private double vehicleLastGoodZ;
+
+	/** The vehicle that a player steers crosses on that client too, and the server follows the same way. */
+	@Inject(method = "handleMoveVehicle", at = @At("HEAD"))
+	private void cubeworld$followClientVehicleCrossing(ServerboundMoveVehiclePacket packet, CallbackInfo ci) {
+		SeamLayout layout = SeamLayout.of(this.player.level());
+		Entity vehicle = this.player.getRootVehicle();
+		if (layout == null || vehicle == this.player || SeamCrossing.ridden(vehicle) != this.player) {
+			return;
+		}
+		Vec3 requested = packet.movingTo().position();
+		int face = SeamInteraction.regionFace(layout, vehicle.getX(), vehicle.getZ());
+		int toFace = SeamInteraction.regionFace(layout, requested.x, requested.z);
+		if (face < 0 || toFace < 0 || face == toFace) {
+			return;
+		}
+		SeamCrossing.Turned turned = SeamCrossing.turned(layout, vehicle, toFace);
+		if (turned.position().distanceToSqr(requested) > MAX_CROSSING_MOVE * MAX_CROSSING_MOVE) {
+			return;
+		}
+		Vec3 position = turned.position();
+		vehicle.absSnapTo(position.x, position.y, position.z, turned.yRot(), turned.xRot());
+		vehicle.setDeltaMovement(turned.velocity());
+		this.vehicleFirstGoodX = this.vehicleLastGoodX = position.x;
+		this.vehicleFirstGoodY = this.vehicleLastGoodY = position.y;
+		this.vehicleFirstGoodZ = this.vehicleLastGoodZ = position.z;
+		vehicle.positionRider(this.player);
 	}
 
 	/** Logs every teleport of a player in a seam world, to find a silent setback at a diagonal. */
