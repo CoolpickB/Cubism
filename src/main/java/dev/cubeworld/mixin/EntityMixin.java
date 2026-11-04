@@ -20,9 +20,11 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -61,6 +63,8 @@ public abstract class EntityMixin implements GravityEntityAccess {
 	@Unique private static final String GRAVITY_KEY = "cubeworld:gravity";
 	/** The same gap as for living entities: no edge pull with ground this close along it. */
 	@Unique private static final double EDGE_GRAVITY_GROUND_GAP = 3.0;
+	/** Room under a step down for the fall of the tick, so that a drop of exactly the step height still counts. */
+	@Unique private static final double STEP_DOWN_MARGIN = 0.1;
 
 	@Shadow private Level level;
 	@Shadow private Vec3 position;
@@ -88,9 +92,15 @@ public abstract class EntityMixin implements GravityEntityAccess {
 	@Shadow protected abstract void checkFallDamage(double ya, boolean onGround, BlockState onState, BlockPos pos);
 	@Shadow public abstract boolean touchingUnloadedChunk();
 	@Shadow private boolean isFree(AABB box) { return false; }
+	@Shadow private Vec3 collide(Vec3 movement) { return movement; }
+	@Shadow public abstract boolean isInWater();
+	@Shadow public abstract boolean isPassenger();
+	@Shadow public abstract void setOnGround(boolean onGround);
 
 	@Unique private Direction cubeworld$gravity = Direction.DOWN;
 	@Unique private boolean cubeworld$gravityKnown;
+	/** Whether the entity stood on the ground when its current move started. */
+	@Unique private boolean cubeworld$wasOnGround;
 	/** Face region where the last fall started, as {@code LivingEntityMixin} keeps it for living entities. */
 	@Unique private int cubeworld$airStartFace = -1;
 
@@ -337,6 +347,48 @@ public abstract class EntityMixin implements GravityEntityAccess {
 			this.mainSupportingBlockPos = support;
 		}
 		this.onGroundNoBlocks = support.isEmpty();
+	}
+
+	@Unique
+	private boolean cubeworld$onCurve() {
+		SeamLayout layout = SeamLayout.of(this.level);
+		return layout != null && layout.inRoundedEdgeBand(Mth.floor(this.position.x), Mth.floor(this.position.z));
+	}
+
+	/** Boats do not step in vanilla. The ice of a frozen sea over a rounded edge stands in steps of a full block. */
+	@ModifyReturnValue(method = "maxUpStep", at = @At("RETURN"))
+	private float cubeworld$boatStepOnCurve(float step) {
+		return (Object) this instanceof AbstractBoat && this.cubeworld$onCurve() ? Math.max(step, 1.0F) : step;
+	}
+
+	@Inject(method = "move", at = @At("HEAD"))
+	private void cubeworld$rememberGround(MoverType moverType, Vec3 delta, CallbackInfo ci) {
+		this.cubeworld$wasOnGround = this.onGround();
+	}
+
+	/**
+	 * Over a rounded edge the ground falls away in steps. A living entity that walks off a step no higher than it can
+	 * step up lands on the step below at once, as vanilla lifts it onto a step that rises. Only the side that
+	 * simulates the entity does it: the server checks a player move with the client's position, which already landed.
+	 */
+	@Inject(method = "move", at = @At("TAIL"))
+	private void cubeworld$stepDownOnCurve(MoverType moverType, Vec3 delta, CallbackInfo ci) {
+		if (moverType != MoverType.SELF || !this.cubeworld$wasOnGround || this.onGround() || delta.y > 0.0 || this.noPhysics
+			|| !((Object) this instanceof LivingEntity living) || living.isFallFlying() || living.onClimbable() || this.isInWater()
+			|| this.isPassenger() || living instanceof Player player && player.getAbilities().flying || !this.cubeworld$onCurve()) {
+			return;
+		}
+		float step = this.maxUpStep();
+		double reach = step + STEP_DOWN_MARGIN;
+		Vec3 down = this.collide(new Vec3(0.0, -reach, 0.0));
+		if (step <= 0.0F || down.y <= -reach + 1.0E-7) {
+			return;
+		}
+		Vec3 drop = CubePlanetMath.localToWorld(down, this.cubeworld$getFrame());
+		this.setPos(this.position.x + drop.x, this.position.y + drop.y, this.position.z + drop.z);
+		this.setOnGround(true);
+		Vec3 motion = this.getDeltaMovement();
+		this.setDeltaMovement(new Vec3(motion.x, 0.0, motion.z));
 	}
 
 	// Self movement is already local. The other mover types push the entity by a world vector.
