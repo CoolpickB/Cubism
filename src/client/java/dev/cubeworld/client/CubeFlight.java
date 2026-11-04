@@ -54,6 +54,40 @@ public final class CubeFlight {
 			cross(player, flies);
 		}
 		traceTick(player);
+		traceLook(player);
+	}
+
+	private static java.io.PrintWriter lookLog;
+	private static int lookTicksLeft;
+
+	/** Writes one line per tick while the view frame is tilted and for 20 ticks after: for finding where the look and the keys disagree. */
+	private static void traceLook(LocalPlayer player) {
+		if (!ClientConfig.traceLook) {
+			return;
+		}
+		Quaternionf view = viewFrame(player, 1.0F);
+		if (!isIdentity(view)) {
+			lookTicksLeft = 20;
+		} else if (lookTicksLeft > 0) {
+			lookTicksLeft--;
+		} else {
+			return;
+		}
+		try {
+			if (lookLog == null) {
+				java.nio.file.Path file = net.fabricmc.loader.api.FabricLoader.getInstance().getGameDir().resolve("logs").resolve("cubeworld-look.log");
+				lookLog = new java.io.PrintWriter(java.nio.file.Files.newBufferedWriter(file), true);
+			}
+			SeamLayout layout = SeamLayout.of(player.level());
+			int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
+			float[] angles = anglesIn(view, player.getYRot(), player.getXRot());
+			Vec3 delta = player.getDeltaMovement();
+			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b",
+				player.tickCount, face, player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), angles[0], angles[1], moveYaw(player),
+				Math.toDegrees(view.angle()), delta.x, delta.y, delta.z, player.input.getMoveVector(), player.onGround()));
+		} catch (java.io.IOException e) {
+			lookLog = null;
+		}
 	}
 
 	/** Logs the position, velocity and view of the player for 10 ticks before and 30 after each crossing. */

@@ -13,20 +13,23 @@ import java.util.Properties;
 public final class ClientConfig {
 	private static final String SHOW_STORAGE_LINE = "showStorageLine";
 
+	/** Whether the look, the walking yaw and the face of the player go to logs/cubeworld-look.log while the view frame is tilted. */
+	public static final boolean traceLook = Boolean.parseBoolean(read().getProperty("traceLook", "false"));
+
 	/** Whether F3 shows the line with the storage position, which is only of use when debugging the mod. */
-	public static final boolean showStorageLine = load();
+	public static final boolean showStorageLine = Boolean.parseBoolean(read().getProperty(SHOW_STORAGE_LINE, "false"));
 
 	private ClientConfig() {
 	}
 
-	private static boolean load() {
+	private static Properties read() {
 		Path file = FabricLoader.getInstance().getConfigDir().resolve("cubeworld-client.properties");
 		Properties properties = new Properties();
 		if (Files.exists(file)) {
 			try (Reader reader = Files.newBufferedReader(file)) {
 				properties.load(reader);
 			} catch (IOException e) {
-				return false;
+				return properties;
 			}
 		}
 		if (properties.getProperty(SHOW_STORAGE_LINE) == null) {
@@ -37,6 +40,6 @@ public final class ClientConfig {
 				// The default applies when the file cannot be written.
 			}
 		}
-		return Boolean.parseBoolean(properties.getProperty(SHOW_STORAGE_LINE));
+		return properties;
 	}
 }
