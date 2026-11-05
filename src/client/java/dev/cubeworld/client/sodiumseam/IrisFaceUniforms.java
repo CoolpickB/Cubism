@@ -68,6 +68,7 @@ public final class IrisFaceUniforms {
 		private final Matrix4f[] inverses = new Matrix4f[INVERSES.length];
 		private final int normalAt;
 		private final @Nullable Matrix3f normalMatrix;
+		private final int faceTurnAt;
 		private final int[] positionAt = new int[POSITIONS.length];
 		private final float[][] positions = new float[POSITIONS.length][3];
 		private final FloatBuffer floats = BufferUtils.createFloatBuffer(16);
@@ -90,6 +91,8 @@ public final class IrisFaceUniforms {
 			} else {
 				this.normalMatrix = null;
 			}
+			// The patched pack lays out its voxel volumes in the frame of the camera face with it. Iris keeps it at the identity.
+			this.faceTurnAt = GL46C.glGetUniformLocation(program, "cubeworld_faceTurn");
 			for (int i = 0; i < POSITIONS.length; i++) {
 				this.positionAt[i] = GL46C.glGetUniformLocation(program, POSITIONS[i]);
 				if (this.positionAt[i] >= 0) {
@@ -126,6 +129,9 @@ public final class IrisFaceUniforms {
 				// The program takes the normal matrix from the camera face, as it does not read the matrix of the draw.
 				this.writeNormal(new Matrix3f(this.normalMatrix).mul(new Matrix3f(turn)));
 			}
+			if (this.faceTurnAt >= 0) {
+				this.writeMatrix3(this.faceTurnAt, new Matrix3f(turn));
+			}
 			for (int i = 0; i < POSITIONS.length; i++) {
 				if (this.positionAt[i] >= 0) {
 					float[] p = this.positions[i];
@@ -139,6 +145,9 @@ public final class IrisFaceUniforms {
 		void restore() {
 			if (this.normalMatrix != null) {
 				this.writeNormal(this.normalMatrix);
+			}
+			if (this.faceTurnAt >= 0) {
+				this.writeMatrix3(this.faceTurnAt, new Matrix3f());
 			}
 			for (int i = 0; i < MATRICES.length; i++) {
 				if (this.matrices[i] != null) {
@@ -159,9 +168,13 @@ public final class IrisFaceUniforms {
 		}
 
 		private void writeNormal(Matrix3f value) {
+			this.writeMatrix3(this.normalAt, value);
+		}
+
+		private void writeMatrix3(int location, Matrix3f value) {
 			this.floats.clear();
 			value.get(this.floats);
-			GL46C.glProgramUniformMatrix3fv(this.program, this.normalAt, false, this.floats);
+			GL46C.glProgramUniformMatrix3fv(this.program, location, false, this.floats);
 		}
 
 		private void writeMatrix(int location, Matrix4f value) {

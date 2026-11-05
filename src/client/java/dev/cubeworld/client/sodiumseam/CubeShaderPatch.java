@@ -59,6 +59,15 @@ public final class CubeShaderPatch {
 		    uniform mat3 cubeworld_celestialFrame;
 		    uniform mat3 cubeworld_viewToFeet;
 		    uniform vec3 cubeworld_shadowLight;
+		    // From the storage frame of the face that draws into the one of the camera face. It is the identity except while a
+		    // folded face draws.
+		    uniform mat3 cubeworld_faceTurn;
+		    #define cubeworldTurn(v) (cubeworld_faceTurn * (v))
+		    #define cubeworldFolded() (cubeworld_faceTurn != mat3(1.0))
+		    // The sky color of Iris follows the time at the camera. The light that the sky gives a point follows the time of the
+		    // point, as vanilla dims the sky color of the full day: by the height of the sun.
+		    uniform vec3 cubeworld_daySkyColor;
+		    #define cubeworldSkyColor() (cubeworld_active != 0 ? cubeworld_daySkyColor * clamp(sin(cubeworldSunAngle() * 6.28318531) * 2.0 + 0.5, 0.0, 1.0) : skyColor)
 		    // The normals that the programs of the ground store for the passes after them are read back with the view matrix of the
 		    // camera face. A folded face draws with the matrix of its own face, so it stores them in the frame of the camera face.
 		    #define cubeworld_normalOut(n) ((cubeworld_active != 0 ? cubeworld_viewToFeet : mat3(gbufferModelViewInverse)) * (n))
@@ -136,6 +145,9 @@ public final class CubeShaderPatch {
 		    #define cubeworldFeetAlt(p) ((p).y + cameraPosition.y)
 		    #define cubeworldCameraAlt() (cameraPosition.y)
 		    #define cubeworldSunAngle() (sunAngle)
+		    #define cubeworldTurn(v) (v)
+		    #define cubeworldFolded() false
+		    #define cubeworldSkyColor() skyColor
 		    #define cubeworld_celestialFrame mat3(gbufferModelViewInverse)
 		#endif
 		""";
@@ -257,6 +269,12 @@ public final class CubeShaderPatch {
 		}
 		""";
 
+	/**
+	 * Put on its own lines before an edit to the voxel volumes, so that it still compiles in a pack that did not take the
+	 * helpers. It goes at the edit and not at the top of the file, which comes before the helpers in some programs.
+	 */
+	private static final String VOXEL_FALLBACK = "\n#ifndef cubeworldTurn\n#define cubeworldTurn(v) (v)\n#define cubeworldFolded() false\n#endif\n";
+
 	private static boolean pending;
 	private static boolean active;
 
@@ -294,7 +312,8 @@ public final class CubeShaderPatch {
 		}
 		if (name.endsWith(COMMON_ROOT)) {
 			// The helpers go after the uniforms of the pack and before the time of day, which they replace.
-			return source.replace(TIME_ANCHOR, HELPERS + TIME_ANCHOR)
+			// Without a shadow map the pack takes the time of the world. On the cube it takes the local sun as with one.
+			return source.replace(TIME_ANCHOR, HELPERS + TIME_ANCHOR.replace("#if SHADOW_QUALITY == -1", "#if SHADOW_QUALITY == -1 && !defined CUBEWORLD"))
 				.replace(SUN_ANGLE, "float tAmin     = fract(cubeworldSunAngle() - 0.033333333);");
 		}
 		if (name.endsWith(AURORA)) {
@@ -317,7 +336,34 @@ public final class CubeShaderPatch {
 				    }
 				""");
 		}
+		if (name.endsWith("/lib/voxelization/lightVoxelization.glsl")) {
+			// The light volume of colored lighting, and the block volume of the reflections, are laid out in the frame of the
+			// camera face. A folded face draws, and writes its blocks in the shadow pass, in its own frame, so its positions
+			// are turned into the one of the camera face. The volumes stay one grid, since the turn takes blocks to blocks.
+			return source.replace("return scenePos + cameraPositionBestFract", VOXEL_FALLBACK + "return cubeworldTurn(scenePos) + cameraPositionBestFract");
+		}
+		if (name.endsWith("/lib/voxelization/reflectionVoxelization.glsl")) {
+			return source.replace("return playerPos + cameraPositionBestFract", VOXEL_FALLBACK + "return cubeworldTurn(playerPos) + cameraPositionBestFract")
+				.replace("return previousPlayerPos + previousCameraPositionBestFract", VOXEL_FALLBACK + "return cubeworldTurn(previousPlayerPos) + previousCameraPositionBestFract");
+		}
+		if (name.endsWith("/lib/voxelization/puddleVoxelization.glsl")) {
+			// The puddle map is a map of columns, and a folded face stands on its side in it. Its puddles skip the map.
+			return source.replace("return scenePos + fract(cameraPosition)", VOXEL_FALLBACK + "if (cubeworldFolded()) return vec3(-1.0);\n\treturn scenePos + fract(cameraPosition)");
+		}
+		if (name.endsWith("/program/shadow.glsl")) {
+			// The faces of the blocks for the reflections are stored by their normal in the frame of the camera face. The
+			// normal matrix of Iris lacks the fold of a folded face, which the matrix of the draw has.
+			source = source.replace("vec3 normal = mat3(shadowModelViewInverse) * gl_NormalMatrix * gl_Normal;\n                UpdateSceneVoxelMap",
+				VOXEL_FALLBACK + "vec3 normal = cubeworldTurn(mat3(shadowModelViewInverse) * mat3(gl_ModelViewMatrix) * gl_Normal);\n                UpdateSceneVoxelMap");
+		}
+		if (name.endsWith("/lib/colors/lightAndAmbientColors.glsl")) {
+			// The light of the sky on the ground. Seen from a face at night, the ground of a face in day would get the dark
+			// sky of the camera, and all of it out of the sun would be black.
+			source = source.replace("vec3 noonClearAmbientColor = pow(skyColor, vec3(0.75)) * 0.85;",
+				"\n#ifndef cubeworldSkyColor\n#define cubeworldSkyColor() skyColor\n#endif\n        vec3 noonClearAmbientColor = pow(cubeworldSkyColor(), vec3(0.75)) * 0.85;");
+		}
 		if (name.endsWith(MAIN_LIGHTING)) {
+			source = source.replace("voxelPos = voxelPos + worldGeoNormal * 0.55;", VOXEL_FALLBACK + "voxelPos = voxelPos + cubeworldTurn(worldGeoNormal) * 0.55;");
 			// There is one shadow map, cast from the sun or the moon after the time at the camera. A point lit by the
 			// other one would read the shadows of the wrong side, so it takes the light of the pack past the shadow
 			// distance. At the line where the light turns over, the shadows are faded out in any case.
@@ -542,6 +588,9 @@ public final class CubeShaderPatch {
 			Vector3f light = celestial.getColumn(1, new Vector3f()).mul(CubeSky.shadowLightSign());
 			return new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView()).transformDirection(light);
 		});
+		// IrisFaceUniforms writes the turn of a folded face while it draws, and puts the identity back.
+		uniforms.uniformMatrix3(UniformUpdateFrequency.PER_FRAME, "cubeworld_faceTurn", Matrix3f::new);
+		uniforms.uniform3f(UniformUpdateFrequency.PER_FRAME, "cubeworld_daySkyColor", () -> new Vector3f(CubeSky.daySky()));
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_core", CubeSky::core);
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_centerY", CubeSky::centerY);
 	}

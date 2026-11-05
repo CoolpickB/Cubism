@@ -85,6 +85,8 @@ public final class CubeSky {
 	private static final Vector3f SURFACE_UP = new Vector3f(0.0F, 1.0F, 0.0F);
 	private static final Matrix4f CUBE_FROM_FEET = new Matrix4f();
 	private static float core;
+	/** The sky color of the full day at the camera, the brightest of the day. */
+	private static final Vector3f DAY_SKY = new Vector3f();
 	private static float centerY;
 
 	private CubeSky() {}
@@ -103,13 +105,81 @@ public final class CubeSky {
 		return celestial == null ? null : new Matrix3f(TILT).mul(celestial);
 	}
 
+	/** How far along the ground the shadow map of a pack reaches at most, past the farthest shadow distance of the presets. */
+	private static final float SHADOW_REACH = 256.0F;
+	private static final float REACH_STEP = 8.0F;
+	private static final int REACH_DIRECTIONS = 8;
+
 	/**
-	 * Which light a patched shader pack casts its one shadow map from: +1 for the sun, -1 for the moon opposite it. It
-	 * follows the time under the camera. Points lit by the other light read no shadows. The light turns over at sunset
-	 * and sunrise of the camera, where the pack has faded the shadows out.
+	 * Which light a patched shader pack casts its one shadow map from: +1 for the sun, -1 for the moon opposite it. The pack
+	 * lights each point by its own time of day, and a point lit by the other light than the map reads no shadows. Sunlight
+	 * without shadows is a harsh glare, while moonlight without them hardly shows. So the map stays with the sun while any
+	 * ground within its reach is lit by the sun. Near an edge that is ground on the next face, which can have day while
+	 * the camera has night.
 	 */
 	public static float shadowLightSign() {
-		return celestial == null || celestial.getColumn(1, new Vector3f()).dot(SURFACE_UP) >= 0.0F ? 1.0F : -1.0F;
+		if (celestial == null) {
+			return 1.0F;
+		}
+		Vector3f sun = celestial.getColumn(1, new Vector3f());
+		Vector3f axis = celestial.getColumn(2, new Vector3f());
+		if (packLightIsSun(sun, axis, SURFACE_UP)) {
+			return 1.0F;
+		}
+		// Walk away from the camera over the rounded shell at the height of the camera, in the directions around it.
+		Matrix3f cubeFromFace = CUBE_FROM_FEET.get3x3(new Matrix3f());
+		Matrix3f faceFromCube = new Matrix3f(cubeFromFace).transpose();
+		Vector3f camera = CUBE_FROM_FEET.getTranslation(new Vector3f());
+		Vector3f up = cubeFromFace.transform(new Vector3f(SURFACE_UP));
+		float height = Math.max(camera.distance(clampToCore(camera)), 1.0F);
+		Vector3f first = up.cross(Math.abs(up.y) < 0.9F ? new Vector3f(0.0F, 1.0F, 0.0F) : new Vector3f(1.0F, 0.0F, 0.0F), new Vector3f()).normalize();
+		Vector3f second = up.cross(first, new Vector3f());
+		Vector3f point = new Vector3f();
+		Vector3f direction = new Vector3f();
+		Vector3f normal = new Vector3f();
+		Vector3f faceNormal = new Vector3f();
+		for (int i = 0; i < REACH_DIRECTIONS; i++) {
+			double angle = i * 2.0 * Math.PI / REACH_DIRECTIONS;
+			point.set(camera);
+			direction.set(first).mul((float) Math.cos(angle)).fma((float) Math.sin(angle), second);
+			for (float walked = REACH_STEP; walked <= SHADOW_REACH; walked += REACH_STEP) {
+				point.fma(REACH_STEP, direction);
+				Vector3f base = clampToCore(point);
+				normal.set(point).sub(base).normalize();
+				point.set(base).fma(height, normal);
+				direction.fma(-direction.dot(normal), normal).normalize();
+				if (packLightIsSun(sun, axis, faceFromCube.transform(normal, faceNormal))) {
+					return 1.0F;
+				}
+			}
+		}
+		return -1.0F;
+	}
+
+	private static Vector3f clampToCore(Vector3f point) {
+		return new Vector3f(Mth.clamp(point.x, -core, core), Mth.clamp(point.y, -core, core), Mth.clamp(point.z, -core, core));
+	}
+
+	/**
+	 * Whether the pack lights ground with this up by the sun rather than the moon, in the face frame of the camera. It
+	 * takes the time of day as cubeworldSunAngle and the timeAngle of the pack do. The pack turns its light over about 12
+	 * degrees past sunset and before sunrise, not at the horizon.
+	 */
+	private static boolean packLightIsSun(Vector3f sun, Vector3f axis, Vector3f up) {
+		double local = Math.acos(Mth.clamp(sun.dot(up) / 0.81649658, -1.0, 1.0));
+		if (sun.dot(axis.cross(up, new Vector3f())) < 0.0F) {
+			local = -local;
+		}
+		double d = Mth.frac(local / (2.0 * Math.PI));
+		double sunAngle = Mth.frac((2.0 * d + 0.5 - Math.cos(d * Math.PI) * 0.5) / 3.0 + 0.25);
+		double tAmin = Mth.frac(sunAngle - 0.033333333);
+		double tAlin = tAmin < 0.433333333 ? tAmin * 1.15384615385 : tAmin * 0.882352941176 + 0.117647058824;
+		double hA = tAlin > 0.5 ? 1.0 : 0.0;
+		double tAfrc = Mth.frac(tAlin * 2.0);
+		double tAfrs = tAfrc * tAfrc * (3.0 - 2.0 * tAfrc);
+		double tAmix = hA < 0.5 ? 0.3 : -0.1;
+		double timeAngle = (tAfrc * (1.0 - tAmix) + tAfrs * tAmix + hA) * 0.5;
+		return timeAngle < 0.5325 || timeAngle > 0.9675;
 	}
 
 	public static void setCelestial(@Nullable Matrix3f frame) {
@@ -147,6 +217,10 @@ public final class CubeSky {
 		return moonBrightness;
 	}
 
+	public static Vector3fc daySky() {
+		return DAY_SKY;
+	}
+
 	public static float starMax() {
 		return starMax;
 	}
@@ -179,7 +253,11 @@ public final class CubeSky {
 			texture.getPixels().setPixel(i, 1, ARGB.colorFromFloat(1.0F, fog.x(), fog.y(), fog.z()));
 			texture.getPixels().setPixel(i, 2, ARGB.colorFromFloat(glow.w(), glow.x(), glow.y(), glow.z()));
 			maxStars = Math.max(maxStars, stars);
-			maxSky = Math.max(maxSky, Math.max(sky.x(), Math.max(sky.y(), sky.z())));
+			float brightest = Math.max(sky.x(), Math.max(sky.y(), sky.z()));
+			if (brightest > maxSky) {
+				maxSky = brightest;
+				DAY_SKY.set(sky);
+			}
 		}
 		texture.upload();
 		starMax = Math.max(maxStars, 0.01F);
