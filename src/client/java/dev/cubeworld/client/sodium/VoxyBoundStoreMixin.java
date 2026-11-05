@@ -1,12 +1,6 @@
 package dev.cubeworld.client.sodium;
 
-import dev.cubeworld.client.sodiumseam.SeamFaces;
 import dev.cubeworld.client.sodiumseam.VoxyFaces;
-import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTracker;
-import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.core.SectionPos;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
@@ -37,35 +31,6 @@ public abstract class VoxyBoundStoreMixin {
 			face.put(pos);
 			ci.cancel();
 		}
-	}
-
-	/**
-	 * Voxy marks only sections that Sodium has built, so a new chunk showed its level of detail, refining over some frames,
-	 * until Sodium built it. Every chunk that Sodium will build hides the level of detail too, as Voxy does itself under FREX.
-	 */
-	@Inject(method = "reset", at = @At("TAIL"))
-	private void cubeworld$readyColumns(CallbackInfo ci) {
-		ClientLevel level = Minecraft.getInstance().level;
-		VoxyRenderSystem system = IVoxyRenderSystemHolder.getNullable();
-		if (level == null || system == null || system.visbleSectionStream == null) {
-			return;
-		}
-		boolean faces = VoxyFaces.active();
-		if (system.visbleSectionStream == (Object) this ? faces : !faces) {
-			return;
-		}
-		StreamedBoundStore store = (StreamedBoundStore) (Object) this;
-		int face = faces ? SeamFaces.currentFace() : 0;
-		int minY = level.getMinSectionY();
-		int maxY = level.getMaxSectionY();
-		ChunkTracker.forEachChunk(ChunkTrackerHolder.get(level).getReadyChunks(), (x, z) -> {
-			if (faces && SeamFaces.faceOfChunk(x) != face) {
-				return;
-			}
-			for (int y = minY; y <= maxY; y++) {
-				store.put(SectionPos.asLong(x, y, z));
-			}
-		});
 	}
 
 	/** The set of the current face when this is the shared set of Voxy, else null. */

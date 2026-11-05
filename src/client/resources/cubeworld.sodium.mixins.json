@@ -18,6 +18,7 @@
 		"VoxyBoundStoreMixin",
 		"VoxyIngestMixin",
 		"VoxyPipelineMixin",
+		"VoxyReadyColumnsMixin",
 		"VoxyRenderSystemMixin",
 		"VoxySectionManagerMixin",
 		"VoxySectionRendererMixin",
