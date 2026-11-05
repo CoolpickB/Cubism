@@ -6,6 +6,7 @@ import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -16,6 +17,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(value = StreamedBoundStore.class, remap = false)
 public abstract class VoxyBoundStoreMixin {
+	@Shadow
+	private boolean didChange;
+
 	@Inject(method = "reset", at = @At("HEAD"), cancellable = true)
 	private void cubeworld$resetFace(CallbackInfo ci) {
 		StreamedBoundStore face = this.cubeworld$faceStore();
@@ -31,6 +35,8 @@ public abstract class VoxyBoundStoreMixin {
 			ci.cancel();
 			return;
 		}
+		// Voxy puts only right after a reset, which uploads the set. A chunk that loads between two resets puts too.
+		this.didChange = true;
 		StreamedBoundStore face = this.cubeworld$faceStore();
 		if (face != null) {
 			face.put(pos);

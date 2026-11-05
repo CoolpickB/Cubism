@@ -1,6 +1,9 @@
 package dev.cubeworld.client.sodium;
 
 import dev.cubeworld.client.ClientConfig;
+import dev.cubeworld.client.sodiumseam.SeamFaces;
+import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.util.IrisUtil;
@@ -56,7 +59,7 @@ public abstract class VoxyReadyColumnsMixin {
 	private void cubeworld$added(int x, int z, CallbackInfo ci) {
 		VoxyRenderSystem system = IVoxyRenderSystemHolder.getNullable();
 		LevelChunk chunk = this.level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false);
-		if (system == null || chunk == null) {
+		if (system == null || system.visbleSectionStream == null || chunk == null || ClientConfig.voxyHide < 2) {
 			return;
 		}
 		// Voxy stores 32 blocks a side at its finest level. A chunk whose top block Voxy has stored, from an earlier
@@ -71,6 +74,14 @@ public abstract class VoxyReadyColumnsMixin {
 			}
 		}
 		this.cubeworld$fresh.add(ChunkPos.pack(x, z));
+		// Voxy shows the chunk once it stores it, and the set is filled again only when Sodium next builds its list.
+		StreamedBoundStore store = VoxyFaces.active() ? VoxyFaces.store(system, SeamFaces.faceOfChunk(x)) : system.visbleSectionStream;
+		int minY = this.level.getMinSectionY();
+		for (int y = minY; y <= this.level.getMaxSectionY(); y++) {
+			if (!chunk.getSection(y - minY).hasOnlyAir()) {
+				store.put(SectionPos.asLong(x, y, z));
+			}
+		}
 	}
 
 	@Inject(method = "onChunkRemoved", at = @At("HEAD"))

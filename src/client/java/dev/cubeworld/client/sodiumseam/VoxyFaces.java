@@ -58,11 +58,14 @@ public final class VoxyFaces {
 
 	/** The sections that the Sodium manager of the current face draws, where Voxy draws none of its own. */
 	public static StreamedBoundStore store(VoxyRenderSystem system) {
+		return store(system, SeamFaces.currentFace());
+	}
+
+	public static StreamedBoundStore store(VoxyRenderSystem system, int face) {
 		if (storesOf != system) {
 			free();
 			storesOf = system;
 		}
-		int face = SeamFaces.currentFace();
 		if (STORES[face] == null) {
 			STORES[face] = new StreamedBoundStore();
 		}
