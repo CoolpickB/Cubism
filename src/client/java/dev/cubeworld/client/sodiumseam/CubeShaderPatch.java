@@ -64,6 +64,8 @@ public final class CubeShaderPatch {
 		    uniform mat3 cubeworld_faceTurn;
 		    #define cubeworldTurn(v) (cubeworld_faceTurn * (v))
 		    #define cubeworldFolded() (cubeworld_faceTurn != mat3(1.0))
+		    // From the frame of the camera face back into the one of the face it left, on the frame of a crossing. Else the identity.
+		    uniform mat3 cubeworld_crossTurn;
 		    // The sky color of Iris follows the time at the camera. The light that the sky gives a point follows the time of the
 		    // point, as vanilla dims the sky color of the full day: by the height of the sun.
 		    uniform vec3 cubeworld_daySkyColor;
@@ -342,6 +344,17 @@ public final class CubeShaderPatch {
 			// are turned into the one of the camera face. The volumes stay one grid, since the turn takes blocks to blocks.
 			return source.replace("return scenePos + cameraPositionBestFract", VOXEL_FALLBACK + "return cubeworldTurn(scenePos) + cameraPositionBestFract");
 		}
+		if (name.endsWith("/program/shadowcomp.glsl")) {
+			// The flood fill of colored lighting spreads the light of the last frame. At a crossing that volume is laid out in the
+			// frame of the old face, so its cells are found with the turn back, about the center of each cell. Without it the
+			// light builds up from nothing over the next frames.
+			return source.replace("\tivec3 previousPos = pos - ivec3(posOffset);\n", """
+					\tivec3 previousPos = pos - ivec3(posOffset);
+					#ifdef CUBEWORLD
+					\tpreviousPos = ivec3(floor(cubeworld_crossTurn * (vec3(previousPos - voxelVolumeSize / 2) + 0.5))) + voxelVolumeSize / 2;
+					#endif
+					""");
+		}
 		if (name.endsWith("/lib/voxelization/reflectionVoxelization.glsl")) {
 			return source.replace("return playerPos + cameraPositionBestFract", VOXEL_FALLBACK + "return cubeworldTurn(playerPos) + cameraPositionBestFract")
 				.replace("return previousPlayerPos + previousCameraPositionBestFract", VOXEL_FALLBACK + "return cubeworldTurn(previousPlayerPos) + previousCameraPositionBestFract");
@@ -539,16 +552,25 @@ public final class CubeShaderPatch {
 				    if (cubeworld_active != 0) {
 				        nPlayerPos = normalize(mat3(cubeworld_cubeFromFeet) * nPlayerPos);
 				        float cubeworldT = 0.0;
+				        float cubeworldOut = 0.0;
 				        bool cubeworldHit = false;
 				        for (int j = 0; j < 160; j++) {
 				            float gap = abs(cubeworldAlt(cameraPos + cubeworldT * nPlayerPos) - cloudAltitude) - cloudStretch;
 				            if (gap <= 0.0) { cubeworldHit = true; break; }
 				            // A ray that skims the shell closes the gap slowly. The floor on the step keeps it from running
 				            // out of steps, at the cost of missing the thin tip of a skimming hit.
+				            cubeworldOut = cubeworldT;
 				            cubeworldT += max(gap, max(2.0, cubeworldT * 0.01));
 				            if (cubeworldT > distanceThreshold) break;
 				        }
 				        if (!cubeworldHit) return vec4(0.0);
+				        // The floor on the step lands up to a step deep in the band, by a depth that changes with the distance.
+				        // The clouds start their march there, which drew dark rings about the camera. Find the edge of the band.
+				        for (int j = 0; j < 8; j++) {
+				            float mid = 0.5 * (cubeworldOut + cubeworldT);
+				            if (abs(cubeworldAlt(cameraPos + mid * nPlayerPos) - cloudAltitude) <= cloudStretch) cubeworldT = mid;
+				            else cubeworldOut = mid;
+				        }
 				        minPlaneDistance = cubeworldT;
 				        planeDistanceDif = LENGTH;
 				    } else {
@@ -636,6 +658,7 @@ public final class CubeShaderPatch {
 		});
 		// IrisFaceUniforms writes the turn of a folded face while it draws, and puts the identity back.
 		uniforms.uniformMatrix3(UniformUpdateFrequency.PER_FRAME, "cubeworld_faceTurn", Matrix3f::new);
+		uniforms.uniformMatrix3(UniformUpdateFrequency.PER_FRAME, "cubeworld_crossTurn", FrameCrossing::backTurn);
 		uniforms.uniform3f(UniformUpdateFrequency.PER_FRAME, "cubeworld_daySkyColor", () -> new Vector3f(CubeSky.daySky()));
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_core", CubeSky::core);
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_centerY", CubeSky::centerY);

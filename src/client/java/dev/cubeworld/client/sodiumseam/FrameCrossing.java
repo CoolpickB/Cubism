@@ -4,6 +4,7 @@ import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3d;
@@ -42,6 +43,13 @@ public final class FrameCrossing {
 		}
 		double x = previous.x, y = previous.y, z = previous.z;
 		return new Vector3d(m[0] * x + m[1] * y + m[2] * z + m[9], m[3] * x + m[4] * y + m[5] * z + m[10], m[6] * x + m[7] * y + m[8] * z + m[11]);
+	}
+
+	/** The turn from the frame of the new face back into the one of the old face, or the identity outside a crossing. */
+	public static Matrix3f backTurn() {
+		int[] m = motion;
+		// The columns of the transpose of R are its rows.
+		return m == null ? new Matrix3f() : new Matrix3f(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]);
 	}
 
 	/** A model view matrix of the last frame. Other matrices, such as the projection, are not affine and stay as they are. */
