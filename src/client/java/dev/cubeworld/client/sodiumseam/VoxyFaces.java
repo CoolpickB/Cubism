@@ -38,7 +38,7 @@ public final class VoxyFaces {
 	private static @Nullable VoxyRenderSystem storesOf;
 	private static int depthCopy, copyWidth, copyHeight, copyFormat;
 	private static final java.util.List<Deferred> DEFERRED = new java.util.ArrayList<>();
-	private static boolean drawingDeferred, copied;
+	private static boolean drawingDeferred, copied, laterFace;
 
 	static {
 		for (int f = 0; f < FACES; f++) {
@@ -212,15 +212,28 @@ public final class VoxyFaces {
 		drawingDeferred = true;
 		copied = false;
 		try {
+			laterFace = false;
 			for (Deferred draw : DEFERRED) {
 				SeamFaces.setWorking(draw.face);
 				system.renderOpaque(draw.viewport, draw.depth, draw.color);
+				laterFace = true;
 			}
 		} finally {
+			laterFace = false;
 			SeamFaces.setWorking(-1);
 			DEFERRED.clear();
 			drawingDeferred = false;
 		}
+	}
+
+	/**
+	 * Voxy draws the list of a viewport that it built in the frame before, then updates its geometry and builds the list
+	 * again. The first face of the frame updates the geometry, so the list that a later face built in the frame before
+	 * can point at geometry that changed, and drew jumbled levels of detail in the sky for a frame while chunks loaded.
+	 * A later face does not update the geometry, and draws its list only after it builds it again.
+	 */
+	public static boolean laterFace() {
+		return laterFace;
 	}
 
 	private record Deferred(int face, Viewport<?> viewport, int depth, int color) {}

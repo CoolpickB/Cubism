@@ -1,12 +1,23 @@
 package dev.cubeworld.client.sodium;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubeworld.client.sodiumseam.VoxyFaces;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
+import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.rendering.Viewport;
+import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
+import me.cortex.voxy.client.core.rendering.hierachical.NodeCleaner;
+import me.cortex.voxy.client.core.rendering.section.backend.AbstractSectionRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
-/** Each face marks where the terrain stands from the depth before any face of Voxy drew, see {@link VoxyFaces#terrainDepth}. */
+/**
+ * Each face marks where the terrain stands from the depth before any face of Voxy drew, see {@link VoxyFaces#terrainDepth}.
+ * Only the first face updates the geometry, and the later faces draw only the lists they build after it, see
+ * {@link VoxyFaces#laterFace}.
+ */
 @Mixin(value = AbstractRenderPipeline.class, remap = false)
 public abstract class VoxyPipelineMixin {
 	@ModifyArg(
@@ -16,5 +27,57 @@ public abstract class VoxyPipelineMixin {
 	)
 	private int cubeworld$terrainDepth(int sourceDepthTexture) {
 		return VoxyFaces.terrainDepth(sourceDepthTexture);
+	}
+
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/rendering/section/backend/AbstractSectionRenderer;renderOpaque(Lme/cortex/voxy/client/core/rendering/Viewport;)V")
+	)
+	private void cubeworld$skipOldList(AbstractSectionRenderer renderer, Viewport viewport, Operation<Void> original) {
+		if (!VoxyFaces.laterFace()) {
+			original.call(renderer, viewport);
+		}
+	}
+
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/rendering/section/backend/AbstractSectionRenderer;buildDrawCalls(Lme/cortex/voxy/client/core/rendering/Viewport;)V")
+	)
+	private void cubeworld$drawNewList(AbstractSectionRenderer renderer, Viewport viewport, Operation<Void> original) {
+		original.call(renderer, viewport);
+		if (VoxyFaces.laterFace()) {
+			renderer.renderOpaque(viewport);
+		}
+	}
+
+	/** The new list already holds what the temporal pass adds. */
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/rendering/section/backend/AbstractSectionRenderer;renderTemporal(Lme/cortex/voxy/client/core/rendering/Viewport;)V")
+	)
+	private void cubeworld$skipTemporal(AbstractSectionRenderer renderer, Viewport viewport, Operation<Void> original) {
+		if (!VoxyFaces.laterFace()) {
+			original.call(renderer, viewport);
+		}
+	}
+
+	@WrapOperation(
+		method = "innerPrimaryWork",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/rendering/hierachical/AsyncNodeManager;tick(Lme/cortex/voxy/client/core/gl/GlBuffer;Lme/cortex/voxy/client/core/rendering/hierachical/NodeCleaner;)V")
+	)
+	private void cubeworld$tickNodesOnce(AsyncNodeManager manager, GlBuffer nodes, NodeCleaner cleaner, Operation<Void> original) {
+		if (!VoxyFaces.laterFace()) {
+			original.call(manager, nodes, cleaner);
+		}
+	}
+
+	@WrapOperation(
+		method = "innerPrimaryWork",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/rendering/hierachical/NodeCleaner;tick(Lme/cortex/voxy/client/core/gl/GlBuffer;)V")
+	)
+	private void cubeworld$tickCleanerOnce(NodeCleaner cleaner, GlBuffer nodes, Operation<Void> original) {
+		if (!VoxyFaces.laterFace()) {
+			original.call(cleaner, nodes);
+		}
 	}
 }
