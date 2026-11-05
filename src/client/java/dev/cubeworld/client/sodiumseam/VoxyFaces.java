@@ -74,42 +74,74 @@ public final class VoxyFaces {
 	}
 
 	/**
-	 * The wedge of the current face, relative to the corner of the 32 block section of the camera that the quads of Voxy
-	 * are placed from: the center of the cube in x, y and z, and half the width of the face region. Each face is stored
-	 * upright, so its wedge is where the height above the center is at least the distance from the center in x and in z.
-	 * The draw of a face keeps to its wedge and its region, and the draw of the next face starts at the same diagonal.
+	 * The wedge of the current face for the shaders of Voxy, relative to the corner of the 32 block section of the camera
+	 * that the quads of Voxy are placed from: the center block of the cube in x, y and z, half the width of the face
+	 * region, and then the least height above the distance from the center in x and in z that a block needs to belong to
+	 * the face. Each face is stored upright, so its wedge is where the height above the center is at least the distance
+	 * from the center in x and in z. A block on the diagonal belongs to one of the two faces, as {@link SeamLayout#ownerFace}
+	 * decides, so the shader keeps whole blocks as the meshers of Sodium do.
 	 */
 	public static float[] region(Viewport<?> viewport) {
 		SeamLayout layout = SeamClient.layout;
 		if (layout == null || !SeamFaces.active()) {
-			// With y far below, every point is inside the wedge and the region.
-			return new float[] {0.0F, -1.0E9F, 0.0F, 1.0E9F};
+			// With the center far below, every block is inside the wedge and the region.
+			return new float[] {0.0F, -1.0E9F, 0.0F, 1.0E9F, 0.0F, 0.0F, 0.0F, 0.0F};
 		}
+		int face = SeamFaces.currentFace();
 		int baseX = viewport.section.x << 5, baseY = viewport.section.y << 5, baseZ = viewport.section.z << 5;
+		int normal = cubeAxisRank(layout, face, 0, 1, 0);
 		return new float[] {
-			layout.offsetX(SeamFaces.currentFace()) + 0.5F - baseX, layout.centerY + 0.5F - baseY, 0.5F - baseZ, layout.spacing / 2.0F
+			layout.offsetX(face) - baseX, layout.centerY - baseY, -baseZ, layout.spacing / 2.0F,
+			normal > cubeAxisRank(layout, face, 1, 0, 0) ? 0.0F : 1.0F, normal > cubeAxisRank(layout, face, 0, 0, 1) ? 0.0F : 1.0F, 0.0F, 0.0F
 		};
 	}
 
-	/** Adds the wedge of the face to the scene block of the shaders of Voxy, and clips each quad corner to it. */
+	/** Where the axis of the cube that a storage axis of the face turns to stands when faces tie: Y over X over Z. */
+	private static int cubeAxisRank(SeamLayout layout, int face, int x, int y, int z) {
+		int[] cube = new int[3];
+		layout.toCube(face, layout.offsetX(face) + x, layout.centerY + y, z, cube);
+		return cube[1] != layout.centerY ? 2 : cube[0] != 0 ? 1 : 0;
+	}
+
+	/** Adds the wedge of the face to the scene block of the shaders of Voxy, and drops the fragments of blocks outside it. */
 	public static String patchShader(String path, String source) {
 		if (source == null) {
 			return null;
 		}
 		if (path.endsWith("lod/gl46/bindings.glsl")) {
-			return replaceOnce(path, source, "    vec3 cameraSubPos;\n};", "    vec3 cameraSubPos;\n    vec4 cubeworldRegion;\n};");
+			return replaceOnce(path, source, "    vec3 cameraSubPos;\n};", "    vec3 cameraSubPos;\n    vec4 cubeworldRegion;\n    vec4 cubeworldTies;\n};");
 		}
 		if (path.endsWith("lod/quad_util.glsl")) {
 			String pos = "    vec4 pos = MVP * vec4(point, 1.0f);";
-			return replaceOnce(path, source, pos, """
-				    vec3 cubeworldD = point - cubeworldRegion.xyz;
-				    gl_ClipDistance[0] = cubeworldD.y - cubeworldD.x;
-				    gl_ClipDistance[1] = cubeworldD.y + cubeworldD.x;
-				    gl_ClipDistance[2] = cubeworldD.y - cubeworldD.z;
-				    gl_ClipDistance[3] = cubeworldD.y + cubeworldD.z;
-				    gl_ClipDistance[4] = cubeworldRegion.w - cubeworldD.x;
-				    gl_ClipDistance[5] = cubeworldRegion.w + cubeworldD.x;
-				""" + pos);
+			source = replaceOnce(path, source, "vec4 getQuadCornerPos(", "vec3 cubeworldCorner;\n\nvec4 getQuadCornerPos(");
+			return replaceOnce(path, source, pos, "    cubeworldCorner = point;\n" + pos);
+		}
+		if (path.endsWith("lod/gl46/quads3.vert")) {
+			source = replaceOnce(path, source, "void main() {", "layout(location = 6) out vec3 cubeworldPoint;\n\nvoid main() {");
+			return replaceOnce(path, source, "    #ifndef USE_NV_BARRY\n    uv = getCornerUV", "    cubeworldPoint = cubeworldCorner;\n\n    #ifndef USE_NV_BARRY\n    uv = getCornerUV");
+		}
+		if (path.endsWith("lod/gl46/quads.frag")) {
+			source = replaceOnce(path, source, "\nvoid main() {", "\nlayout(location = 6) in vec3 cubeworldPoint;\n\nvoid main() {");
+			// The block of a fragment lies just behind its face, against the direction that the face points to.
+			return replaceOnce(path, source, "    if (any(notEqual(clamp(tile,", """
+				    {
+				        uint cubeworldFace = getFace();
+				        vec3 cubeworldNormal = vec3(0);
+				        float cubeworldSign = (cubeworldFace & 1u) == 1u ? 1.0 : -1.0;
+				        if ((cubeworldFace >> 1) == 0u) cubeworldNormal.y = cubeworldSign;
+				        else if ((cubeworldFace >> 1) == 1u) cubeworldNormal.z = cubeworldSign;
+				        else cubeworldNormal.x = cubeworldSign;
+				        ivec3 cubeworldBlock = ivec3(floor(cubeworldPoint - cubeworldNormal * 0.01 - cubeworldRegion.xyz));
+				        int cubeworldHalf = int(cubeworldRegion.w);
+				        if (cubeworldBlock.y - abs(cubeworldBlock.x) < int(cubeworldTies.x)
+				            || cubeworldBlock.y - abs(cubeworldBlock.z) < int(cubeworldTies.y)
+				            || cubeworldBlock.x < -cubeworldHalf || cubeworldBlock.x >= cubeworldHalf) {
+				            discard;
+				            return;
+				        }
+				    }
+
+				    if (any(notEqual(clamp(tile,""");
 		}
 		return source;
 	}
