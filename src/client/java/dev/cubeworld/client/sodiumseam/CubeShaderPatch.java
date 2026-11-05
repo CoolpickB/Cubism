@@ -57,7 +57,11 @@ public final class CubeShaderPatch {
 		    uniform float cubeworld_core;
 		    uniform float cubeworld_centerY;
 		    uniform mat3 cubeworld_celestialFrame;
+		    uniform mat3 cubeworld_viewToFeet;
 		    uniform vec3 cubeworld_shadowLight;
+		    // The normals that the programs of the ground store for the passes after them are read back with the view matrix of the
+		    // camera face. A folded face draws with the matrix of its own face, so it stores them in the frame of the camera face.
+		    #define cubeworld_normalOut(n) ((cubeworld_active != 0 ? cubeworld_viewToFeet : mat3(gbufferModelViewInverse)) * (n))
 		    #define CUBEWORLD_UP_VEC (cubeworld_active != 0 ? normalize(cubeworld_upPosition) : normalize(gbufferModelView[1].xyz))
 		    float cubeworldAlt(vec3 p) {
 		        if (cubeworld_active == 0) return p.y;
@@ -125,6 +129,7 @@ public final class CubeShaderPatch {
 		    // The programs of Voxy declare their own uniforms. They keep the flat world.
 		    #define cubeworld_active 0
 		    #define cubeworld_cubeFromFeet mat4(1.0)
+		    #define cubeworld_normalOut(n) (mat3(gbufferModelViewInverse) * (n))
 		    #define cubeworldAlt(p) ((p).y)
 		    #define cubeworldNormal(p) (p)
 		    #define cubeworldToFeet(d) (d)
@@ -336,6 +341,55 @@ public final class CubeShaderPatch {
 		if (name.endsWith(UNBOUND_CLOUDS)) {
 			return patchUnboundClouds(source);
 		}
+		if (name.endsWith("/lib/materials/materialMethods/reflectionBackground.glsl")) {
+			// The clouds in a reflection are traced from the feet of the camera face. A folded face draws its water with
+			// its own matrices, so the directions and the position must be turned into the frame of the camera face first.
+			source = source
+				.replace("normalize(mat3(gbufferModelViewInverse) * normalMR)", "normalize(cubeworld_normalOut(normalMR))")
+				.replace("dot(playerPos, worldNormalMR)", "dot(cubeworld_normalOut(mat3(gbufferModelView) * playerPos), worldNormalMR)")
+				.replace("normalize(mat3(gbufferModelViewInverse) * nViewPosR)", "normalize(cubeworld_normalOut(nViewPosR))");
+		}
+		if (name.endsWith("/lib/materials/materialMethods/reflections.glsl")) {
+			// Water is flat, so its sky reflection is measured from the up of its own face. The rounded up of the pack is
+			// tilted near an edge, and a folded face has to use the matrix it draws with.
+			source = source.replace("    float RVdotU = dot(nViewPosR, upVec);",
+				"""
+				    #if defined GBUFFERS_WATER && defined CUBEWORLD
+				        float RVdotU = dot(nViewPosR, cubeworld_active != 0 ? normalize(gbufferModelView[1].xyz) : upVec);
+				    #else
+				        float RVdotU = dot(nViewPosR, upVec);
+				    #endif""");
+		}
+		if (name.endsWith("/program/gbuffers_water.glsl") || name.endsWith("/program/gbuffers_terrain.glsl")) {
+			// The normal matrix of the pack comes from the global model view matrix of Iris, which is the one of the camera
+			// face. The model view matrix of the draw carries the fold of a face next to it, so the normals follow it.
+			source = source.replace("gl_NormalMatrix", "mat3(gl_ModelViewMatrix)");
+		}
+		if (name.endsWith("/program/gbuffers_water.glsl")) {
+			// The up of the face in view space, from the matrix of the draw. The foam on the edge of the water needs the
+			// flat up of the face it is on, not the rounded up of the pack that tilts near an edge.
+			source = source.replace("\nin vec3 playerPos;\n", "\nin vec3 playerPos;\nflat in vec3 cwFaceUp;\n")
+				.replace("\nout vec3 playerPos;\n", "\nout vec3 playerPos;\nflat out vec3 cwFaceUp;\n")
+				.replace("    normal = normalize(mat3(gl_ModelViewMatrix) * gl_Normal);\n",
+					"    normal = normalize(mat3(gl_ModelViewMatrix) * gl_Normal);\n    cwFaceUp = normalize(mat3(gl_ModelViewMatrix) * vec3(0.0, 1.0, 0.0));\n");
+		}
+		if (name.endsWith("/lib/materials/specificMaterials/translucents/water.glsl")) {
+			// The height of the world of a folded face is not the one of the camera face, so its fraction says nothing.
+			source = source.replace("foam *= clamp((fract(worldPos.y) - 0.7) * 10.0, 0.0, 1.0);", "if (cubeworld_active == 0) foam *= clamp((fract(worldPos.y) - 0.7) * 10.0, 0.0, 1.0);");
+			source = source.replace("                if (NdotU > 0.99) {", "                if (dot(normal, cwFaceUp) > 0.99) {")
+				.replace("""
+                    vec3 matrixM = vec3(
+                        gbufferModelViewInverse[0].y,
+                        gbufferModelViewInverse[1].y,
+                        gbufferModelViewInverse[2].y
+                    );
+                    float playerPosTY = dot(matrixM, viewPosT) + gbufferModelViewInverse[3].y;
+                    float yPosDif = playerPosTY - playerPos.y;
+""", "                    float yPosDif = dot(viewPosT - viewPos, cwFaceUp);\n");
+		}
+		if (name.contains("/program/")) {
+			source = source.replace("mat3(gbufferModelViewInverse) * normalM", "cubeworld_normalOut(normalM)");
+		}
 		for (String program : POINT_UP_PROGRAMS) {
 			if (name.endsWith("/program/" + program + ".glsl")) {
 				return "#define CUBEWORLD_POINT_UP\n" + source.replace(UP, "upVec = cubeworldPointUp();");
@@ -461,6 +515,8 @@ public final class CubeShaderPatch {
 			Matrix3f viewToStorage = new Matrix3f().set(new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView())).transpose();
 			return rows.mul(viewToStorage);
 		});
+		uniforms.uniformMatrix3(UniformUpdateFrequency.PER_FRAME, "cubeworld_viewToFeet",
+			() -> new Matrix3f().set(new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView())).transpose());
 		uniforms.uniform3f(UniformUpdateFrequency.PER_FRAME, "cubeworld_shadowLight", () -> {
 			// The light that the shadow map is cast from, as IrisShadowMatricesMixin picks it.
 			Matrix3f celestial = CubeSky.celestial();
