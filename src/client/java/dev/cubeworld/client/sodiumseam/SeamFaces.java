@@ -82,6 +82,11 @@ public final class SeamFaces {
 		return working >= 0 ? working : primary;
 	}
 
+	/** True outside {@link #drive} and {@link #draw}: Sodium handles the camera face, which it draws before the folded faces. */
+	public static boolean onCameraFace() {
+		return working < 0;
+	}
+
 	public static void setPrimary(int face) {
 		primary = face;
 	}

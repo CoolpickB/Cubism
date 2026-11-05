@@ -17,6 +17,7 @@
 		"ViewportAccessor",
 		"VoxyBoundStoreMixin",
 		"VoxyIngestMixin",
+		"VoxyPipelineMixin",
 		"VoxyRenderSystemMixin",
 		"VoxySectionRendererMixin",
 		"VoxyShaderLoaderMixin",

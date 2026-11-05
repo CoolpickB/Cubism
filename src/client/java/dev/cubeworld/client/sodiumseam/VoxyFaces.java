@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import org.jspecify.annotations.Nullable;
+import org.lwjgl.opengl.GL45C;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ public final class VoxyFaces {
 	private static final Object[] VIEWPORT_KEYS = new Object[FACES];
 	private static final StreamedBoundStore[] STORES = new StreamedBoundStore[FACES];
 	private static @Nullable VoxyRenderSystem storesOf;
+	private static int depthCopy, copyWidth, copyHeight, copyFormat;
 
 	static {
 		for (int f = 0; f < FACES; f++) {
@@ -68,6 +70,7 @@ public final class VoxyFaces {
 			}
 		}
 		storesOf = null;
+		freeDepthCopy();
 	}
 
 	/**
@@ -118,6 +121,41 @@ public final class VoxyFaces {
 			return source;
 		}
 		return text.replace(find, replacement);
+	}
+
+	/**
+	 * The depth texture that Voxy marks the pixels with terrain from, where it draws no levels of detail. Voxy writes the
+	 * depth of its levels of detail into the depth of the frame after each draw, so a later face would take the levels of
+	 * detail of an earlier face for terrain and leave holes where it is in front of them. Each face reads a copy of the
+	 * depth from before the first draw of Voxy in the frame, which is the draw of the camera face. The depth that Voxy
+	 * writes is depth tested, so the nearer face still wins where the levels of detail of two faces overlap.
+	 */
+	public static int terrainDepth(int sourceDepthTexture) {
+		if (!active()) {
+			return sourceDepthTexture;
+		}
+		if (SeamFaces.onCameraFace()) {
+			int width = GL45C.glGetTextureLevelParameteri(sourceDepthTexture, 0, GL45C.GL_TEXTURE_WIDTH);
+			int height = GL45C.glGetTextureLevelParameteri(sourceDepthTexture, 0, GL45C.GL_TEXTURE_HEIGHT);
+			int format = GL45C.glGetTextureLevelParameteri(sourceDepthTexture, 0, GL45C.GL_TEXTURE_INTERNAL_FORMAT);
+			if (depthCopy == 0 || width != copyWidth || height != copyHeight || format != copyFormat) {
+				freeDepthCopy();
+				depthCopy = GL45C.glCreateTextures(GL45C.GL_TEXTURE_2D);
+				GL45C.glTextureStorage2D(depthCopy, 1, format, width, height);
+				copyWidth = width;
+				copyHeight = height;
+				copyFormat = format;
+			}
+			GL45C.glCopyImageSubData(sourceDepthTexture, GL45C.GL_TEXTURE_2D, 0, 0, 0, 0, depthCopy, GL45C.GL_TEXTURE_2D, 0, 0, 0, 0, width, height, 1);
+		}
+		return depthCopy == 0 ? sourceDepthTexture : depthCopy;
+	}
+
+	private static void freeDepthCopy() {
+		if (depthCopy != 0) {
+			GL45C.glDeleteTextures(depthCopy);
+			depthCopy = 0;
+		}
 	}
 
 	/**
