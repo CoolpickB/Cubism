@@ -13,6 +13,9 @@ import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.Heightmap;
+import me.cortex.voxy.common.world.WorldSection;
+import me.cortex.voxy.common.world.other.Mapper;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -29,8 +32,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Voxy has no level of detail yet for a chunk that loads inside the draw distance of Sodium, so it stores the chunk and
  * shows its level of detail, refining over some frames, until Sodium builds the chunk. The sections of such a chunk that
  * Sodium has not built yet hide the level of detail too, so the chunk shows only its blocks. Sodium does not visit these
- * sections when it lists what it draws, so they are found here. A chunk that loads past the draw distance already has a
- * level of detail when it comes into the distance, and Sodium builds it only then, so it keeps its level of detail.
+ * sections when it lists what it draws, so they are found here. A chunk that loads past the draw distance, or that Voxy
+ * stored on an earlier visit, already has a fine level of detail, so it keeps it until Sodium builds the chunk.
  */
 @Mixin(value = RenderSectionManager.class, remap = false)
 public abstract class VoxyReadyColumnsMixin {
@@ -51,6 +54,22 @@ public abstract class VoxyReadyColumnsMixin {
 
 	@Inject(method = "onChunkAdded", at = @At("HEAD"))
 	private void cubeworld$added(int x, int z, CallbackInfo ci) {
+		VoxyRenderSystem system = IVoxyRenderSystemHolder.getNullable();
+		LevelChunk chunk = this.level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false);
+		if (system == null || chunk == null) {
+			return;
+		}
+		// Voxy stores 32 blocks a side at its finest level. A chunk whose top block Voxy has stored, from an earlier
+		// visit, already shows a fine level of detail, which stays until Sodium builds the chunk.
+		int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, 8, 8);
+		WorldSection stored = system.getEngine().acquireIfExists(0, x >> 1, top >> 5, z >> 1);
+		if (stored != null) {
+			long block = stored._unsafeGetRawDataArray()[WorldSection.getIndex(((x & 1) << 4) + 8, top & 31, ((z & 1) << 4) + 8)];
+			stored.release();
+			if (!Mapper.isAir(block)) {
+				return;
+			}
+		}
 		this.cubeworld$fresh.add(ChunkPos.pack(x, z));
 	}
 
