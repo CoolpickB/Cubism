@@ -57,6 +57,8 @@ public final class SeamFaces {
 	private static int renderDistance;
 	private static SortBehavior sortBehavior = SortBehavior.OFF;
 	private static int primary = -1;
+	/** The face whose manager runs or draws right now, or -1 while Sodium's own manager does. */
+	private static int working = -1;
 
 	private SeamFaces() {}
 
@@ -73,6 +75,11 @@ public final class SeamFaces {
 		renderDistance = distance;
 		sortBehavior = sort;
 		primary = face;
+	}
+
+	/** The face whose sections Sodium handles right now: a folded face inside {@link #drive} and {@link #draw}, else the camera face. */
+	public static int currentFace() {
+		return working >= 0 ? working : primary;
 	}
 
 	public static void setPrimary(int face) {
@@ -182,6 +189,7 @@ public final class SeamFaces {
 			if (Math.abs(p.x - layout.offsetX(f)) > reach || Math.abs(p.z) > reach) {
 				continue;
 			}
+			working = f;
 			UniformBufferManager ubm = uniforms[f];
 			Frustum frustum = new FoldedFrustum(((ViewportAccessor) (Object) viewport).cubeworld$frustum(), m);
 			Viewport folded = new Viewport(frustum, p);
@@ -220,6 +228,7 @@ public final class SeamFaces {
 			manager.tickVisibleRenders();
 			drawn[f] = true;
 		}
+		working = -1;
 	}
 
 	private static ChunkRenderMatrices folded(ChunkRenderMatrices matrices, int[] m) {
@@ -247,6 +256,7 @@ public final class SeamFaces {
 			if (faceUniforms) {
 				IrisFaceUniforms.beginFace(motion[f]);
 			}
+			working = f;
 			ChunkRenderMatrices turned = folded(matrices, motion[f]);
 			Vector3d p = position[f];
 			RenderSectionManager manager = managers[f];
@@ -259,6 +269,7 @@ public final class SeamFaces {
 				drawPass(manager, ubm, turned, DefaultTerrainRenderPasses.TRANSLUCENT, p, fog, sorting, renderPass, sampler, stage);
 			}
 		}
+		working = -1;
 		if (faceUniforms) {
 			IrisFaceUniforms.endFaces();
 		}

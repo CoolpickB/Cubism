@@ -14,7 +14,13 @@
 		"IrisShadowRendererMixin",
 		"LevelSliceMixin",
 		"SodiumWorldRendererMixin",
-		"ViewportAccessor"
+		"ViewportAccessor",
+		"VoxyBoundStoreMixin",
+		"VoxyIngestMixin",
+		"VoxyRenderSystemMixin",
+		"VoxySectionRendererMixin",
+		"VoxyShaderLoaderMixin",
+		"VoxyViewportSelectorMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

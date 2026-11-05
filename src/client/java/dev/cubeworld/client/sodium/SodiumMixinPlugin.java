@@ -19,7 +19,8 @@ public final class SodiumMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		return FabricLoader.getInstance().isModLoaded(mixinClassName.contains(".Iris") ? "iris" : "sodium");
+		String mod = mixinClassName.contains(".Iris") ? "iris" : mixinClassName.contains(".Voxy") ? "voxy" : "sodium";
+		return FabricLoader.getInstance().isModLoaded(mod);
 	}
 
 	@Override
