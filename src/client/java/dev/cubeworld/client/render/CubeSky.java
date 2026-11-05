@@ -103,6 +103,15 @@ public final class CubeSky {
 		return celestial == null ? null : new Matrix3f(TILT).mul(celestial);
 	}
 
+	/**
+	 * Which light a patched shader pack casts its one shadow map from: +1 for the sun, -1 for the moon opposite it. It
+	 * follows the time under the camera. Points lit by the other light read no shadows. The light turns over at sunset
+	 * and sunrise of the camera, where the pack has faded the shadows out.
+	 */
+	public static float shadowLightSign() {
+		return celestial == null || celestial.getColumn(1, new Vector3f()).dot(SURFACE_UP) >= 0.0F ? 1.0F : -1.0F;
+	}
+
 	public static void setCelestial(@Nullable Matrix3f frame) {
 		celestial = frame;
 	}

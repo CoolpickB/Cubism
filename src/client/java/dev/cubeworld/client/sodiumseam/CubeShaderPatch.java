@@ -539,7 +539,7 @@ public final class CubeShaderPatch {
 			if (celestial == null) {
 				return new Vector3f(0.0F, 1.0F, 0.0F);
 			}
-			Vector3f light = celestial.getColumn(1, new Vector3f());
+			Vector3f light = celestial.getColumn(1, new Vector3f()).mul(CubeSky.shadowLightSign());
 			return new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView()).transformDirection(light);
 		});
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_core", CubeSky::core);

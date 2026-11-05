@@ -17,15 +17,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class IrisShadowMatricesMixin {
 	@Inject(method = "createBaselineModelViewMatrix", at = @At("HEAD"), cancellable = true)
 	private static void cubeworld$lookAlongSun(PoseStack target, float shadowAngle, float sunPathRotation, float nearPlane, float farPlane, CallbackInfo ci) {
-		// A patched pack always casts from the real sun, so the shadow map does not depend on the time at the camera. Points
-		// that the moon lights read no shadows. Others place the sun on the tilted frame, and the shadows follow their light.
+		// A patched pack casts from the real sun or moon after the time at the camera. Others place the sun on the tilted
+		// frame, and the shadows follow their light.
 		Matrix3f celestial = CubeShaderPatch.active() ? CubeSky.celestial() : CubeSky.tiltedCelestial();
 		if (celestial == null) {
 			return;
 		}
 		// At night packs light from the moon, opposite the sun. A half turn about the axis keeps the frame right-handed.
-		boolean day = CubeShaderPatch.active() || CelestialUniforms.isDay();
-		float light = day ? 1.0F : -1.0F;
+		float light = CubeShaderPatch.active() ? CubeSky.shadowLightSign() : CelestialUniforms.isDay() ? 1.0F : -1.0F;
 		Vector3f side = celestial.getColumn(0, new Vector3f()).mul(light);
 		Vector3f sun = celestial.getColumn(1, new Vector3f()).mul(light);
 		Vector3f axis = celestial.getColumn(2, new Vector3f());
