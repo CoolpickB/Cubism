@@ -13,6 +13,8 @@ import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -24,6 +26,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Voxy marks only sections that Sodium has built, so a new chunk showed its level of detail, refining over some frames,
  * until Sodium built it. Every chunk that Sodium will build and draw hides the level of detail too, as Voxy does itself
  * under FREX. A chunk past the draw distance of Sodium keeps its level of detail, so it does not flash while it unloads.
+ * Sections of only air stay open, as Voxy leaves them: Voxy drops the levels of detail that are hidden whole, and has to
+ * load them again when Sodium stops drawing the chunk.
  */
 @Mixin(value = RenderSectionManager.class, remap = false)
 public abstract class VoxyReadyColumnsMixin {
@@ -68,7 +72,14 @@ public abstract class VoxyReadyColumnsMixin {
 			if (dx * dx + dz * dz >= distance * distance) {
 				return;
 			}
+			LevelChunk chunk = this.level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false);
+			if (chunk == null) {
+				return;
+			}
 			for (int y = minY; y <= maxY; y++) {
+				if (chunk.getSection(y - minY).hasOnlyAir()) {
+					continue;
+				}
 				float dy = nearestToZero((y << 4) - camera.intY - 1, (y << 4) - camera.intY + 17) - camera.fracY;
 				if (Math.abs(dy) < distance) {
 					system.visbleSectionStream.put(SectionPos.asLong(x, y, z));
