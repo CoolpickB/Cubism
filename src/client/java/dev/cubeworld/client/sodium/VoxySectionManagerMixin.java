@@ -1,0 +1,24 @@
+package dev.cubeworld.client.sodium;
+
+import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
+import net.minecraft.client.multiplayer.ClientLevel;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+/** Voxy stores a chunk when it loads; the cube also stores again the chunks across the seam that read from it. */
+@Mixin(value = RenderSectionManager.class, remap = false)
+public abstract class VoxySectionManagerMixin {
+	@Shadow
+	@Final
+	private ClientLevel level;
+
+	@Inject(method = "onChunkAdded", at = @At("TAIL"))
+	private void cubeworld$reingestAcrossSeam(int x, int z, CallbackInfo ci) {
+		VoxyFaces.reingestAcrossSeam(this.level, x, z);
+	}
+}

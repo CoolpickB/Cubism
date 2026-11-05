@@ -14,6 +14,11 @@ import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import me.cortex.voxy.common.world.service.VoxelIngestService;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.opengl.GL45C;
 import org.slf4j.Logger;
@@ -232,7 +237,8 @@ public final class VoxyFaces {
 		int nonAir = 0;
 		for (int i = 0; i < 4096; i++) {
 			int x = bx + (i & 15), y = by + (i >> 8 & 15), z = bz + (i >> 4 & 15);
-			if (!layout.insideWedge(x, y, z) && layout.ownerStorage(x, y, z, owner)) {
+			// The face across the seam is loaded later or not at all; reingestAcrossSeam fills the voxel when it loads.
+			if (!layout.insideWedge(x, y, z) && layout.ownerStorage(x, y, z, owner) && level.hasChunk(owner[0] >> 4, owner[2] >> 4)) {
 				pos.set(owner[0], owner[1], owner[2]);
 				BlockState state = level.getBlockState(pos);
 				if (!state.isSolidRender() && state.getFluidState().isEmpty()) {
@@ -248,5 +254,41 @@ public final class VoxyFaces {
 		}
 		section.lvl0NonAirCount = nonAir;
 		return section;
+	}
+
+	/**
+	 * Has Voxy store again the chunks of other faces whose voxels past their wedge are filled from the chunk that just
+	 * loaded, see {@link #fillPastWedge}. Those voxels lie within a section of the diagonal of their own face.
+	 */
+	public static void reingestAcrossSeam(ClientLevel level, int chunkX, int chunkZ) {
+		SeamLayout layout = SeamClient.layout;
+		int x0 = chunkX << 4, z0 = chunkZ << 4;
+		if (layout == null || !layout.inRegion(x0 + 8, z0 + 8)) {
+			return;
+		}
+		int face = layout.faceIndexAt(x0 + 8);
+		LongOpenHashSet chunks = new LongOpenHashSet();
+		int[] cube = new int[3], other = new int[3];
+		for (int y = level.getMinY(); y <= level.getMaxY(); y += 16) {
+			for (int c = 0; c < 8; c++) {
+				layout.toCube(face, x0 + (c & 1) * 15, y + (c >> 1 & 1) * 15, z0 + (c >> 2) * 15, cube);
+				for (int g = 0; g < FACES; g++) {
+					if (g == face) {
+						continue;
+					}
+					layout.toStorage(g, cube[0], cube[1], cube[2], other);
+					int dx = Math.abs(other[0] - layout.offsetX(g)), dy = other[1] - layout.centerY, dz = Math.abs(other[2]);
+					if (layout.inRegion(other[0], other[2]) && layout.faceIndexAt(other[0]) == g && dy >= Math.max(dx, dz) - 32) {
+						chunks.add(ChunkPos.pack(other[0] >> 4, other[2] >> 4));
+					}
+				}
+			}
+		}
+		for (long key : chunks) {
+			LevelChunk chunk = level.getChunkSource().getChunk(ChunkPos.getX(key), ChunkPos.getZ(key), ChunkStatus.FULL, false);
+			if (chunk != null) {
+				VoxelIngestService.tryAutoIngestChunk(chunk);
+			}
+		}
 	}
 }

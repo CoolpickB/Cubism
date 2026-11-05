@@ -19,6 +19,7 @@
 		"VoxyIngestMixin",
 		"VoxyPipelineMixin",
 		"VoxyRenderSystemMixin",
+		"VoxySectionManagerMixin",
 		"VoxySectionRendererMixin",
 		"VoxyShaderLoaderMixin",
 		"VoxyViewportSelectorMixin"
