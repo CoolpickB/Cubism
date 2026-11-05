@@ -387,6 +387,9 @@ public final class CubeShaderPatch {
 		if (name.endsWith(UNBOUND_CLOUDS)) {
 			return patchUnboundClouds(source);
 		}
+		if (name.endsWith("/lib/atmospherics/clouds/reimaginedClouds.glsl")) {
+			return patchReimaginedClouds(source);
+		}
 		if (name.endsWith("/lib/materials/materialMethods/reflectionBackground.glsl")) {
 			// The clouds in a reflection are traced from the feet of the camera face. A folded face draws its water with
 			// its own matrices, so the directions and the position must be turned into the frame of the camera face first.
@@ -469,27 +472,64 @@ public final class CubeShaderPatch {
 		source = source.replace(
 			"vec3 wpos = PlayerToShadow(tracePos - cameraPos);",
 			"""
-			#ifdef CLOUDS_UNBOUND
+			#if defined CLOUDS_UNBOUND || defined CLOUDS_REIMAGINED
 			        vec3 wpos = PlayerToShadow(cubeworldToFeet(tracePos - cameraPos));
 			#else
 			        vec3 wpos = PlayerToShadow(tracePos - cameraPos);
 			#endif""");
+		// The two layers of the reimagined clouds: the one nearer to the camera is traced first.
+		source = source.replace("if (abs(cameraPos.y - minCloudAlt) < abs(cameraPos.y - maxCloudAlt)) {",
+			"if (abs(cubeworldAlt(cameraPos) - minCloudAlt) < abs(cubeworldAlt(cameraPos) - maxCloudAlt)) {");
 		return source.replace(
 			"    cameraPos += cameraPosOffset;\n",
 			"""
 			    cameraPos += cameraPosOffset;
-			#ifdef CLOUDS_UNBOUND
+			#if defined CLOUDS_UNBOUND || defined CLOUDS_REIMAGINED
 			    if (cubeworld_active != 0) cameraPos = (cubeworld_cubeFromFeet * vec4(cameraPosOffset, 1.0)).xyz;
 			#endif
 			""");
 	}
 
-	private static String patchUnboundClouds(String source) {
+	/**
+	 * The clouds that read a flat map take it on the plane of the face that a point of the cube is over: the axis of the
+	 * point that is largest in size becomes y, the up of that face. The map then lies flat over each face, and changes
+	 * plane at the diagonal over an edge.
+	 */
+	private static final String CLOUD_PLANE = """
+
+		#ifndef CUBEWORLD_CLOUD_PLANE
+		#define CUBEWORLD_CLOUD_PLANE
+		vec3 cubeworldPlanar(vec3 v, vec3 p) {
+		    if (cubeworld_active == 0) return v;
+		    vec3 a = abs(p);
+		    return a.y >= a.x && a.y >= a.z ? v : a.x >= a.z ? v.zxy : v.xzy;
+		}
+		#endif
+		""";
+
+	private static String patchReimaginedClouds(String source) {
+		source = source.replace("const float cloudRoundness = 0.125;\n", "const float cloudRoundness = 0.125;\n" + CLOUD_PLANE)
+			.replace("tracePosM = ModifyTracePos(tracePos, cloudAltitude);",
+				"tracePosM = ModifyTracePos(cubeworld_active != 0 ? vec3(cubeworldPlanar(tracePos, tracePos).x, cubeworldAlt(tracePos), cubeworldPlanar(tracePos, tracePos).z) : tracePos, cloudAltitude);")
+			.replace("vec3 cLightPosAdd = normalize(ViewToPlayer(lightVec * 1000000000.0)) * vec3(0.08);",
+				"vec3 cLightPosAdd = normalize(ViewToPlayer(lightVec * 1000000000.0)) * vec3(0.08);\n"
+					+ "                if (cubeworld_active != 0) cLightPosAdd = cubeworldPlanar(mat3(cubeworld_cubeFromFeet) * cLightPosAdd, tracePos);")
+			.replace("float aboveClouds = clamp01((cameraPos.y - lowerPlaneAltitude) * 0.05);",
+				"float aboveClouds = clamp01((cubeworldAlt(cameraPos) - lowerPlaneAltitude) * 0.05);");
+		// The band of these clouds is thin, and they take one step per block of it. On the cube the march is cut to the
+		// length that a ray at its angle to the shell stays in the band, so a ray along the shell does not take thousands.
+		source = patchCloudShell(source,
+			"min(max(distanceThreshold - cubeworldT, 0.0), cloudTallness / max(abs(dot(nPlayerPos, cubeworldNormal(cameraPos + cubeworldT * nPlayerPos))), 0.02))");
+		return source;
+	}
+
+	/** The march of the volumetric clouds over the rounded shell of the cube. The length is how far it marches from the entry. */
+	private static String patchCloudShell(String source, String length) {
 		source = source.replace(
 			"float threshold = clamp(abs(cloudAltitude - tracePos.y) / cloudStretch, 0.001, 0.999);",
 			"float threshold = clamp(abs(cloudAltitude - cubeworldAlt(tracePos)) / cloudStretch, 0.001, 0.999);");
 		// Over the cube the band of the clouds is a rounded shell. Step along the ray to it by the gap to the band,
-		// which never steps over it, and guess how far the ray stays in it from its angle to the shell.
+		// which never steps over it.
 		source = replaceBetween(source,
 			"    float lowerPlaneDistance  = (lowerPlaneAltitude - cameraPos.y) / nPlayerPos.y;",
 			"    float planeDistanceDif = maxPlaneDistance - minPlaneDistance;\n",
@@ -510,12 +550,29 @@ public final class CubeShaderPatch {
 				        }
 				        if (!cubeworldHit) return vec4(0.0);
 				        minPlaneDistance = cubeworldT;
-				        // The march stops where the ray leaves the band. A ray can follow the shell around an edge onto the next face,
-				        // so no estimate of the length from the slope at the entry holds.
-				        planeDistanceDif = max(distanceThreshold - cubeworldT, 0.0);
+				        planeDistanceDif = LENGTH;
 				    } else {
-				""" + original.replace("    float minPlaneDistance = ", "    minPlaneDistance = ")
+				""".replace("LENGTH", length) + original.replace("    float minPlaneDistance = ", "    minPlaneDistance = ")
 					.replace("    float planeDistanceDif = ", "    planeDistanceDif = ") + "    }\n");
+		source = source.replace(
+			"    tracePos.y -= traceAdd.y;\n",
+			"    if (cubeworld_active != 0) tracePos -= traceAdd; else tracePos.y -= traceAdd.y;\n");
+		// The haze and the end of the march read the distance on the ground. A ray that bends over an edge covers little of it
+		// while it travels far, so on the cube they read the true distance.
+		source = source.replace("float lTracePosXZ = length(cloudPlayerPos.xz);", "float lTracePosXZ = cubeworld_active != 0 ? lTracePos : length(cloudPlayerPos.xz);");
+		return source.replace(
+			"float cloudShading = 1.0 - (higherPlaneAltitude - tracePos.y) / cloudTallness;",
+			"float cloudShading = 1.0 - (higherPlaneAltitude - cubeworldAlt(tracePos)) / cloudTallness;");
+	}
+
+	private static String patchUnboundClouds(String source) {
+		// The march stops where the ray leaves the band. A ray can follow the shell around an edge onto the next face, so no
+		// estimate of the length from the slope at the entry holds.
+		source = patchCloudShell(source, "max(distanceThreshold - cubeworldT, 0.0)");
+		// The low cloud quality reads a flat map of noise.
+		source = source.replace("noise += texture2DLod(noisetex, tracePosM.xz - vec2(0.0, wind), 0.0).b * currentPersist;",
+			"noise += texture2DLod(noisetex, cubeworldPlanar(tracePosM, tracePos).xz - vec2(0.0, wind), 0.0).b * currentPersist;")
+			.replace("const float cloudTallness = cloudStretch * 2.0;\n", "const float cloudTallness = cloudStretch * 2.0;\n" + CLOUD_PLANE);
 		// The closed area check reads the shadow map at points far from the camera. On the cube the body of the planet shades
 		// the far side from the sun, so the check would remove the clouds there.
 		source = source.replace("if (shadowLength < lTracePos)", "if (cubeworld_active == 0 && shadowLength < lTracePos)");
@@ -523,23 +580,12 @@ public final class CubeShaderPatch {
 			"float aboveClouds = clamp01((cameraPos.y - lowerPlaneAltitude) * 0.01);",
 			"float aboveClouds = clamp01((cubeworldAlt(cameraPos) - lowerPlaneAltitude) * 0.01);");
 		source = source.replace(
-			"    tracePos.y -= traceAdd.y;\n",
-			"    if (cubeworld_active != 0) tracePos -= traceAdd; else tracePos.y -= traceAdd.y;\n");
-		source = source.replace(
 			"if (abs(tracePos.y - cloudAltitude) > cloudStretch) break;",
 			"if (abs(cubeworldAlt(tracePos) - cloudAltitude) > cloudStretch) {\n    if (cubeworld_active == 0) break;\n    // Over the edge of the cube the ray can come back into the shell farther on, so look for the next entry.\n    float cubeworldT2 = length(tracePos - cameraPos);\n    bool cubeworldBack = false;\n    for (int j = 0; j < 64; j++) {\n        float gap2 = abs(cubeworldAlt(cameraPos + cubeworldT2 * nPlayerPos) - cloudAltitude) - cloudStretch;\n        if (gap2 <= 0.0) { cubeworldBack = true; break; }\n        cubeworldT2 += max(gap2, max(2.0, cubeworldT2 * 0.01));\n        if (cubeworldT2 > distanceThreshold) break;\n    }\n    if (!cubeworldBack) break;\n    // The offset by the dither of each pixel keeps the slices of neighbouring pixels apart, as at the first entry.\n    tracePos = cameraPos + (cubeworldT2 + stepMult * (dither - 1.0)) * nPlayerPos;\n}\n");
-		// The haze and the end of the march read the distance on the ground. A ray that bends over an edge covers little of it
-		// while it travels far, so on the cube they read the true distance.
-		source = source.replace("float lTracePosXZ = length(cloudPlayerPos.xz);", "float lTracePosXZ = cubeworld_active != 0 ? lTracePos : length(cloudPlayerPos.xz);");
-		source = source.replace(
-			"float lTracePosXZ = length(cloudPlayerPos.xz);",
-			"float lTracePosXZ = cubeworld_active != 0 ? lTracePos : length(cloudPlayerPos.xz);");
 		source = source.replace(
 			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cloudPlayerPos.y)",
 			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cubeworldAlt(tracePos) - cubeworldAlt(cameraPos))");
-		return source.replace(
-			"float cloudShading = 1.0 - (higherPlaneAltitude - tracePos.y) / cloudTallness;",
-			"float cloudShading = 1.0 - (higherPlaneAltitude - cubeworldAlt(tracePos)) / cloudTallness;");
+		return source;
 	}
 
 	private static String replaceBetween(String source, String start, String end, java.util.function.UnaryOperator<String> edit) {
