@@ -2,6 +2,7 @@ package dev.cubeworld.client.sodium;
 
 import dev.cubeworld.client.sodiumseam.VoxyFaces;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
+import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.bounding.IBoundStore;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
 import org.spongepowered.asm.mixin.Mixin;
@@ -41,6 +42,13 @@ public abstract class VoxyRenderSystemMixin {
 	)
 	private double cubeworld$centerZ(double z) {
 		return VoxyFaces.centerZ(z);
+	}
+
+	@Inject(method = "renderOpaque", at = @At("HEAD"), cancellable = true)
+	private void cubeworld$deferFace(Viewport<?> viewport, int depth, int color, CallbackInfo ci) {
+		if (VoxyFaces.defer((VoxyRenderSystem) (Object) this, viewport, depth, color)) {
+			ci.cancel();
+		}
 	}
 
 	@Inject(method = "shutdown", at = @At("TAIL"))

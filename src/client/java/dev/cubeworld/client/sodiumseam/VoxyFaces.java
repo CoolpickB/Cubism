@@ -37,6 +37,8 @@ public final class VoxyFaces {
 	private static final StreamedBoundStore[] STORES = new StreamedBoundStore[FACES];
 	private static @Nullable VoxyRenderSystem storesOf;
 	private static int depthCopy, copyWidth, copyHeight, copyFormat;
+	private static final java.util.List<Deferred> DEFERRED = new java.util.ArrayList<>();
+	private static boolean drawingDeferred, copied;
 
 	static {
 		for (int f = 0; f < FACES; f++) {
@@ -164,14 +166,15 @@ public final class VoxyFaces {
 	 * The depth texture that Voxy marks the pixels with terrain from, where it draws no levels of detail. Voxy writes the
 	 * depth of its levels of detail into the depth of the frame after each draw, so a later face would take the levels of
 	 * detail of an earlier face for terrain and leave holes where it is in front of them. Each face reads a copy of the
-	 * depth from before the first draw of Voxy in the frame, which is the draw of the camera face. The depth that Voxy
+	 * depth from before the first draw of Voxy in the frame, after the opaque terrain of every face, see {@link #defer}. The depth that Voxy
 	 * writes is depth tested, so the nearer face still wins where the levels of detail of two faces overlap.
 	 */
 	public static int terrainDepth(int sourceDepthTexture) {
 		if (!active()) {
 			return sourceDepthTexture;
 		}
-		if (SeamFaces.onCameraFace()) {
+		if (!copied) {
+			copied = true;
 			int width = GL45C.glGetTextureLevelParameteri(sourceDepthTexture, 0, GL45C.GL_TEXTURE_WIDTH);
 			int height = GL45C.glGetTextureLevelParameteri(sourceDepthTexture, 0, GL45C.GL_TEXTURE_HEIGHT);
 			int format = GL45C.glGetTextureLevelParameteri(sourceDepthTexture, 0, GL45C.GL_TEXTURE_INTERNAL_FORMAT);
@@ -187,6 +190,37 @@ public final class VoxyFaces {
 		}
 		return depthCopy == 0 ? sourceDepthTexture : depthCopy;
 	}
+
+	/**
+	 * Voxy draws at the end of the cutout pass of each face, and the camera face draws first. A face that draws later
+	 * was not in the depth that {@link #terrainDepth} copied, so Voxy drew its levels of detail over the blocks of that
+	 * face. All draws of Voxy wait until the opaque terrain of every face is drawn. Returns true when the draw waits.
+	 */
+	public static boolean defer(VoxyRenderSystem system, Viewport<?> viewport, int depth, int color) {
+		if (!active() || drawingDeferred) {
+			return false;
+		}
+		SeamFaces.afterOpaque = () -> drawDeferred(system);
+		DEFERRED.add(new Deferred(SeamFaces.currentFace(), viewport, depth, color));
+		return true;
+	}
+
+	private static void drawDeferred(VoxyRenderSystem system) {
+		drawingDeferred = true;
+		copied = false;
+		try {
+			for (Deferred draw : DEFERRED) {
+				SeamFaces.setWorking(draw.face);
+				system.renderOpaque(draw.viewport, draw.depth, draw.color);
+			}
+		} finally {
+			SeamFaces.setWorking(-1);
+			DEFERRED.clear();
+			drawingDeferred = false;
+		}
+	}
+
+	private record Deferred(int face, Viewport<?> viewport, int depth, int color) {}
 
 	private static void freeDepthCopy() {
 		if (depthCopy != 0) {

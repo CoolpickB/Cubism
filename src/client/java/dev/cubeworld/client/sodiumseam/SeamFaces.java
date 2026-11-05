@@ -59,8 +59,14 @@ public final class SeamFaces {
 	private static int primary = -1;
 	/** The face whose manager runs or draws right now, or -1 while Sodium's own manager does. */
 	private static int working = -1;
+	/** Runs after the opaque terrain of every face is drawn. {@link VoxyFaces} draws there, so this class does not load Voxy. */
+	static @Nullable Runnable afterOpaque;
 
 	private SeamFaces() {}
+
+	static void setWorking(int face) {
+		working = face;
+	}
 
 	public static boolean active() {
 		return primary >= 0;
@@ -277,6 +283,9 @@ public final class SeamFaces {
 		working = -1;
 		if (faceUniforms) {
 			IrisFaceUniforms.endFaces();
+		}
+		if (group == ChunkSectionLayerGroup.OPAQUE && afterOpaque != null) {
+			afterOpaque.run();
 		}
 	}
 
