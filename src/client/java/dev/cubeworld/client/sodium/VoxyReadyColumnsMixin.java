@@ -6,7 +6,9 @@ import dev.cubeworld.client.sodiumseam.VoxyFaces;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.util.IrisUtil;
+import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
+import net.caffeinemc.mods.sodium.client.render.chunk.storage.SectionStorage;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTracker;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
 import net.caffeinemc.mods.sodium.client.render.viewport.CameraTransform;
@@ -25,16 +27,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Voxy marks only sections that Sodium has built, so a new chunk showed its level of detail, refining over some frames,
- * until Sodium built it. Every chunk that Sodium will build and draw hides the level of detail too, as Voxy does itself
- * under FREX. A chunk past the draw distance of Sodium keeps its level of detail, so it does not flash while it unloads.
- * Sections of only air stay open, as Voxy leaves them: Voxy drops the levels of detail that are hidden whole, and has to
- * load them again when Sodium stops drawing the chunk.
+ * until Sodium built it. The sections that Sodium has but did not build yet, within its draw distance, hide the level of
+ * detail too. Sodium does not visit these sections when it lists what it draws, so they are found here. Built sections
+ * stay with Voxy: Sodium draws from a list that it builds in the background, so a guess of which built sections it draws
+ * left chunks at the edge with no blocks and no level of detail for some frames.
  */
 @Mixin(value = RenderSectionManager.class, remap = false)
 public abstract class VoxyReadyColumnsMixin {
 	@Shadow
 	@Final
 	private ClientLevel level;
+
+	@Shadow
+	@Final
+	private SectionStorage renderSections;
 
 	@Shadow
 	protected abstract float getSearchDistance(FogParameters fogParameters);
@@ -79,6 +85,10 @@ public abstract class VoxyReadyColumnsMixin {
 			}
 			for (int y = minY; y <= maxY; y++) {
 				if (chunk.getSection(y - minY).hasOnlyAir()) {
+					continue;
+				}
+				RenderSection section = this.renderSections.getConsistent(SectionPos.asLong(x, y, z));
+				if (section == null || section.isBuilt()) {
 					continue;
 				}
 				float dy = nearestToZero((y << 4) - camera.intY - 1, (y << 4) - camera.intY + 17) - camera.fracY;
