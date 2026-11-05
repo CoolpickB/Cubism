@@ -22,7 +22,6 @@
 		"VoxySectionManagerMixin",
 		"VoxySectionRendererMixin",
 		"VoxyShaderLoaderMixin",
-		"VoxyUnbuiltSectionMixin",
 		"VoxyViewportSelectorMixin"
 	],
 	"injectors": {
