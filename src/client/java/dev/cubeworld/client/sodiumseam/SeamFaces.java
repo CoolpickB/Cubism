@@ -238,7 +238,8 @@ public final class SeamFaces {
 
 	public static void draw(RenderPass renderPass, ChunkSectionLayerGroup group, ChunkRenderMatrices matrices, GpuSampler sampler,
 		@Nullable OitStage stage, FogParameters fog, boolean sorting) {
-		boolean faceUniforms = SeamClient.IRIS && !IrisLink.shadowsActive();
+		// The shadow pass needs them too: the pack lays the water caustics out on the world x and z of each shadow vertex.
+		boolean faceUniforms = SeamClient.IRIS;
 		for (int f = 0; f < FACES; f++) {
 			if (!drawn[f]) {
 				continue;

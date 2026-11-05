@@ -349,6 +349,22 @@ public final class CubeShaderPatch {
 				.replace("dot(playerPos, worldNormalMR)", "dot(cubeworld_normalOut(mat3(gbufferModelView) * playerPos), worldNormalMR)")
 				.replace("normalize(mat3(gbufferModelViewInverse) * nViewPosR)", "normalize(cubeworld_normalOut(nViewPosR))");
 		}
+		if (name.endsWith("/lib/materials/materialMethods/refraction.glsl")) {
+			// The refraction is drawn once for the whole view, in the frame of the camera face. There the water of a folded
+			// face stands on edge, so its noise stretched into streaks and changed at a crossing. The noise lies on the face
+			// that the point of the cube is on, which does not depend on the face of the camera.
+			source = source.replace("    vec3 worldPos = playerPos.xyz + cameraPosition.xyz;\n",
+				"""
+				    vec3 worldPos = playerPos.xyz + cameraPosition.xyz;
+				    #ifdef CUBEWORLD
+				        if (cubeworld_active != 0) {
+				            vec3 cubePos = (cubeworld_cubeFromView * vec4(viewPos.xyz, 1.0)).xyz;
+				            vec3 a = abs(cubePos);
+				            worldPos = a.y >= a.x && a.y >= a.z ? cubePos.xyz : a.x >= a.z ? cubePos.zxy : cubePos.xzy;
+				        }
+				    #endif
+				""");
+		}
 		if (name.endsWith("/lib/materials/materialMethods/reflections.glsl")) {
 			// Water is flat, so its sky reflection is measured from the up of its own face. The rounded up of the pack is
 			// tilted near an edge, and a folded face has to use the matrix it draws with.

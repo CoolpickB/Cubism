@@ -24,11 +24,22 @@ public final class IrisFaceUniforms {
 	private static int @Nullable [] motion;
 	/** The values of the camera face in each program that a folded face changed this draw, to put back afterwards. */
 	private static final Int2ObjectOpenHashMap<Saved> SAVED = new Int2ObjectOpenHashMap<>();
+	/** The program that Iris set up last, which stays bound until the pipeline changes. */
+	private static int lastProgram = -1;
 
 	private IrisFaceUniforms() {}
 
 	static void beginFace(int[] faceMotion) {
 		motion = faceMotion;
+		// The backend binds a pipeline, and Iris sets up its program, only when the pipeline changes. Sodium draws the
+		// camera face first, and the translucent pass of every face uses the same pipeline, so no setup runs for the
+		// folded faces after it. The values go straight into the program that is bound and every one set up so far.
+		if (lastProgram >= 0) {
+			SAVED.computeIfAbsent(lastProgram, Saved::new);
+		}
+		for (Saved saved : SAVED.values()) {
+			saved.apply(faceMotion);
+		}
 	}
 
 	static void endFaces() {
@@ -37,10 +48,12 @@ public final class IrisFaceUniforms {
 			saved.restore();
 		}
 		SAVED.clear();
+		lastProgram = -1;
 	}
 
 	/** Iris sets up the program for every draw, so this runs after Iris has written the values of the camera face. */
 	public static void onSetup(int program) {
+		lastProgram = program;
 		int[] m = motion;
 		if (m != null) {
 			SAVED.computeIfAbsent(program, Saved::new).apply(m);
