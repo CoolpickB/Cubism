@@ -1,5 +1,6 @@
 package dev.cubeworld.client.sodium;
 
+import dev.cubeworld.client.ClientConfig;
 import dev.cubeworld.client.sodiumseam.VoxyFaces;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
@@ -26,6 +27,10 @@ public abstract class VoxyBoundStoreMixin {
 
 	@Inject(method = "put", at = @At("HEAD"), cancellable = true)
 	private void cubeworld$putFace(long pos, CallbackInfo ci) {
+		if (ClientConfig.voxyHide == 0) {
+			ci.cancel();
+			return;
+		}
 		StreamedBoundStore face = this.cubeworld$faceStore();
 		if (face != null) {
 			face.put(pos);

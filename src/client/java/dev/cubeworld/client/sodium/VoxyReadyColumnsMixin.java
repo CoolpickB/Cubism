@@ -1,5 +1,6 @@
 package dev.cubeworld.client.sodium;
 
+import dev.cubeworld.client.ClientConfig;
 import dev.cubeworld.client.sodiumseam.SeamFaces;
 import dev.cubeworld.client.sodiumseam.VoxyFaces;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
@@ -53,7 +54,7 @@ public abstract class VoxyReadyColumnsMixin {
 
 	private void cubeworld$readyColumns(Viewport viewport, FogParameters fogParameters) {
 		VoxyRenderSystem system = IVoxyRenderSystemHolder.getNullable();
-		if (system == null || system.visbleSectionStream == null || IrisUtil.irisShadowActive()) {
+		if (system == null || system.visbleSectionStream == null || IrisUtil.irisShadowActive() || ClientConfig.voxyHide < 2) {
 			return;
 		}
 		boolean faces = VoxyFaces.active();

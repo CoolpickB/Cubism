@@ -7,7 +7,10 @@ import dev.cubeworld.client.render.CubeSky;
 import dev.cubeworld.client.render.SeamRenderer;
 import dev.cubeworld.network.CubeNetworking;
 import dev.cubeworld.worldgen.SeamLayout;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Screenshot;
@@ -26,6 +29,12 @@ public class CubeWorldClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		CubeSky.init();
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+			ClientCommands.literal("cubevoxy").then(ClientCommands.literal("hide").then(
+				ClientCommands.argument("mode", IntegerArgumentType.integer(0, 2)).executes(context -> {
+					ClientConfig.voxyHide = IntegerArgumentType.getInteger(context, "mode");
+					return 1;
+				})))));
 		CubeNetworking.clientGravitySender = gravity -> ClientPlayNetworking.send(new CubeNetworking.PlayerGravityPayload(gravity));
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.PlanetPayload.TYPE, (payload, context) ->

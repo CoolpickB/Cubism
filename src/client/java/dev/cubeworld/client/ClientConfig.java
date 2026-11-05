@@ -19,6 +19,12 @@ public final class ClientConfig {
 	/** Whether the look, the walking yaw and the face of the player go to logs/cubeworld-look.log while the view frame is tilted. */
 	public static final boolean traceLook = Boolean.parseBoolean(PROPERTIES.getProperty("traceLook", "false"));
 
+	/**
+	 * Debug, set with {@code /cubevoxy hide}: where Voxy hides its levels of detail. 0 nowhere, 1 behind the sections
+	 * that Sodium draws (Voxy alone), 2 also behind the chunks that Sodium will build.
+	 */
+	public static int voxyHide = 2;
+
 	/** Whether F3 shows the line with the storage position, which is only of use when debugging the mod. */
 	public static final boolean showStorageLine = Boolean.parseBoolean(PROPERTIES.getProperty(SHOW_STORAGE_LINE, "false"));
 
