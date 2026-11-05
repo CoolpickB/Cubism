@@ -65,9 +65,11 @@ public final class CubeTime {
 	public static double[] surfaceNormal(SeamLayout layout, double x, double y, double z) {
 		int face = layout.faceIndexAt(Mth.floor(x));
 		double inner = layout.radius - EDGE_BLEND;
-		double ex = beyond(x - layout.offsetX(face), inner);
-		double ey = beyond(y - layout.centerY, inner);
-		double ez = beyond(z, inner);
+		// The center of the cube is the center of a block, as in SeamLayout.crossingFace. From the block corner, the two
+		// faces of an edge would put it half a block apart, a step of about 25 ticks at each crossing.
+		double ex = beyond(x - layout.offsetX(face) - 0.5, inner);
+		double ey = beyond(y - layout.centerY - 0.5, inner);
+		double ez = beyond(z - 0.5, inner);
 		if (ex == 0.0 && ey == 0.0 && ez == 0.0) {
 			ey = 1.0;
 		}

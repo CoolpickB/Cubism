@@ -53,7 +53,8 @@ public abstract class SkyRendererMixin {
 			double ticks = instance.totalTicks() + (instance.isPaused() ? 0.0F : partialTicks * instance.rate());
 			cubeworld$celestial = CubeTime.celestial(layout, layout.faceIndexAt(Mth.floor(camera.position().x)), ticks);
 			CubeSky.setCelestial(cubeworld$celestial);
-			CubeSky.extract(level, camera.position(), ticks);
+			net.minecraft.world.entity.Entity body = camera.entity();
+			CubeSky.extract(level, camera.position(), body == null ? camera.position() : dev.cubeworld.client.CubeFlight.timeFocus(body, partialTicks), ticks);
 			// The air already covers the sky below the horizon.
 			state.shouldRenderDarkDisc = false;
 		});

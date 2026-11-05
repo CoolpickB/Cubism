@@ -627,6 +627,11 @@ public final class CubeFlight {
 		return new Quaternionf().rotationYXZ((float) Math.PI - yRot * Mth.DEG_TO_RAD, -xRot * Mth.DEG_TO_RAD, -roll * Mth.DEG_TO_RAD);
 	}
 
+	/** Where the sky and the light read the local time: the body center, which a crossing carries over exactly. */
+	public static Vec3 timeFocus(Entity body, float partialTicks) {
+		return body.getPosition(partialTicks).add(0.0, body.getBbHeight() / 2.0, 0.0);
+	}
+
 	/**
 	 * Puts a body where the crossing turns it, with its velocity and yaw. The last positions turn along, so the frame
 	 * between the two ticks stays in place. The crossing can move the body off a block (see SeamCrossing.turned); the

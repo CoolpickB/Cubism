@@ -27,6 +27,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -66,6 +67,15 @@ public abstract class CameraMixin {
 	@Shadow private int matrixPropertiesDirty;
 
 	@Shadow protected abstract void setPosition(double x, double y, double z);
+
+	/**
+	 * The probe gives the sky color, the sun angle and the lightmap the local time at the point it samples. It samples
+	 * the point the sky of the cube reads, or the shader pack mixes two local times near an edge.
+	 */
+	@ModifyArg(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/attribute/EnvironmentAttributeProbe;tick(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/phys/Vec3;)V"), index = 1)
+	private Vec3 cubeworld$probeAtTimeFocus(Vec3 position) {
+		return SeamLayout.of(this.entity.level()) == null ? position : CubeFlight.timeFocus(this.entity, 1.0F);
+	}
 
 	@Unique private Entity cubeworld$lastEntity;
 	@Unique private Direction cubeworld$lastFrame = Direction.DOWN;

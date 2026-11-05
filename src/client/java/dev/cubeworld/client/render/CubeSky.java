@@ -142,8 +142,11 @@ public final class CubeSky {
 		return starMax;
 	}
 
-	/** Samples the colors of the day and the position of the camera and the sun for the next frame. */
-	public static void extract(ClientLevel level, Vec3 camera, double ticks) {
+	/**
+	 * Samples the colors of the day and the position of the camera and the sun for the next frame. The local time and
+	 * the up come from the body center, the same point as the attribute probe of the camera (see CameraMixin).
+	 */
+	public static void extract(ClientLevel level, Vec3 camera, Vec3 body, double ticks) {
 		SeamLayout layout = SeamLayout.of(level);
 		CubeTime.State time = ((CubeTimeLevel) level).cubeworld$cubeTime();
 		active = layout != null && time != null;
@@ -172,7 +175,7 @@ public final class CubeSky {
 		texture.upload();
 		starMax = Math.max(maxStars, 0.01F);
 		radius = layout.radius;
-		double[] up = CubeTime.surfaceNormal(layout, camera.x, camera.y, camera.z);
+		double[] up = CubeTime.surfaceNormal(layout, body.x, body.y, body.z);
 		SURFACE_UP.set((float) up[0], (float) up[1], (float) up[2]).normalize();
 		TILT.rotation(new org.joml.Quaternionf().rotationTo(SURFACE_UP, new Vector3f(0.0F, 1.0F, 0.0F)));
 		core = layout.radius - CubeTime.EDGE_BLEND;
@@ -186,11 +189,12 @@ public final class CubeSky {
 				FRAME.setRowColumn(row, column, m[row * 3 + column]);
 			}
 		}
-		double x = camera.x - layout.offsetX(face);
-		double y = camera.y - layout.centerY;
-		double z = camera.z;
+		// About the center of the cube, which is the center of a block (see CubeTime.surfaceNormal).
+		double x = camera.x - layout.offsetX(face) - 0.5;
+		double y = camera.y - layout.centerY - 0.5;
+		double z = camera.z - 0.5;
 		// The fog of vanilla at the camera follows the local time there, which the shader needs to match the horizon.
-		long cameraTicks = Math.floorMod((long) ticks + CubeTime.offsetTicks(layout, camera.x, camera.y, camera.z), CubeTime.DAY_TICKS);
+		long cameraTicks = Math.floorMod((long) ticks + CubeTime.offsetTicks(layout, body.x, body.y, body.z), CubeTime.DAY_TICKS);
 		FRAME.setColumn(3, new Vector4f(
 			(float) (m[0] * x + m[1] * y + m[2] * z),
 			(float) (m[3] * x + m[4] * y + m[5] * z),
