@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Clips the quads of Voxy to the storage region of the face that draws, see {@link VoxyFaces#region}. */
+/** Clips the quads of Voxy to the wedge of the face that draws, see {@link VoxyFaces#region}. */
 @Mixin(value = MDICSectionRenderer.class, remap = false)
 public abstract class VoxySectionRendererMixin {
 	@Shadow
@@ -53,7 +53,7 @@ public abstract class VoxySectionRendererMixin {
 	}
 
 	private static void cubeworld$clip(boolean on) {
-		for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < 6; i++) {
 			if (on) {
 				GL30C.glEnable(GL30C.GL_CLIP_DISTANCE0 + i);
 			} else {

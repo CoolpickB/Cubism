@@ -12,7 +12,7 @@ import net.minecraft.world.level.chunk.PalettedContainerRO;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
-/** Voxy keeps only the blocks of a chunk that are inside the wedge of its face, before it builds the levels of detail. */
+/** Voxy sees the real blocks past the wedge of a face, before it builds the levels of detail. */
 @Mixin(value = VoxelIngestService.class, remap = false)
 public abstract class VoxyIngestMixin {
 	@WrapOperation(
@@ -23,8 +23,8 @@ public abstract class VoxyIngestMixin {
 		)
 	)
 	@SuppressWarnings("rawtypes")
-	private VoxelizedSection cubeworld$cutToWedge(VoxelizedSection section, Mapper mapper, PalettedContainer blocks,
+	private VoxelizedSection cubeworld$fillPastWedge(VoxelizedSection section, Mapper mapper, PalettedContainer blocks,
 		PalettedContainerRO biomes, ILightingSupplier light, Operation<VoxelizedSection> original) {
-		return VoxyFaces.cutToWedge(original.call(section, mapper, blocks, biomes, light));
+		return VoxyFaces.fillPastWedge(original.call(section, mapper, blocks, biomes, light), mapper);
 	}
 }

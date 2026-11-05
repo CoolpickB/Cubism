@@ -7,6 +7,13 @@ import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
 import me.cortex.voxy.common.voxelization.VoxelizedSection;
 import me.cortex.voxy.common.world.other.Mapper;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.lighting.LayerLightEventListener;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,22 +71,24 @@ public final class VoxyFaces {
 	}
 
 	/**
-	 * The storage region of the current face, relative to the corner of the 32 block section of the camera that the quads
-	 * of Voxy are placed from: min x, max x, min z, max z. The faces lie side by side in storage, so a draw that leaves its
-	 * region shows another face in the wrong place.
+	 * The wedge of the current face, relative to the corner of the 32 block section of the camera that the quads of Voxy
+	 * are placed from: the center of the cube in x, y and z, and half the width of the face region. Each face is stored
+	 * upright, so its wedge is where the height above the center is at least the distance from the center in x and in z.
+	 * The draw of a face keeps to its wedge and its region, and the draw of the next face starts at the same diagonal.
 	 */
 	public static float[] region(Viewport<?> viewport) {
 		SeamLayout layout = SeamClient.layout;
 		if (layout == null || !SeamFaces.active()) {
-			return new float[] {-1.0E9F, 1.0E9F, -1.0E9F, 1.0E9F};
+			// With y far below, every point is inside the wedge and the region.
+			return new float[] {0.0F, -1.0E9F, 0.0F, 1.0E9F};
 		}
-		int center = layout.offsetX(SeamFaces.currentFace());
-		int half = layout.spacing / 2;
-		int baseX = viewport.section.x << 5, baseZ = viewport.section.z << 5;
-		return new float[] {center - half - baseX, center + half - baseX, -half - baseZ, half - baseZ};
+		int baseX = viewport.section.x << 5, baseY = viewport.section.y << 5, baseZ = viewport.section.z << 5;
+		return new float[] {
+			layout.offsetX(SeamFaces.currentFace()) + 0.5F - baseX, layout.centerY + 0.5F - baseY, 0.5F - baseZ, layout.spacing / 2.0F
+		};
 	}
 
-	/** Adds the face region to the scene block of the shaders of Voxy, and clips each quad corner to it. */
+	/** Adds the wedge of the face to the scene block of the shaders of Voxy, and clips each quad corner to it. */
 	public static String patchShader(String path, String source) {
 		if (source == null) {
 			return null;
@@ -90,10 +99,13 @@ public final class VoxyFaces {
 		if (path.endsWith("lod/quad_util.glsl")) {
 			String pos = "    vec4 pos = MVP * vec4(point, 1.0f);";
 			return replaceOnce(path, source, pos, """
-				    gl_ClipDistance[0] = point.x - cubeworldRegion.x;
-				    gl_ClipDistance[1] = cubeworldRegion.y - point.x;
-				    gl_ClipDistance[2] = point.z - cubeworldRegion.z;
-				    gl_ClipDistance[3] = cubeworldRegion.w - point.z;
+				    vec3 cubeworldD = point - cubeworldRegion.xyz;
+				    gl_ClipDistance[0] = cubeworldD.y - cubeworldD.x;
+				    gl_ClipDistance[1] = cubeworldD.y + cubeworldD.x;
+				    gl_ClipDistance[2] = cubeworldD.y - cubeworldD.z;
+				    gl_ClipDistance[3] = cubeworldD.y + cubeworldD.z;
+				    gl_ClipDistance[4] = cubeworldRegion.w - cubeworldD.x;
+				    gl_ClipDistance[5] = cubeworldRegion.w + cubeworldD.x;
 				""" + pos);
 		}
 		return source;
@@ -122,12 +134,15 @@ public final class VoxyFaces {
 	}
 
 	/**
-	 * Turns the blocks of a section that are outside the wedge of its face into air, as the meshers of the face do. A face
-	 * region holds blocks past its wedge that belong to the next face, and the folded face would draw them over it.
+	 * Fills the voxels of a section that are past the wedge of its face with the real blocks there, from the face that
+	 * owns them, as the meshers of Sodium read them (see LevelSliceMixin). The region of a face holds only air past its
+	 * wedge, so Voxy would draw the cut faces of the ground along the diagonal. The draw of the face clips these voxels away.
+	 * This runs on a Voxy thread and reads the client level, as the meshers of Sodium do from their threads.
 	 */
-	public static VoxelizedSection cutToWedge(VoxelizedSection section) {
+	public static VoxelizedSection fillPastWedge(VoxelizedSection section, Mapper mapper) {
 		SeamLayout layout = SeamClient.layout;
-		if (layout == null) {
+		ClientLevel level = Minecraft.getInstance().level;
+		if (layout == null || level == null) {
 			return section;
 		}
 		int bx = section.x << 4, by = section.y << 4, bz = section.z << 4;
@@ -139,12 +154,25 @@ public final class VoxyFaces {
 		if (inside) {
 			return section;
 		}
+		LayerLightEventListener sky = level.getLightEngine().getLayerListener(LightLayer.SKY);
+		LayerLightEventListener block = level.getLightEngine().getLayerListener(LightLayer.BLOCK);
 		long[] data = section.section;
+		int[] owner = new int[3];
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		int nonAir = 0;
 		for (int i = 0; i < 4096; i++) {
-			if (!layout.insideWedge(bx + (i & 15), by + (i >> 8 & 15), bz + (i >> 4 & 15))) {
-				data[i] = Mapper.airWithLight(Mapper.getLightId(data[i]));
-			} else if (Mapper.getBlockId(data[i]) != 0) {
+			int x = bx + (i & 15), y = by + (i >> 8 & 15), z = bz + (i >> 4 & 15);
+			if (!layout.insideWedge(x, y, z) && layout.ownerStorage(x, y, z, owner)) {
+				pos.set(owner[0], owner[1], owner[2]);
+				BlockState state = level.getBlockState(pos);
+				if (!state.isSolidRender() && state.getFluidState().isEmpty()) {
+					// A block that is not a full cube keeps the orientation of its own face, which is turned here.
+					state = Blocks.AIR.defaultBlockState();
+				}
+				int light = Math.min(15, sky.getLightValue(pos)) | Math.min(15, block.getLightValue(pos)) << 4;
+				data[i] = Mapper.composeMappingId((byte) light, mapper.getIdForBlockState(state), Mapper.getBiomeId(data[i]));
+			}
+			if (!Mapper.isAir(data[i])) {
 				nonAir++;
 			}
 		}
