@@ -24,6 +24,7 @@ import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
@@ -79,7 +80,51 @@ public final class CubeSky {
 	private static float starMax;
 	private static float moonBrightness;
 
+	private static @Nullable Matrix3f celestial;
+	private static final Matrix3f TILT = new Matrix3f();
+	private static final Vector3f SURFACE_UP = new Vector3f(0.0F, 1.0F, 0.0F);
+	private static final Matrix4f CUBE_FROM_FEET = new Matrix4f();
+	private static float core;
+	private static float centerY;
+
 	private CubeSky() {}
+
+	/** The sky frame in the camera face from the last extract, whose columns are the side, the sun and the axis of the sun. */
+	public static @Nullable Matrix3f celestial() {
+		return celestial;
+	}
+
+	/**
+	 * The sky frame for shader packs that place the sun around +Y of the face frame. That up turns a quarter turn at an
+	 * edge, so the frame is tilted until the surface normal under the camera is +Y. The elevation of the sun then agrees
+	 * with the local time, but the sun turns in view where the camera crosses an edge.
+	 */
+	public static @Nullable Matrix3f tiltedCelestial() {
+		return celestial == null ? null : new Matrix3f(TILT).mul(celestial);
+	}
+
+	public static void setCelestial(@Nullable Matrix3f frame) {
+		celestial = frame;
+	}
+
+	/** The unit surface normal under the camera, in the face frame of the camera. */
+	public static Vector3f surfaceUp() {
+		return SURFACE_UP;
+	}
+
+	/** Takes a position relative to the camera in the face frame of the camera to cube coordinates about the center. */
+	public static Matrix4f cubeFromFeet() {
+		return CUBE_FROM_FEET;
+	}
+
+	/** Half the size of the box whose rounded shells are the levels of equal height over the cube. */
+	public static float core() {
+		return core;
+	}
+
+	public static float centerY() {
+		return centerY;
+	}
 
 	/** Loads the class, so that the pipelines are registered before the shaders compile. */
 	public static void init() {}
@@ -127,6 +172,11 @@ public final class CubeSky {
 		texture.upload();
 		starMax = Math.max(maxStars, 0.01F);
 		radius = layout.radius;
+		double[] up = CubeTime.surfaceNormal(layout, camera.x, camera.y, camera.z);
+		SURFACE_UP.set((float) up[0], (float) up[1], (float) up[2]).normalize();
+		TILT.rotation(new org.joml.Quaternionf().rotationTo(SURFACE_UP, new Vector3f(0.0F, 1.0F, 0.0F)));
+		core = layout.radius - CubeTime.EDGE_BLEND;
+		centerY = layout.centerY;
 
 		int face = layout.faceIndexAt(Mth.floor(camera.x));
 		int[] m = layout.rotation(face);
@@ -147,6 +197,7 @@ public final class CubeSky {
 			(float) (m[6] * x + m[7] * y + m[8] * z),
 			cameraTicks
 		));
+		CUBE_FROM_FEET.set(FRAME).m33(1.0F);
 		double[] sun = CubeTime.sunDirection(ticks);
 		SUN.set(sun[0], sun[1], sun[2]);
 

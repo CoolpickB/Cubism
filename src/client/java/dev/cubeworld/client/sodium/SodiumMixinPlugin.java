@@ -7,7 +7,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-/** Applies the Sodium mixins only when Sodium is installed, as their targets do not exist otherwise. */
+/** Applies the mixins only when their target mod is installed, as their targets do not exist otherwise. */
 public final class SodiumMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public void onLoad(String mixinPackage) {}
@@ -19,7 +19,7 @@ public final class SodiumMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		return FabricLoader.getInstance().isModLoaded("sodium");
+		return FabricLoader.getInstance().isModLoaded(mixinClassName.contains(".Iris") ? "iris" : "sodium");
 	}
 
 	@Override

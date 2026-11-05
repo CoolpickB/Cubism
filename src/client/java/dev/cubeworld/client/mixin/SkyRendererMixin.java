@@ -5,7 +5,9 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.mojang.renderpearl.api.commands.RenderPass;
+import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.CubeSky;
+import dev.cubeworld.client.sodiumseam.CubeShaderPatch;
 import dev.cubeworld.seam.CubeTime;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.Camera;
@@ -42,6 +44,7 @@ public abstract class SkyRendererMixin {
 	private void cubeworld$extractCelestial(ClientLevel level, float partialTicks, Camera camera, SkyRenderState state, CallbackInfo ci) {
 		SeamLayout layout = SeamLayout.of(level);
 		cubeworld$celestial = null;
+		CubeSky.setCelestial(null);
 		if (layout == null || state.skybox != DimensionType.Skybox.OVERWORLD) {
 			return;
 		}
@@ -49,6 +52,7 @@ public abstract class SkyRendererMixin {
 			ClockInstance instance = level.clockManager().getInstance(clock);
 			double ticks = instance.totalTicks() + (instance.isPaused() ? 0.0F : partialTicks * instance.rate());
 			cubeworld$celestial = CubeTime.celestial(layout, layout.faceIndexAt(Mth.floor(camera.position().x)), ticks);
+			CubeSky.setCelestial(cubeworld$celestial);
 			CubeSky.extract(level, camera.position(), ticks);
 			// The air already covers the sky below the horizon.
 			state.shouldRenderDarkDisc = false;
@@ -62,7 +66,8 @@ public abstract class SkyRendererMixin {
 	@WrapOperation(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SkyRenderer;renderSkyDisc(Lcom/mojang/renderpearl/api/commands/RenderPass;Lorg/joml/Vector3fc;)V"))
 	private void cubeworld$renderAir(SkyRenderer renderer, RenderPass renderPass, Vector3fc skyColor, Operation<Void> original) {
 		Matrix3f celestial = cubeworld$celestial;
-		if (celestial == null || !CubeSky.active()) {
+		// A shader pack draws its own sky, and Iris has no program for the pipelines of the cube sky.
+		if (celestial == null || !CubeSky.active() || SeamClient.IRIS && CubeShaderPatch.packInUse()) {
 			original.call(renderer, renderPass, skyColor);
 			return;
 		}

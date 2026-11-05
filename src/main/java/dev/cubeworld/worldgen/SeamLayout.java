@@ -363,6 +363,9 @@ public final class SeamLayout {
 	/** A structure whose middle lies deeper below the top of a face than this folds about a hinge at its depth. */
 	private static final int UNDERGROUND = 32;
 
+	/** Blocks before an edge at which the faces behind its far side start to load for a viewer. */
+	private static final int CROSSING_LEAD = 96;
+
 	/** The depth of the hinge for a structure whose middle is at {@code y}, or 0 for a structure on the surface (see {@link SeamFold.Fold#atDepth}). */
 	public int hingeDepth(int y) {
 		int depth = CubePlanetMath.TOP_SURFACE_Y - y;
@@ -462,6 +465,24 @@ public final class SeamLayout {
 		int face = this.faceIndexAt(sx);
 		int[] cube = new int[3];
 		this.toCube(face, sx, sy, sz, cube);
+		this.collectAround(face, cube, viewDistance, out);
+		// A face is the opposite of the viewer face only until the viewer crosses an edge. The faces behind the neighbor
+		// that the viewer is about to cross to join early, so that a crossing does not send a whole face at once.
+		for (int g = 0; g < FACES.length; g++) {
+			if (g != face && FACES[g] != FACES[face].getOpposite() && this.edgeDistance(g, cube) < CROSSING_LEAD) {
+				this.collectAround(g, cube, viewDistance, out);
+			}
+		}
+	}
+
+	/** Blocks from a cube position to the edge that its face shares with the given neighbor face. */
+	private int edgeDistance(int neighbor, int[] cube) {
+		Direction side = FACES[neighbor];
+		return this.radius - (side.getStepX() * cube[0] + side.getStepY() * (cube[1] - this.centerY) + side.getStepZ() * cube[2]);
+	}
+
+	/** The neighbor chunks of a viewer, as if the viewer stood on the given face at the cube position. */
+	private void collectAround(int face, int[] cube, int viewDistance, LongSet out) {
 		int[] viewer = new int[3];
 		int reach = viewDistance * 16;
 		int top = this.centerY + this.radius + CubePlanetMath.ATMOSPHERE_HEIGHT;

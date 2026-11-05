@@ -31,7 +31,7 @@ public final class CubeTime {
 	 * Over this many blocks before an edge, the local time blends toward the time of the neighbor face. It is half way
 	 * at the diagonal, where the camera crosses, so the sky has no step there.
 	 */
-	private static final int EDGE_BLEND = 32;
+	public static final int EDGE_BLEND = 32;
 	/** Local times closer than this share one sky darkening value per tick. */
 	private static final int DARKEN_STEP = 20;
 
@@ -48,6 +48,22 @@ public final class CubeTime {
 	 */
 	public static int offsetTicks(SeamLayout layout, double x, double y, double z) {
 		int face = layout.faceIndexAt(Mth.floor(x));
+		double[] e = surfaceNormal(layout, x, y, z);
+		double ex = e[0], ey = e[1], ez = e[2];
+		int[] m = layout.rotation(face);
+		double nx = m[0] * ex + m[1] * ey + m[2] * ez;
+		double ny = m[3] * ex + m[4] * ey + m[5] * ez;
+		double nz = m[6] * ex + m[7] * ey + m[8] * ez;
+		double phase = Math.atan2(nx * V[0] + ny * V[1] + nz * V[2], nx * U[0] + ny * U[1] + nz * U[2]);
+		return (int) Math.round(-phase / (2.0 * Math.PI) * DAY_TICKS);
+	}
+
+	/**
+	 * The direction of the rounded cube surface under a position, in the storage frame of the position's face. It is not
+	 * normalized. The sun is above the horizon of a position exactly when it is on this side of the plane normal to it.
+	 */
+	public static double[] surfaceNormal(SeamLayout layout, double x, double y, double z) {
+		int face = layout.faceIndexAt(Mth.floor(x));
 		double inner = layout.radius - EDGE_BLEND;
 		double ex = beyond(x - layout.offsetX(face), inner);
 		double ey = beyond(y - layout.centerY, inner);
@@ -55,12 +71,7 @@ public final class CubeTime {
 		if (ex == 0.0 && ey == 0.0 && ez == 0.0) {
 			ey = 1.0;
 		}
-		int[] m = layout.rotation(face);
-		double nx = m[0] * ex + m[1] * ey + m[2] * ez;
-		double ny = m[3] * ex + m[4] * ey + m[5] * ez;
-		double nz = m[6] * ex + m[7] * ey + m[8] * ez;
-		double phase = Math.atan2(nx * V[0] + ny * V[1] + nz * V[2], nx * U[0] + ny * U[1] + nz * U[2]);
-		return (int) Math.round(-phase / (2.0 * Math.PI) * DAY_TICKS);
+		return new double[] {ex, ey, ez};
 	}
 
 	private static double beyond(double value, double limit) {

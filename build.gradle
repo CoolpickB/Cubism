@@ -23,6 +23,7 @@ dependencies {
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 	// Sodium is only compiled against, from a local copy that is not redistributed. The mod works without it.
 	clientCompileOnly files("libs/sodium.jar")
+	clientCompileOnly files("libs/iris.jar")
 }
 
 processResources {

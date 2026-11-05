@@ -48,8 +48,10 @@ public final class SeamFaces {
 	private static final Vector3d[] position = new Vector3d[FACES];
 	private static final int[][] motion = new int[FACES][];
 	private static final boolean[] drawn = new boolean[FACES];
-	private static final Matrix4f[] lastCull = new Matrix4f[FACES];
-	private static final float[] lastFog = new float[FACES];
+	// Index 1 is the Iris shadow pass, which draws with another frustum and cull matrix than the main pass.
+	private static final Vector3d[][] seen = new Vector3d[2][FACES];
+	private static final Matrix4f[][] lastCull = new Matrix4f[2][FACES];
+	private static final float[][] lastFog = new float[2][FACES];
 
 	private static @Nullable ClientLevel level;
 	private static int renderDistance;
@@ -115,10 +117,20 @@ public final class SeamFaces {
 			uniforms[f] = null;
 			drawn[f] = false;
 			position[f] = null;
-			lastCull[f] = null;
+			for (int s = 0; s < 2; s++) {
+				seen[s][f] = null;
+				lastCull[s][f] = null;
+			}
 		}
 		primary = -1;
 		level = null;
+	}
+
+	/** Takes every manager out of the Iris shadow state. */
+	public static void endShadowScope() {
+		if (SeamClient.IRIS) {
+			IrisLink.setShadowScope(managers, uniforms, false);
+		}
 	}
 
 	public static void forEachManager(Consumer<RenderSectionManager> action) {
@@ -150,6 +162,11 @@ public final class SeamFaces {
 	public static void drive(Camera camera, Viewport viewport, FogParameters fog, boolean occlusion, boolean immediately,
 		Matrix4f cullMatrix, int maxUpdates) {
 		SeamLayout layout = SeamClient.layout;
+		boolean shadow = SeamClient.IRIS && IrisLink.shadowsActive();
+		int s = shadow ? 1 : 0;
+		if (shadow) {
+			IrisLink.setShadowScope(managers, uniforms, true);
+		}
 		for (int f = 0; f < FACES; f++) {
 			drawn[f] = false;
 			RenderSectionManager manager = managers[f];
@@ -169,22 +186,23 @@ public final class SeamFaces {
 			Frustum frustum = new FoldedFrustum(((ViewportAccessor) (Object) viewport).cubeworld$frustum(), m);
 			Viewport folded = new Viewport(frustum, p);
 
-			Vector3d last = position[f];
+			Vector3d last = seen[s][f];
 			boolean moved = last == null || !last.equals(p);
-			if (moved || lastCull[f] == null || !cullMatrix.equals(lastCull[f], 1.0E-4F) || fog.cullDistance() != lastFog[f]) {
+			if (moved || lastCull[s][f] == null || !cullMatrix.equals(lastCull[s][f], 1.0E-4F) || fog.cullDistance() != lastFog[s][f]) {
 				manager.notifyChangedCamera();
 			}
-			if (lastCull[f] == null) {
-				lastCull[f] = new Matrix4f();
+			if (lastCull[s][f] == null) {
+				lastCull[s][f] = new Matrix4f();
 			}
-			lastCull[f].set(cullMatrix);
-			lastFog[f] = fog.cullDistance();
+			lastCull[s][f].set(cullMatrix);
+			lastFog[s][f] = fog.cullDistance();
 
 			manager.prepareFrame(p);
 			ubm.prepareFrame();
 			if (moved && last != null) {
 				manager.processGFNIMovement(new CameraMovement(last, p));
 			}
+			seen[s][f] = p;
 			position[f] = p;
 			motion[f] = m;
 
@@ -220,9 +238,13 @@ public final class SeamFaces {
 
 	public static void draw(RenderPass renderPass, ChunkSectionLayerGroup group, ChunkRenderMatrices matrices, GpuSampler sampler,
 		@Nullable OitStage stage, FogParameters fog, boolean sorting) {
+		boolean faceUniforms = SeamClient.IRIS && !IrisLink.shadowsActive();
 		for (int f = 0; f < FACES; f++) {
 			if (!drawn[f]) {
 				continue;
+			}
+			if (faceUniforms) {
+				IrisFaceUniforms.beginFace(motion[f]);
 			}
 			ChunkRenderMatrices turned = folded(matrices, motion[f]);
 			Vector3d p = position[f];
@@ -235,6 +257,9 @@ public final class SeamFaces {
 			} else if (group == ChunkSectionLayerGroup.TRANSLUCENT) {
 				drawPass(manager, ubm, turned, DefaultTerrainRenderPasses.TRANSLUCENT, p, fog, sorting, renderPass, sampler, stage);
 			}
+		}
+		if (faceUniforms) {
+			IrisFaceUniforms.endFaces();
 		}
 	}
 

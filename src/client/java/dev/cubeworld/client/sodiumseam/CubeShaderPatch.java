@@ -1,0 +1,476 @@
+package dev.cubeworld.client.sodiumseam;
+
+import dev.cubeworld.client.render.CubeSky;
+import java.nio.file.Path;
+import net.irisshaders.iris.api.v0.IrisApi;
+import net.irisshaders.iris.gl.uniform.UniformHolder;
+import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
+import net.irisshaders.iris.uniforms.CapturedRenderingState;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+
+/**
+ * Edits the source of Complementary Unbound r5.9.3 as Iris reads it, so that it lights with the one real sun of the cube,
+ * takes the sky up from the rounded surface under the camera, and puts its volumetric clouds on a shell around the cube.
+ * Every edit replaces an exact piece of text. If a pack does not hold that text, the edit does nothing, and the pack
+ * keeps the tilted sun that every pack gets.
+ */
+public final class CubeShaderPatch {
+	private static final String COMMON = "/lib/util/commonFunctions.glsl";
+	private static final String COMMON_ROOT = "/lib/common.glsl";
+	private static final String TIME_ANCHOR = "    #if SHADOW_QUALITY == -1\n      float timeAngle = worldTime / 24000.0;";
+	private static final String SUN_ANGLE = "float tAmin     = fract(sunAngle - 0.033333333);";
+	private static final String AURORA = "/lib/atmospherics/auroraBorealis.glsl";
+	private static final String STARS = "/lib/atmospherics/stars.glsl";
+	private static final String MAIN_CLOUDS = "/lib/atmospherics/clouds/mainClouds.glsl";
+	private static final String UNBOUND_CLOUDS = "/lib/atmospherics/clouds/unboundClouds.glsl";
+	private static final String MAIN_FOG = "/lib/atmospherics/fog/mainFog.glsl";
+	private static final String MAIN_LIGHTING = "/lib/lighting/mainLighting.glsl";
+	/** The programs that draw once for the whole view. They take the rounded up at the camera. */
+	private static final String[] CAMERA_UP_PROGRAMS = {
+		"composite", "composite1", "composite3", "composite4", "composite5", "deferred1",
+		"gbuffers_skybasic", "gbuffers_skytextured", "gbuffers_clouds", "gbuffers_weather", "gbuffers_hand"
+	};
+	/** The programs that draw the ground and what stands on it. They take the rounded up at each point. */
+	private static final String[] POINT_UP_PROGRAMS = {
+		"gbuffers_terrain", "gbuffers_water", "gbuffers_block", "gbuffers_entities", "gbuffers_textured", "gbuffers_basic"
+	};
+
+	private static final String SUN_DEFINE =
+		"    #define GetSunVector() normalize((gbufferModelView * vec4(vec3(-sin(overworldAngle), cos(overworldAngle) * SUN_ROTATION_DATA) * 2000.0, 1.0)).xyz)";
+	private static final String UP = "upVec = normalize(gbufferModelView[1].xyz);";
+
+	/**
+	 * The cube coordinates of the clouds are about the center of the cube. The altitude of a point is the height it would
+	 * have on a face, over a rounded box: the core box, and around it the distance to the core. Over the middle of a face
+	 * it is the plain y of the face storage, so the cloud height of the pack stays as it is.
+	 */
+	private static final String HELPERS = """
+		#ifndef VOXY_PATCH
+		    #define CUBEWORLD
+		    uniform int cubeworld_active;
+		    uniform vec3 cubeworld_sunPosition;
+		    uniform vec3 cubeworld_upPosition;
+		    uniform mat4 cubeworld_cubeFromFeet;
+		    uniform mat4 cubeworld_cubeFromView;
+		    uniform float cubeworld_core;
+		    uniform float cubeworld_centerY;
+		    uniform mat3 cubeworld_celestialFrame;
+		    uniform vec3 cubeworld_shadowLight;
+		    #define CUBEWORLD_UP_VEC (cubeworld_active != 0 ? normalize(cubeworld_upPosition) : normalize(gbufferModelView[1].xyz))
+		    float cubeworldAlt(vec3 p) {
+		        if (cubeworld_active == 0) return p.y;
+		        return cubeworld_centerY + cubeworld_core + length(max(abs(p) - cubeworld_core, 0.0));
+		    }
+		    vec3 cubeworldNormal(vec3 p) {
+		        vec3 e = sign(p) * max(abs(p) - cubeworld_core, 0.0);
+		        return dot(e, e) > 0.0 ? normalize(e) : normalize(p);
+		    }
+		    vec3 cubeworldToFeet(vec3 d) {
+		        return cubeworld_active != 0 ? transpose(mat3(cubeworld_cubeFromFeet)) * d : d;
+		    }
+		    // The height of a point relative to the camera. It goes through view space, which every face shares, so it
+		    // holds in programs that draw a folded face with the matrices of that face.
+		    float cubeworldFeetAlt(vec3 playerPos) {
+		        if (cubeworld_active == 0) return playerPos.y + cameraPosition.y;
+		        return cubeworldAlt((cubeworld_cubeFromView * vec4(mat3(gbufferModelView) * playerPos, 1.0)).xyz);
+		    }
+		    float cubeworldCameraAlt() {
+		        return cubeworld_active != 0 ? cubeworldAlt(cubeworld_cubeFromFeet[3].xyz) : cameraPosition.y;
+		    }
+		    // The rounded up at a point of view space.
+		    vec3 cubeworldUpAtView(vec3 viewPos) {
+		        vec3 p = (cubeworld_cubeFromView * vec4(viewPos, 1.0)).xyz;
+		        return normalize(transpose(mat3(cubeworld_cubeFromView)) * cubeworldNormal(p));
+		    }
+		    // The programs that draw the ground take the up, and so the time of day, of each point they draw. Two faces
+		    // then meet at an edge with the same light, and the light turns smoothly around it.
+		    #if defined CUBEWORLD_POINT_UP && defined FRAGMENT_SHADER
+		        vec3 cubeworldPointUp() {
+		            if (cubeworld_active == 0) return normalize(gbufferModelView[1].xyz);
+		            vec4 clip = vec4(vec3(gl_FragCoord.xy / vec2(viewWidth, viewHeight), gl_FragCoord.z) * 2.0 - 1.0, 1.0);
+		            vec4 view = gbufferProjectionInverse * clip;
+		            return cubeworldUpAtView(view.xyz / view.w);
+		        }
+		    #elif defined CUBEWORLD_POINT_UP && defined VERTEX_SHADER
+		        vec3 cubeworldPointUp() {
+		            if (cubeworld_active == 0) return normalize(gbufferModelView[1].xyz);
+		            return cubeworldUpAtView((gl_ModelViewMatrix * gl_Vertex).xyz);
+		        }
+		    #endif
+		    // The time of day where the sky is seen from: the rounded up at the camera for the programs that draw the whole
+		    // view, the up at each point for the programs that draw the ground, and the up of the face for the rest. It follows the height of the sun over that
+		    // up, scaled so that the sun at its highest over the middle of a face is noon. The angle around the axis of the
+		    // sun is not used for it: at the two corners on the axis the sun circles the horizon, and that angle has no
+		    // stable value there. Morning or afternoon comes from the side the sun is on. Same in CubeShaderPatch.java.
+		    float cubeworldSunAngle() {
+		        if (cubeworld_active == 0) return sunAngle;
+		        #if defined CUBEWORLD_CAMERA_UP
+		            vec3 upView = cubeworld_upPosition;
+		        #elif defined CUBEWORLD_POINT_UP && (defined FRAGMENT_SHADER || defined VERTEX_SHADER)
+		            vec3 upView = cubeworldPointUp();
+		        #else
+		            vec3 upView = gbufferModelView[1].xyz;
+		        #endif
+		        vec3 n = normalize(mat3(cubeworld_cubeFromView) * upView);
+		        vec3 s = normalize(mat3(cubeworld_cubeFromView) * cubeworld_sunPosition);
+		        float local = acos(clamp(dot(s, n) / 0.81649658, -1.0, 1.0));
+		        if (dot(s, cross(vec3(0.57735027), n)) < 0.0) local = -local;
+		        float d = fract(local / 6.28318531);
+		        float timeOfDay = (2.0 * d + 0.5 - cos(d * 3.14159265) * 0.5) / 3.0;
+		        return fract(timeOfDay + 0.25);
+		    }
+		#else
+		    // The programs of Voxy declare their own uniforms. They keep the flat world.
+		    #define cubeworld_active 0
+		    #define cubeworld_cubeFromFeet mat4(1.0)
+		    #define cubeworldAlt(p) ((p).y)
+		    #define cubeworldNormal(p) (p)
+		    #define cubeworldToFeet(d) (d)
+		    #define cubeworldFeetAlt(p) ((p).y + cameraPosition.y)
+		    #define cubeworldCameraAlt() (cameraPosition.y)
+		    #define cubeworldSunAngle() (sunAngle)
+		    #define cubeworld_celestialFrame mat3(gbufferModelViewInverse)
+		#endif
+		""";
+
+	/**
+	 * The aurora of the cube hangs over the rounded surface like the clouds, between two heights. A point of it shows only
+	 * where it is night under it, and only over the part of the cube around the camera, since the biome and moon that allow
+	 * it are those of the camera. The pattern of the pack lies on the three axis planes, blended by the normal so that it
+	 * bends over an edge. Over the middle of a face only one plane counts.
+	 */
+	private static final String CUBE_AURORA = """
+
+		#ifdef CUBEWORLD
+		const float cubeworldAuroraLow = 320.0;
+		const float cubeworldAuroraDepth = 240.0;
+
+		float cubeworldAuroraNoise(vec2 planePos, float auroraAnimate) {
+		    #if AURORA_STYLE == 1
+		        planePos = floor(planePos) * 0.0007;
+		        float noise = texture2DLod(noisetex, planePos, 0.0).b;
+		        noise = pow2(pow2(pow2(pow2(1.0 - 2.0 * abs(noise - 0.5)))));
+		        noise *= pow1_5(texture2DLod(noisetex, planePos * 100.0 + auroraAnimate, 0.0).b);
+		    #else
+		        planePos *= 0.0007;
+		        float noise = texture2DLod(noisetex, planePos, 0.0).r;
+		        noise = pow2(pow2(pow2(pow2(1.0 - 2.0 * abs(noise - 0.5)))));
+		        noise *= texture2DLod(noisetex, planePos * 3.0 + auroraAnimate, 0.0).b;
+		        noise *= texture2DLod(noisetex, planePos * 5.0 - auroraAnimate, 0.0).b;
+		    #endif
+		    return noise;
+		}
+
+		vec3 GetAuroraBorealisCube(vec3 viewPos, float VdotU, float dither) {
+		    // The flat aurora ends above the horizon. Over an edge the shell bends down, so it may show a bit below.
+		    float visibility = sqrt1(clamp01(VdotU * 1.5 + 0.3)) - rainFactor - maxBlindnessDarkness;
+		    visibility *= 1.0 - max0(VdotU) * 0.9;
+		    #if AURORA_CONDITION == 1 || AURORA_CONDITION == 3
+		        visibility -= moonPhase;
+		    #endif
+		    #if AURORA_CONDITION == 2 || AURORA_CONDITION == 3
+		        visibility *= inSnowy;
+		    #endif
+		    #if AURORA_CONDITION == 4
+		        visibility = max(visibility * inSnowy, visibility - moonPhase);
+		    #endif
+		    if (visibility <= 0.0) return vec3(0.0);
+
+		    vec3 dir = normalize(mat3(cubeworld_cubeFromView) * viewPos);
+		    vec3 cam = cubeworld_cubeFromFeet[3].xyz;
+		    vec3 camUp = normalize(mat3(cubeworld_cubeFromView) * cubeworld_upPosition);
+		    vec3 sunDir = normalize(mat3(cubeworld_cubeFromView) * cubeworld_sunPosition);
+
+		    // Step along the ray to the lower height of the aurora, by the gap to it, which never steps over it.
+		    float t = 0.0;
+		    bool hit = false;
+		    for (int j = 0; j < 64; j++) {
+		        float gap = cubeworldAuroraLow - cubeworldAlt(cam + t * dir);
+		        if (gap < 1.0) { hit = gap > -cubeworldAuroraDepth; break; }
+		        t += max(gap, max(2.0, t * 0.01));
+		        if (t > 4000.0) break;
+		    }
+		    if (!hit) return vec3(0.0);
+
+		    #ifdef DEFERRED1
+		        int sampleCount = 25;
+		        int sampleCountP = sampleCount + 5;
+		    #else
+		        int sampleCount = 10;
+		        int sampleCountP = sampleCount + 10;
+		    #endif
+
+		    float ditherM = dither + 5.0;
+		    float auroraAnimate = frameTimeCounter * 0.001;
+		    vec2 wind = vec2(syncedTime * 0.04, 0.0);
+		    vec3 aurora = vec3(0.0);
+		    for (int i = 0; i < sampleCount; i++) {
+		        float current = pow2((i + ditherM) / sampleCountP);
+		        float targetAlt = cubeworldAuroraLow + cubeworldAuroraDepth * current;
+		        vec3 p = cam + t * dir;
+		        for (int k = 0; k < 2; k++) {
+		            t += (targetAlt - cubeworldAlt(p)) / max(dot(dir, cubeworldNormal(p)), 0.15);
+		            p = cam + t * dir;
+		        }
+		        vec3 n = cubeworldNormal(p);
+		        float night = 1.0 - clamp01((dot(sunDir, n) + 0.0625) / 0.125);
+		        float near = smoothstep(0.0, 0.6, dot(n, camUp));
+		        float weight = night * near;
+		        if (weight <= 0.0) continue;
+
+		        vec3 w = pow2(pow2(n));
+		        w /= w.x + w.y + w.z;
+		        vec3 q = p * 0.037;
+		        float noise = 0.0;
+		        if (w.x > 0.01) noise += w.x * cubeworldAuroraNoise(q.zy + wind, auroraAnimate);
+		        if (w.y > 0.01) noise += w.y * cubeworldAuroraNoise(q.xz + wind, auroraAnimate);
+		        if (w.z > 0.01) noise += w.z * cubeworldAuroraNoise(q.xy + wind, auroraAnimate);
+
+		        float currentM = 1.0 - current;
+		        aurora += weight * noise * currentM * mix(vec3(7.0, 2.2, 12.0), vec3(6.0, 16.0, 12.0), pow2(pow2(currentM)));
+		    }
+
+		    #if AURORA_STYLE == 1
+		        aurora *= 1.3;
+		    #else
+		        aurora *= 1.8;
+		    #endif
+		    #ifdef ATM_COLOR_MULTS
+		        aurora *= sqrtAtmColorMult;
+		    #endif
+		    return aurora * visibility / sampleCount;
+		}
+		#endif
+
+		vec3 GetAuroraBorealis(vec3 viewPos, float VdotU, float dither) {
+		    #ifdef CUBEWORLD
+		        if (cubeworld_active != 0) return GetAuroraBorealisCube(viewPos, VdotU, dither);
+		    #endif
+		    return GetAuroraBorealisFlat(viewPos, VdotU, dither);
+		}
+		""";
+
+	private static boolean pending;
+	private static boolean active;
+
+	private CubeShaderPatch() {}
+
+	/** True when the shader pack in use took the patch, so it lights with the real sun. */
+	public static boolean active() {
+		return active;
+	}
+
+	public static boolean packInUse() {
+		return IrisApi.getInstance().isShaderPackInUse();
+	}
+
+	/** Called when Iris has read all the files of a pack. */
+	public static void finishPack() {
+		active = pending;
+		pending = false;
+	}
+
+	public static String patch(Path path, String source) {
+		String name = path.toString().replace('\\', '/');
+		// The pack is written with Windows line ends, and the edits match on whole lines.
+		source = source.replace("\r\n", "\n");
+		if (name.endsWith(COMMON)) {
+			if (!source.contains(SUN_DEFINE)) {
+				return source;
+			}
+			pending = true;
+			String sun = "    #ifdef CUBEWORLD\n"
+				+ "        #define GetSunVector() (cubeworld_active != 0 ? normalize(cubeworld_sunPosition) : "
+				+ SUN_DEFINE.substring(SUN_DEFINE.indexOf("normalize(")) + ")\n"
+				+ "    #else\n" + SUN_DEFINE + "\n    #endif";
+			return source.replace(SUN_DEFINE, sun);
+		}
+		if (name.endsWith(COMMON_ROOT)) {
+			// The helpers go after the uniforms of the pack and before the time of day, which they replace.
+			return source.replace(TIME_ANCHOR, HELPERS + TIME_ANCHOR)
+				.replace(SUN_ANGLE, "float tAmin     = fract(cubeworldSunAngle() - 0.033333333);");
+		}
+		if (name.endsWith(AURORA)) {
+			String header = "vec3 GetAuroraBorealis(vec3 viewPos, float VdotU, float dither) {";
+			if (!source.contains(header)) {
+				return source;
+			}
+			return source.replace(header, "vec3 GetAuroraBorealisFlat(vec3 viewPos, float VdotU, float dither) {") + CUBE_AURORA;
+		}
+		if (name.endsWith(STARS)) {
+			// The stars keep their place on the sky, which turns with the sun. Its pole is the axis of the sun, and the
+			// half of the sky past the equator shows the mirror of the other half, as the projection needs y above 0.
+			return source.replace(
+				"    vec3 wpos = normalize((gbufferModelViewInverse * vec4(viewPos * 1000.0, 1.0)).xyz);\n",
+				"""
+				    vec3 wpos = normalize((gbufferModelViewInverse * vec4(viewPos * 1000.0, 1.0)).xyz);
+				    if (cubeworld_active != 0) {
+				        wpos = normalize(cubeworld_celestialFrame * viewPos);
+				        wpos.y = abs(wpos.y);
+				    }
+				""");
+		}
+		if (name.endsWith(MAIN_LIGHTING)) {
+			// There is one shadow map, cast from the sun or the moon after the time at the camera. A point lit by the
+			// other one would read the shadows of the wrong side, so it takes the light of the pack past the shadow
+			// distance. At the line where the light turns over, the shadows are faded out in any case.
+			return source.replace(
+				"float shadowLength = shadowDistance * 0.9166667 - lViewPos;",
+				"""
+				float shadowLength = shadowDistance * 0.9166667 - lViewPos;
+				                    #ifdef CUBEWORLD
+				                        if (cubeworld_active != 0 && dot(lightVec, cubeworld_shadowLight) < 0.0) shadowLength = 0.0;
+				                    #endif""");
+		}
+		if (name.endsWith(MAIN_FOG) || name.endsWith("/program/deferred1.glsl")) {
+			// The fog thickens toward the ground. Its height must follow the cube, or the ground of the camera face
+			// cuts the sky along a plane that turns at each crossing.
+			source = source.replace("GetAtmFogAltitudeFactor(playerPos.y + cameraPosition.y)", "GetAtmFogAltitudeFactor(cubeworldFeetAlt(playerPos))")
+				.replace("GetAtmFogAltitudeFactor(cameraPosition.y + ", "GetAtmFogAltitudeFactor(cubeworldCameraAlt() + ");
+		}
+		if (name.endsWith(MAIN_CLOUDS)) {
+			return patchMainClouds(source);
+		}
+		if (name.endsWith(UNBOUND_CLOUDS)) {
+			return patchUnboundClouds(source);
+		}
+		for (String program : POINT_UP_PROGRAMS) {
+			if (name.endsWith("/program/" + program + ".glsl")) {
+				return "#define CUBEWORLD_POINT_UP\n" + source.replace(UP, "upVec = cubeworldPointUp();");
+			}
+		}
+		for (String program : CAMERA_UP_PROGRAMS) {
+			if (name.endsWith("/program/" + program + ".glsl")) {
+				return "#define CUBEWORLD_CAMERA_UP\n" + source.replace(UP, "upVec = CUBEWORLD_UP_VEC;");
+			}
+		}
+		return source;
+	}
+
+	private static String patchMainClouds(String source) {
+		source = source.replace(
+			"vec3 wpos = PlayerToShadow(tracePos - cameraPos);",
+			"""
+			#ifdef CLOUDS_UNBOUND
+			        vec3 wpos = PlayerToShadow(cubeworldToFeet(tracePos - cameraPos));
+			#else
+			        vec3 wpos = PlayerToShadow(tracePos - cameraPos);
+			#endif""");
+		return source.replace(
+			"    cameraPos += cameraPosOffset;\n",
+			"""
+			    cameraPos += cameraPosOffset;
+			#ifdef CLOUDS_UNBOUND
+			    if (cubeworld_active != 0) cameraPos = (cubeworld_cubeFromFeet * vec4(cameraPosOffset, 1.0)).xyz;
+			#endif
+			""");
+	}
+
+	private static String patchUnboundClouds(String source) {
+		source = source.replace(
+			"float threshold = clamp(abs(cloudAltitude - tracePos.y) / cloudStretch, 0.001, 0.999);",
+			"float threshold = clamp(abs(cloudAltitude - cubeworldAlt(tracePos)) / cloudStretch, 0.001, 0.999);");
+		// Over the cube the band of the clouds is a rounded shell. Step along the ray to it by the gap to the band,
+		// which never steps over it, and guess how far the ray stays in it from its angle to the shell.
+		source = replaceBetween(source,
+			"    float lowerPlaneDistance  = (lowerPlaneAltitude - cameraPos.y) / nPlayerPos.y;",
+			"    float planeDistanceDif = maxPlaneDistance - minPlaneDistance;\n",
+			original -> """
+				    float minPlaneDistance;
+				    float planeDistanceDif;
+				    if (cubeworld_active != 0) {
+				        nPlayerPos = normalize(mat3(cubeworld_cubeFromFeet) * nPlayerPos);
+				        float cubeworldT = 0.0;
+				        bool cubeworldHit = false;
+				        for (int j = 0; j < 160; j++) {
+				            float gap = abs(cubeworldAlt(cameraPos + cubeworldT * nPlayerPos) - cloudAltitude) - cloudStretch;
+				            if (gap <= 0.0) { cubeworldHit = true; break; }
+				            // A ray that skims the shell closes the gap slowly. The floor on the step keeps it from running
+				            // out of steps, at the cost of missing the thin tip of a skimming hit.
+				            cubeworldT += max(gap, max(2.0, cubeworldT * 0.01));
+				            if (cubeworldT > distanceThreshold) break;
+				        }
+				        if (!cubeworldHit) return vec4(0.0);
+				        minPlaneDistance = cubeworldT;
+				        // The march stops where the ray leaves the band. A ray can follow the shell around an edge onto the next face,
+				        // so no estimate of the length from the slope at the entry holds.
+				        planeDistanceDif = max(distanceThreshold - cubeworldT, 0.0);
+				    } else {
+				""" + original.replace("    float minPlaneDistance = ", "    minPlaneDistance = ")
+					.replace("    float planeDistanceDif = ", "    planeDistanceDif = ") + "    }\n");
+		// The closed area check reads the shadow map at points far from the camera. On the cube the body of the planet shades
+		// the far side from the sun, so the check would remove the clouds there.
+		source = source.replace("if (shadowLength < lTracePos)", "if (cubeworld_active == 0 && shadowLength < lTracePos)");
+		source = source.replace(
+			"float aboveClouds = clamp01((cameraPos.y - lowerPlaneAltitude) * 0.01);",
+			"float aboveClouds = clamp01((cubeworldAlt(cameraPos) - lowerPlaneAltitude) * 0.01);");
+		source = source.replace(
+			"    tracePos.y -= traceAdd.y;\n",
+			"    if (cubeworld_active != 0) tracePos -= traceAdd; else tracePos.y -= traceAdd.y;\n");
+		source = source.replace(
+			"if (abs(tracePos.y - cloudAltitude) > cloudStretch) break;",
+			"if (abs(cubeworldAlt(tracePos) - cloudAltitude) > cloudStretch) {\n    if (cubeworld_active == 0) break;\n    // Over the edge of the cube the ray can come back into the shell farther on, so look for the next entry.\n    float cubeworldT2 = length(tracePos - cameraPos);\n    bool cubeworldBack = false;\n    for (int j = 0; j < 64; j++) {\n        float gap2 = abs(cubeworldAlt(cameraPos + cubeworldT2 * nPlayerPos) - cloudAltitude) - cloudStretch;\n        if (gap2 <= 0.0) { cubeworldBack = true; break; }\n        cubeworldT2 += max(gap2, max(2.0, cubeworldT2 * 0.01));\n        if (cubeworldT2 > distanceThreshold) break;\n    }\n    if (!cubeworldBack) break;\n    // The offset by the dither of each pixel keeps the slices of neighbouring pixels apart, as at the first entry.\n    tracePos = cameraPos + (cubeworldT2 + stepMult * (dither - 1.0)) * nPlayerPos;\n}\n");
+		// The haze and the end of the march read the distance on the ground. A ray that bends over an edge covers little of it
+		// while it travels far, so on the cube they read the true distance.
+		source = source.replace("float lTracePosXZ = length(cloudPlayerPos.xz);", "float lTracePosXZ = cubeworld_active != 0 ? lTracePos : length(cloudPlayerPos.xz);");
+		source = source.replace(
+			"float lTracePosXZ = length(cloudPlayerPos.xz);",
+			"float lTracePosXZ = cubeworld_active != 0 ? lTracePos : length(cloudPlayerPos.xz);");
+		source = source.replace(
+			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cloudPlayerPos.y)",
+			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cubeworldAlt(tracePos) - cubeworldAlt(cameraPos))");
+		return source.replace(
+			"float cloudShading = 1.0 - (higherPlaneAltitude - tracePos.y) / cloudTallness;",
+			"float cloudShading = 1.0 - (higherPlaneAltitude - cubeworldAlt(tracePos)) / cloudTallness;");
+	}
+
+	private static String replaceBetween(String source, String start, String end, java.util.function.UnaryOperator<String> edit) {
+		int from = source.indexOf(start);
+		int to = from < 0 ? -1 : source.indexOf(end, from);
+		if (to < 0) {
+			return source;
+		}
+		to += end.length();
+		return source.substring(0, from) + edit.apply(source.substring(from, to)) + source.substring(to);
+	}
+
+	public static void addUniforms(UniformHolder uniforms) {
+		uniforms.uniform1i(UniformUpdateFrequency.PER_FRAME, "cubeworld_active", () -> CubeSky.active() && CubeSky.celestial() != null ? 1 : 0);
+		uniforms.uniform3f(UniformUpdateFrequency.PER_FRAME, "cubeworld_sunPosition", () -> {
+			Matrix3f celestial = CubeSky.celestial();
+			Vector3f sun = celestial == null ? new Vector3f(0.0F, 100.0F, 0.0F) : celestial.getColumn(1, new Vector3f()).mul(100.0F);
+			return new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView()).transformDirection(sun);
+		});
+		uniforms.uniform3f(UniformUpdateFrequency.PER_FRAME, "cubeworld_upPosition",
+			() -> new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView()).transformDirection(new Vector3f(CubeSky.surfaceUp())));
+		uniforms.uniformMatrix(UniformUpdateFrequency.PER_FRAME, "cubeworld_cubeFromFeet", CubeSky::cubeFromFeet);
+		uniforms.uniformMatrix(UniformUpdateFrequency.PER_FRAME, "cubeworld_cubeFromView", () -> {
+			// View to feet is the transpose of the rotation of the model view. Its translation is only view bobbing.
+			Matrix4f feetFromView = new Matrix4f().set3x3(new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView())).transpose3x3();
+			return new Matrix4f(CubeSky.cubeFromFeet()).mul(feetFromView);
+		});
+		uniforms.uniformMatrix3(UniformUpdateFrequency.PER_FRAME, "cubeworld_celestialFrame", () -> {
+			// Rows: the side, the axis and the sun, so that y is the pole of the sky.
+			Matrix3f celestial = CubeSky.celestial();
+			Matrix3f rows = celestial == null ? new Matrix3f() : new Matrix3f(celestial).transpose();
+			Vector3f axis = rows.getRow(2, new Vector3f());
+			Vector3f sun = rows.getRow(1, new Vector3f());
+			rows.setRow(1, axis).setRow(2, sun);
+			Matrix3f viewToStorage = new Matrix3f().set(new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView())).transpose();
+			return rows.mul(viewToStorage);
+		});
+		uniforms.uniform3f(UniformUpdateFrequency.PER_FRAME, "cubeworld_shadowLight", () -> {
+			// The light that the shadow map is cast from, as IrisShadowMatricesMixin picks it.
+			Matrix3f celestial = CubeSky.celestial();
+			if (celestial == null) {
+				return new Vector3f(0.0F, 1.0F, 0.0F);
+			}
+			Vector3f light = celestial.getColumn(1, new Vector3f());
+			return new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView()).transformDirection(light);
+		});
+		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_core", CubeSky::core);
+		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_centerY", CubeSky::centerY);
+	}
+}
