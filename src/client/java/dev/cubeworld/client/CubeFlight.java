@@ -81,6 +81,25 @@ public final class CubeFlight {
 	private static float glideRollO;
 	private static final float GLIDE_ROLL_KEEP = 0.9F;
 
+	private static Vec3 lastPosition = Vec3.ZERO;
+	private static final double TELEPORT_DISTANCE = 8.0;
+
+	/** Whether the player is farther from where the last tick put it, carried over a face change, than a step can reach. */
+	private static boolean teleported(SeamLayout layout, int lastFace, int face, Vec3 position) {
+		Vec3 last = lastPosition;
+		if (face != lastFace) {
+			int[] m = layout.motion(lastFace, face);
+			if (m[4] == -1) {
+				return true;
+			}
+			last = new Vec3(
+				m[0] * last.x + m[1] * last.y + m[2] * last.z + m[9],
+				m[3] * last.x + m[4] * last.y + m[5] * last.z + m[10],
+				m[6] * last.x + m[7] * last.y + m[8] * last.z + m[11]);
+		}
+		return last.distanceToSqr(position) > TELEPORT_DISTANCE * TELEPORT_DISTANCE;
+	}
+
 	private static void carryLook(LocalPlayer player) {
 		glideRollO = glideRoll;
 		glideRoll *= GLIDE_ROLL_KEEP;
@@ -105,11 +124,25 @@ public final class CubeFlight {
 			return;
 		}
 		boolean tiltEnds = screenUpTilted && isIdentity(view);
+		// A world that was just joined or a teleport keeps no screen up from before: it would stay in the frame of the old
+		// place, tilted wrong, until the look changed.
+		Vec3 position = player.position();
+		boolean placed = lastFace < 0 || teleported(layout, lastFace, face, position);
+		lastPosition = position;
+		if (placed) {
+			hasScreenUp = false;
+			screenUpTilted = false;
+		}
 		syncScreenUp(player, view);
+		if (placed) {
+			upright(screenUp, syncedLook, view);
+			screenUpTilted = !isIdentity(view);
+			lastUp.set(up);
+		}
 		screenUpO.set(screenUp);
 		// The tilt ended and the yaw took the screen heading. The last step of the tilt is a fraction of a degree, but
 		// carried after that it moved a yaw close to straight down by 20 degrees, and the screen rolled with it.
-		if (lastFace < 0 || tiltEnds) {
+		if (placed || tiltEnds) {
 			return;
 		}
 		if (face != lastFace) {

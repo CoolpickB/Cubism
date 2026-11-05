@@ -47,6 +47,7 @@
 		"PlayerFlightMixin",
 		"RenderSectionAccessor",
 		"RenderSectionMixin",
+		"ClientSuggestionProviderMixin",
 		"DebugEntryPositionMixin",
 		"SkyRendererMixin",
 		"SoundEngineMixin",
