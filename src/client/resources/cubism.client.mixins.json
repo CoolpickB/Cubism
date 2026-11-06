@@ -36,6 +36,7 @@
 		"LocalPlayerMixin",
 		"MinecraftMixin",
 		"PresetEditorMixin",
+		"WorldTabMixin",
 		"RiddenRotationMixin",
 		"RenderSectionRegionMixin",
 		"SectionCompilerMixin",
