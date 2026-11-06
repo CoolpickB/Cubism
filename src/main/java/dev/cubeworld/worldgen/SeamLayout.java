@@ -68,7 +68,7 @@ public final class SeamLayout {
 		}
 	}
 
-	public static void setActive(SeamLayout layout) {
+	public static void setActive(@Nullable SeamLayout layout) {
 		active = layout;
 	}
 

@@ -248,10 +248,10 @@ public final class SeamCrossing {
 		int[] m = layout.motion(layout.faceIndexAt(Mth.floor(entity.getX())), toFace);
 		// The body turns about its center, so the entity stands upright in the new frame at the same place.
 		double halfHeight = entity.getBbHeight() / 2.0;
-		Vec3 center = rotate(m, entity.position().add(0.0, halfHeight, 0.0)).add(m[9], m[10], m[11]);
-		Vec3 look = rotate(m, Vec3.directionFromRotation(entity.getXRot(), entity.getYRot()));
+		Vec3 center = SeamInteraction.rotate(m, entity.position().add(0.0, halfHeight, 0.0)).add(m[9], m[10], m[11]);
+		Vec3 look = SeamInteraction.rotate(m, Vec3.directionFromRotation(entity.getXRot(), entity.getYRot()));
 		// The turned downward direction points away from the edge, the way the entity moves on.
-		Vec3 away = rotate(m, new Vec3(0.0, -1.0, 0.0));
+		Vec3 away = SeamInteraction.rotate(m, new Vec3(0.0, -1.0, 0.0));
 		float yRot;
 		float xRot;
 		if (entity instanceof Player) {
@@ -263,18 +263,18 @@ public final class SeamCrossing {
 		} else if (entity instanceof Projectile && entity.getDeltaMovement().lengthSqr() > 1.0E-7) {
 			// A projectile points along its flight, with its own sign convention, and eases to that direction each
 			// tick. Any other rotation here shows as a swing after the crossing.
-			Vec3 flight = rotate(m, entity.getDeltaMovement());
+			Vec3 flight = SeamInteraction.rotate(m, entity.getDeltaMovement());
 			yRot = (float) Math.toDegrees(Math.atan2(flight.x, flight.z));
 			xRot = (float) Math.toDegrees(Math.atan2(flight.y, flight.horizontalDistance()));
 		} else {
 			// A body rolls over the edge: the part of its facing toward the edge, which turns up, points away from the
 			// edge instead. Else a boat that comes at the edge a little to the side faces along the edge.
-			Vec3 facing = rotate(m, Vec3.directionFromRotation(0.0F, entity.getYRot()));
+			Vec3 facing = SeamInteraction.rotate(m, Vec3.directionFromRotation(0.0F, entity.getYRot()));
 			Vec3 heading = new Vec3(facing.x + facing.y * away.x, 0.0, facing.z + facing.y * away.z);
 			yRot = (float) Math.toDegrees(Math.atan2(-heading.x, heading.z));
 			xRot = entity.getXRot();
 		}
-		return new Turned(free(entity, center.subtract(0.0, halfHeight, 0.0)), rotate(m, entity.getDeltaMovement()), yRot, xRot);
+		return new Turned(free(entity, center.subtract(0.0, halfHeight, 0.0)), SeamInteraction.rotate(m, entity.getDeltaMovement()), yRot, xRot);
 	}
 
 	/**
@@ -303,12 +303,4 @@ public final class SeamCrossing {
 	private static final double FREE_STEP = 0.05;
 	private static final double FREE_SEARCH = 1.0;
 	private static final Direction[] FREE_ORDER = {Direction.UP, Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST};
-
-	private static Vec3 rotate(int[] m, Vec3 v) {
-		return new Vec3(
-			m[0] * v.x + m[1] * v.y + m[2] * v.z,
-			m[3] * v.x + m[4] * v.y + m[5] * v.z,
-			m[6] * v.x + m[7] * v.y + m[8] * v.z
-		);
-	}
 }

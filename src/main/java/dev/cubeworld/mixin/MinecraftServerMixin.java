@@ -51,6 +51,9 @@ public abstract class MinecraftServerMixin {
 	protected abstract void waitUntilNextTick();
 
 	@Shadow
+	public abstract boolean isRunning();
+
+	@Shadow
 	protected abstract GlobalPos selectLevelLoadFocusPos();
 
 	@Inject(method = "loadLevel", at = @At("HEAD"))
@@ -117,19 +120,25 @@ public abstract class MinecraftServerMixin {
 		}
 		LoadTrace.event("server: pre-generation start, " + pregen.total() + " columns");
 		CubePregen.unsyncedWrites = true;
-		while (!pregen.tick()) {
-			LoadTrace.serverSample(level, "pre-generation", pregen.describe());
-			if (progress != null) {
-				progress.pregenDone = pregen.ready();
+		try {
+			while (!pregen.tick()) {
+				if (!this.isRunning()) {
+					return;
+				}
+				LoadTrace.serverSample(level, "pre-generation", pregen.describe());
+				if (progress != null) {
+					progress.pregenDone = pregen.ready();
+				}
+				if (Util.getMillis() - lastLog > 5000L) {
+					lastLog = Util.getMillis();
+					CUBEWORLD$LOGGER.info("Generated {} of {} chunk columns", pregen.done(), pregen.total());
+				}
+				this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
+				this.waitUntilNextTick();
 			}
-			if (Util.getMillis() - lastLog > 5000L) {
-				lastLog = Util.getMillis();
-				CUBEWORLD$LOGGER.info("Generated {} of {} chunk columns", pregen.done(), pregen.total());
-			}
-			this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
-			this.waitUntilNextTick();
+		} finally {
+			CubePregen.unsyncedWrites = false;
 		}
-		CubePregen.unsyncedWrites = false;
 		if (progress != null) {
 			progress.pregenDone = pregen.total();
 			progress.pregenFinished = true;
@@ -168,6 +177,8 @@ public abstract class MinecraftServerMixin {
 	@Inject(method = "stopServer", at = @At("TAIL"))
 	private void cubeworld$stopTracking(CallbackInfo ci) {
 		CubePregen.stopTracking();
+		// The layout is static, so a vanilla world that loads next in the same game would see the cube otherwise.
+		SeamLayout.setActive(null);
 		LoadTrace.end("server stopped");
 	}
 }

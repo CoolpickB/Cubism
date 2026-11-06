@@ -4,6 +4,7 @@ import dev.cubeworld.CubeWorldMod;
 import dev.cubeworld.worldgen.CubeChunkGenerator;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
@@ -22,7 +23,8 @@ public class WorldPresetsMixin {
 		CallbackInfoReturnable<Optional<ResourceKey<WorldPreset>>> cir
 	) {
 		Optional<LevelStem> overworld = dimensions.get(LevelStem.OVERWORLD);
-		if (overworld.isPresent() && overworld.get().generator() instanceof CubeChunkGenerator) {
+		if (overworld.isPresent() && (overworld.get().generator() instanceof CubeChunkGenerator
+			|| overworld.get().generator() instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubeWorldMod.SEAM_SETTINGS))) {
 			cir.setReturnValue(Optional.of(CubeWorldMod.CUBE_PRESET));
 		}
 	}

@@ -1,5 +1,7 @@
 package dev.cubeworld.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import dev.cubeworld.worldgen.SeamLayout;
 import dev.cubeworld.worldgen.SeamPaths;
 import net.minecraft.core.Holder;
@@ -14,8 +16,6 @@ import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
  * A map shows the flat plane of the face that it was made on. A player, frame or banner on another face is placed where
@@ -34,26 +34,17 @@ public abstract class MapItemSavedDataMixin {
 	@Final
 	public ResourceKey<Level> dimension;
 
-	@ModifyVariable(method = "addDecoration", at = @At("HEAD"), argsOnly = true, ordinal = 0)
-	private double cubeworld$x(double xPos, Holder<MapDecorationType> type, @Nullable LevelAccessor level, String key, double xx, double zPos, double yRot, @Nullable Component name) {
-		Vec3 flat = this.cubeworld$flat(xPos, zPos);
-		return flat == null ? xPos : flat.x;
-	}
-
-	@ModifyVariable(method = "addDecoration", at = @At("HEAD"), argsOnly = true, ordinal = 1)
-	private double cubeworld$z(double zPos, Holder<MapDecorationType> type, @Nullable LevelAccessor level, String key, double xPos, double zz, double yRot, @Nullable Component name) {
-		Vec3 flat = this.cubeworld$flat(xPos, zPos);
-		return flat == null ? zPos : flat.z;
-	}
-
-	@ModifyVariable(method = "addDecoration", at = @At("HEAD"), argsOnly = true, ordinal = 2)
-	private double cubeworld$yaw(double yRot, Holder<MapDecorationType> type, @Nullable LevelAccessor level, String key, double xPos, double zPos, double yy, @Nullable Component name) {
+	@WrapMethod(method = "addDecoration")
+	private void cubeworld$placeOnFacePlane(Holder<MapDecorationType> type, @Nullable LevelAccessor level, String key, double xPos,
+		double zPos, double yRot, @Nullable Component name, Operation<Void> original) {
 		SeamLayout layout = this.dimension == Level.OVERWORLD ? SeamLayout.active() : null;
-		return layout == null ? yRot : SeamPaths.aimYaw(layout, new Vec3(this.centerX, 0.0, this.centerZ), new Vec3(xPos, 0.0, zPos), (float) yRot);
-	}
-
-	private @Nullable Vec3 cubeworld$flat(double xPos, double zPos) {
-		SeamLayout layout = this.dimension == Level.OVERWORLD ? SeamLayout.active() : null;
-		return layout == null ? null : SeamPaths.aim(layout, new Vec3(this.centerX, 0.0, this.centerZ), new Vec3(xPos, 0.0, zPos));
+		if (layout == null) {
+			original.call(type, level, key, xPos, zPos, yRot, name);
+			return;
+		}
+		Vec3 center = new Vec3(this.centerX, 0.0, this.centerZ);
+		Vec3 pos = new Vec3(xPos, 0.0, zPos);
+		Vec3 flat = SeamPaths.aim(layout, center, pos);
+		original.call(type, level, key, flat.x, flat.z, (double) SeamPaths.aimYaw(layout, center, pos, (float) yRot), name);
 	}
 }
