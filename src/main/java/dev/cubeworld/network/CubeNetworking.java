@@ -1,11 +1,9 @@
 package dev.cubeworld.network;
 
 import dev.cubeworld.CubeWorldMod;
-import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.worldgen.CubeSettings;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -20,7 +18,6 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -42,20 +39,6 @@ public final class CubeNetworking {
 
 		@Override
 		public Type<SeamPayload> type() {
-			return TYPE;
-		}
-	}
-
-	public record EntityGravityPayload(int entityId, Direction gravity) implements CustomPacketPayload {
-		public static final Type<EntityGravityPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(CubeWorldMod.MOD_ID, "entity_gravity"));
-		public static final StreamCodec<RegistryFriendlyByteBuf, EntityGravityPayload> CODEC = StreamCodec.composite(
-			ByteBufCodecs.VAR_INT, EntityGravityPayload::entityId,
-			Direction.STREAM_CODEC, EntityGravityPayload::gravity,
-			EntityGravityPayload::new
-		);
-
-		@Override
-		public Type<EntityGravityPayload> type() {
 			return TYPE;
 		}
 	}
@@ -101,7 +84,6 @@ public final class CubeNetworking {
 
 	public static void register() {
 		PayloadTypeRegistry.clientboundPlay().register(SeamPayload.TYPE, SeamPayload.CODEC);
-		PayloadTypeRegistry.clientboundPlay().register(EntityGravityPayload.TYPE, EntityGravityPayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(MovingBlockPayload.TYPE, MovingBlockPayload.CODEC);
 
 		ServerTickEvents.END_LEVEL_TICK.register(level -> {
@@ -125,15 +107,5 @@ public final class CubeNetworking {
 				sender.sendPacket(new SeamPayload(settings.diameterChunks(), settings.edgeRounding()));
 			}
 		});
-
-		EntityTrackingEvents.START_TRACKING.register((entity, player) -> {
-			if (((GravityEntityAccess) entity).cubeworld$getGravityDirection() != Direction.DOWN) {
-				ServerPlayNetworking.send(player, payloadFor(entity));
-			}
-		});
-	}
-
-	private static EntityGravityPayload payloadFor(Entity entity) {
-		return new EntityGravityPayload(entity.getId(), ((GravityEntityAccess) entity).cubeworld$getGravityDirection());
 	}
 }

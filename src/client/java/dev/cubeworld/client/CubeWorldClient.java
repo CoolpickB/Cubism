@@ -1,7 +1,6 @@
 package dev.cubeworld.client;
 
 import dev.cubeworld.debug.LoadTrace;
-import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.client.render.CubeSky;
 import dev.cubeworld.client.render.SeamRenderer;
@@ -18,7 +17,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.piston.MovingPistonBlock;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
@@ -59,13 +57,6 @@ public class CubeWorldClient implements ClientModInitializer {
 			level.setBlockEntity(MovingPistonBlock.newMovingBlockEntity(
 				pos, payload.pistonState(), payload.movedState(), payload.direction(), payload.extending(), payload.source()
 			));
-		});
-
-		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.EntityGravityPayload.TYPE, (payload, context) -> {
-			Entity entity = context.client().level == null ? null : context.client().level.getEntity(payload.entityId());
-			if (entity != null) {
-				((GravityEntityAccess) entity).cubeworld$forceGravityDirection(payload.gravity());
-			}
 		});
 
 		if (FabricLoader.getInstance().isDevelopmentEnvironment()) {

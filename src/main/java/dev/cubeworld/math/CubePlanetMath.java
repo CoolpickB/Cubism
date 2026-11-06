@@ -1,12 +1,5 @@
 package dev.cubeworld.math;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import org.joml.Quaternionf;
-
 public final class CubePlanetMath {
 	public static final int MIN_DIAMETER_CHUNKS = 24;
 	public static final int MAX_DIAMETER_CHUNKS = 128;
@@ -102,73 +95,5 @@ public final class CubePlanetMath {
 		} else {
 			out[2] = Math.copySign(r, dz);
 		}
-	}
-
-	public static Vec3 up(Direction gravity) {
-		return new Vec3(-gravity.getStepX(), -gravity.getStepY(), -gravity.getStepZ());
-	}
-
-	/**
-	 * Transforms a vector from the local frame (where -Y is along gravity) into world coordinates.
-	 * Matches getCameraRotation(gravity) on all 6 faces.
-	 */
-	public static Vec3 localToWorld(Vec3 local, Direction gravity) {
-		return switch (gravity) {
-			case DOWN -> local;
-			case UP -> new Vec3(-local.x, -local.y, local.z);
-			case NORTH -> new Vec3(local.x, -local.z, local.y);
-			case SOUTH -> new Vec3(local.x, local.z, -local.y);
-			case WEST -> new Vec3(local.y, -local.x, local.z);
-			case EAST -> new Vec3(-local.y, local.x, local.z);
-		};
-	}
-
-	public static Vec3 worldToLocal(Vec3 world, Direction gravity) {
-		return switch (gravity) {
-			case DOWN -> world;
-			case UP -> new Vec3(-world.x, -world.y, world.z);
-			case NORTH -> new Vec3(world.x, world.z, -world.y);
-			case SOUTH -> new Vec3(world.x, -world.z, world.y);
-			case WEST -> new Vec3(-world.y, world.x, world.z);
-			case EAST -> new Vec3(world.y, -world.x, world.z);
-		};
-	}
-
-	// The frames are signed axis permutations about the origin, so transforming the two corners keeps a box exact.
-	public static AABB localToWorld(AABB local, Direction gravity) {
-		if (gravity == Direction.DOWN) {
-			return local;
-		}
-		return new AABB(localToWorld(local.getMinPosition(), gravity), localToWorld(local.getMaxPosition(), gravity));
-	}
-
-	public static AABB worldToLocal(AABB world, Direction gravity) {
-		if (gravity == Direction.DOWN) {
-			return world;
-		}
-		return new AABB(worldToLocal(world.getMinPosition(), gravity), worldToLocal(world.getMaxPosition(), gravity));
-	}
-
-	public static Direction rotateDirection(Direction localDir, Direction gravity) {
-		if (localDir == null || gravity == Direction.DOWN) {
-			return localDir;
-		}
-		Vec3 w = localToWorld(new Vec3(localDir.getStepX(), localDir.getStepY(), localDir.getStepZ()), gravity);
-		return Direction.getApproximateNearest(w.x, w.y, w.z);
-	}
-
-	/**
-	 * Returns the face rotation that maps local UP (+Y) to the opposite of gravity.
-	 */
-	public static Quaternionf getCameraRotation(Direction gravity) {
-		Quaternionf q = new Quaternionf();
-		return switch (gravity) {
-			case DOWN -> q.identity();
-			case UP -> q.rotationZ((float) Math.PI);
-			case NORTH -> q.rotationX((float) (Math.PI / 2.0));
-			case SOUTH -> q.rotationX((float) (-Math.PI / 2.0));
-			case WEST -> q.rotationZ((float) (-Math.PI / 2.0));
-			case EAST -> q.rotationZ((float) (Math.PI / 2.0));
-		};
 	}
 }

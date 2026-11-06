@@ -5,15 +5,12 @@ import dev.cubeworld.client.CubeFlight;
 import dev.cubeworld.seam.SeamCrossing;
 import dev.cubeworld.debug.LoadTrace;
 import dev.cubeworld.client.SeamClient;
-import dev.cubeworld.gravity.GravityEntityAccess;
-import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.SectionPos;
-import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -31,12 +28,9 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Turns the camera into the frame of the entity. When the frame changes, the camera keeps the old view and
- * turns to the new frame over {@link #SMOOTH_TICKS} ticks, about the feet of the entity.
- *
- * <p>In a seam world the frame never changes, but an entity that crosses a seam moves to another face region and
- * its view turns with the face motion. The camera then starts from the old view, carried over by the motion, and
- * turns to the new view in the same way, about the center of the entity.
+ * An entity that crosses a seam moves to another face region and its view turns with the face motion. The camera
+ * then starts from the old view, carried over by the motion, and turns to the new view over {@link #SMOOTH_TICKS}
+ * ticks, about the center of the entity.
  *
  * <p>In flight the camera stands upright in the air frame of {@link CubeFlight}, which tilts over the edges. The
  * frame turns with the face motion at a crossing, so the seam turn is then near zero.
@@ -78,7 +72,6 @@ public abstract class CameraMixin {
 	}
 
 	@Unique private Entity cubeworld$lastEntity;
-	@Unique private Direction cubeworld$lastFrame = Direction.DOWN;
 	@Unique private final Quaternionf cubeworld$correction = new Quaternionf();
 	@Unique private float cubeworld$flipTime;
 	@Unique private final Quaternionf cubeworld$frameRotation = new Quaternionf();
@@ -102,7 +95,6 @@ public abstract class CameraMixin {
 
 	@Inject(method = "alignWithEntity", at = @At("HEAD"))
 	private void cubeworld$updateFrameRotation(float partialTicks, CallbackInfo ci) {
-		Direction frame = this.entity instanceof GravityEntityAccess access ? access.cubeworld$getFrame() : Direction.DOWN;
 		float now = this.entity.tickCount + partialTicks;
 		this.cubeworld$lastView = this.cubeworld$view;
 		this.cubeworld$view = CubeFlight.viewFrame(this.entity, partialTicks);
@@ -113,17 +105,10 @@ public abstract class CameraMixin {
 			this.cubeworld$eyeCorrection.identity();
 			this.cubeworld$lastFace = -1;
 			this.cubeworld$lastView = this.cubeworld$view;
-		} else if (frame != this.cubeworld$lastFrame) {
-			// Start from the rotation on screen, also when the last turn is not complete.
-			Quaternionf shown = this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(this.cubeworld$lastFrame));
-			this.cubeworld$correction.set(shown.mul(CubePlanetMath.getCameraRotation(frame).conjugate()));
-			this.cubeworld$flipTime = now;
-			this.cubeworld$smoothTicks = SMOOTH_TICKS;
 		}
-		this.cubeworld$lastFrame = frame;
 		this.cubeworld$turnAcrossSeam(partialTicks, now, airTurn);
-		this.cubeworld$frameRotation.set(this.cubeworld$smoothedCorrection(now).mul(airTurn).mul(CubePlanetMath.getCameraRotation(frame)));
-		this.cubeworld$eyeFrame.set(this.cubeworld$smoothedCorrection(now).mul(CubePlanetMath.getCameraRotation(frame)));
+		this.cubeworld$frameRotation.set(this.cubeworld$smoothedCorrection(now).mul(airTurn));
+		this.cubeworld$eyeFrame.set(this.cubeworld$smoothedCorrection(now));
 		SeamClient.lightFrame.set(this.cubeworld$smoothedCorrection(now).mul(this.cubeworld$view));
 	}
 
