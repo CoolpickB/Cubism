@@ -64,6 +64,13 @@ public final class SeamPaths {
 		}
 		int a = layout.faceIndexAt(fromBlockX);
 		int b = layout.faceIndexAt(targetBlockX);
+		if (onMap) {
+			// An entity crosses a diagonal only some way past it, so it can still be stored in the region of the face it
+			// left. The two regions place it differently, and the marker would jump at the crossing.
+			Vec3 cube = layout.storageToCube(b, target.x, target.y, target.z);
+			target = layout.cubeToStorage(cube.x, cube.y, cube.z);
+			b = layout.faceIndexAt(Mth.floor(target.x));
+		}
 		if (a == b) {
 			return target;
 		}
