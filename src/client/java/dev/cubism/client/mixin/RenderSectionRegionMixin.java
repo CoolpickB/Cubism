@@ -1,13 +1,13 @@
 package dev.cubism.client.mixin;
 
 import dev.cubism.client.SeamClient;
+import dev.cubism.seam.SeamStates;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.material.FluidState;
@@ -23,10 +23,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * A section next to a seam meshes against the blocks of the neighbor face. Outside its wedge, a face region holds
  * only cleared air and leftover feature blocks, so blocks and light there are read from the owner face instead.
- * Without this, the wedge staircase shows stone side faces lit by the dark cleared air.
- *
- * <p>The blocks keep the orientation of their own face. That is exact for full blocks and only an approximation
- * for stairs, slabs and other shapes.
+ * Without this, the wedge staircase shows stone side faces lit by the dark cleared air. The blocks turn into the frame
+ * of this face by {@link SeamStates}.
  */
 @Mixin(RenderSectionRegion.class)
 public abstract class RenderSectionRegionMixin implements BlockAndTintGetter {
@@ -37,9 +35,8 @@ public abstract class RenderSectionRegionMixin implements BlockAndTintGetter {
 	private void cubism$readBlockAcrossSeam(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
 		BlockPos owner = cubism$ownerPos(pos);
 		if (owner != null) {
-			BlockState state = this.level.getBlockState(owner);
-			// A partial shape would cull its neighbors by a turned shape. See LevelSliceMixin.
-			cir.setReturnValue(state.isSolidRender() || !state.getFluidState().isEmpty() ? state : Blocks.AIR.defaultBlockState());
+			SeamLayout layout = SeamClient.layout;
+			cir.setReturnValue(SeamStates.turnForMesh(layout, this.level.getBlockState(owner), layout.faceIndexAt(owner.getX()), layout.faceIndexAt(pos.getX())));
 		}
 	}
 

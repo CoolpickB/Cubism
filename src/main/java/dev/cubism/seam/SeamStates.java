@@ -47,6 +47,15 @@ public final class SeamStates {
 		return TURNED[fromFace * FACES + toFace].computeIfAbsent(state, s -> compute(layout, s, fromFace, toFace));
 	}
 
+	/**
+	 * As {@link #turn}, for the meshers. A fluid block that cannot turn stays as it is, so that water still meets the
+	 * water across the seam. Connected textures, such as those of Continuity, read the turned blocks too.
+	 */
+	public static BlockState turnForMesh(SeamLayout layout, BlockState state, int fromFace, int toFace) {
+		BlockState turned = turn(layout, state, fromFace, toFace);
+		return turned.isAir() && !state.getFluidState().isEmpty() ? state : turned;
+	}
+
 	/** True when a state that is not air turns into the air stand-in. */
 	public static boolean unturnable(SeamLayout layout, BlockState state, int fromFace, int toFace) {
 		return !state.isAir() && turn(layout, state, fromFace, toFace).isAir();

@@ -3,13 +3,13 @@ package dev.cubism.client.compat.sodium.mixin;
 import dev.cubism.client.SeamClient;
 import dev.cubism.client.render.CubeShade;
 import dev.cubism.client.compat.sodium.ShadeSlice;
+import dev.cubism.seam.SeamStates;
 import dev.cubism.worldgen.SeamLayout;
 import net.caffeinemc.mods.sodium.client.world.LevelSlice;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.level.LightLayer;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
@@ -53,10 +53,8 @@ public abstract class LevelSliceMixin implements ShadeSlice {
 	private void cubism$readBlockAcrossSeam(int x, int y, int z, CallbackInfoReturnable<BlockState> cir) {
 		BlockPos owner = cubism$ownerPos(x, y, z);
 		if (owner != null) {
-			BlockState state = this.level.getBlockState(owner);
-			// The block keeps the orientation of its own face, so a stair or slab would cull the faces next to it by
-			// a shape that is turned the wrong way, and the block beside it would not draw a face that shows through the gap.
-			cir.setReturnValue(state.isSolidRender() || !state.getFluidState().isEmpty() ? state : Blocks.AIR.defaultBlockState());
+			SeamLayout layout = SeamClient.layout;
+			cir.setReturnValue(SeamStates.turnForMesh(layout, this.level.getBlockState(owner), layout.faceIndexAt(owner.getX()), layout.faceIndexAt(x)));
 		}
 	}
 
