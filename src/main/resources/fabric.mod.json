@@ -49,5 +49,8 @@
 		"minecraft": "~26.3",
 		"java": ">=25",
 		"fabric-api": "*"
+	},
+	"breaks": {
+		"c2me": "*"
 	}
 }
