@@ -251,11 +251,15 @@ public final class SeamInteraction {
 			return;
 		}
 		int[] back = layout.motion(regionFace(layout, mob.getX(), mob.getZ()), regionFace(layout, target.getX(), target.getZ()));
+		Vec3 before = target.position();
 		place(target, m);
 		try {
 			action.run();
 		} finally {
 			place(target, back);
+			if (dev.cubism.debug.LoadTrace.active() && target.position().distanceToSqr(before) > 1.0E-6) {
+				dev.cubism.debug.LoadTrace.event("target not back after a seam attack: " + target + " was " + before + " by " + mob);
+			}
 		}
 	}
 

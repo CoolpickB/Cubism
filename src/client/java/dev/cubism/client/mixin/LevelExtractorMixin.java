@@ -68,7 +68,7 @@ public abstract class LevelExtractorMixin {
 	private void cubism$skipOtherRegion(
 		Entity entity, Frustum frustum, double camX, double camY, double camZ, float partialTicks, long chunkFadeDuration, CallbackInfoReturnable<Boolean> cir
 	) {
-		if (SeamRenderer.inOtherRegion(entity, camX, camZ)) {
+		if (SeamRenderer.inOtherRegion(entity, camX, camZ) || SeamRenderer.torn(entity)) {
 			cir.setReturnValue(false);
 		}
 	}

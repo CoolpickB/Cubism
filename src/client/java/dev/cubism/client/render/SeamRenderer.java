@@ -654,7 +654,7 @@ public final class SeamRenderer {
 		}
 		for (Entity entity : level.entitiesForRendering()) {
 			int face = SeamInteraction.regionFace(layout, entity.getX(), entity.getZ());
-			if (face < 0 || face == cameraFace) {
+			if (face < 0 || face == cameraFace || torn(entity)) {
 				continue;
 			}
 			Vec3 camera = SeamInteraction.move(layout.motion(cameraFace, face), cameraPos);
@@ -670,6 +670,20 @@ public final class SeamRenderer {
 	}
 
 	/** True for an entity that {@link #extractEntities} draws instead of vanilla. */
+	/**
+	 * An entity whose last-frame position is far from its position, as after a crossing that its old position did not
+	 * follow, such as two crossings at a corner. The frame between the two would draw it somewhere on the line between
+	 * two faces, which is out in the sky. Vanilla snaps moves this long, so such an entity only waits for its next tick.
+	 */
+	public static boolean torn(Entity entity) {
+		double dx = entity.getX() - entity.xo;
+		double dy = entity.getY() - entity.yo;
+		double dz = entity.getZ() - entity.zo;
+		return dx * dx + dy * dy + dz * dz > TORN_DISTANCE * TORN_DISTANCE;
+	}
+
+	private static final double TORN_DISTANCE = 64.0;
+
 	public static boolean inOtherRegion(Entity entity, double cameraX, double cameraZ) {
 		SeamLayout layout = SeamClient.layout;
 		if (layout == null) {

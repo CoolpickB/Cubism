@@ -68,6 +68,9 @@ public final class SeamCrossing {
 				continue;
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();
+			if (dev.cubism.debug.LoadTrace.active() && !(entity instanceof Player) && SeamInteraction.regionFace(layout, center.x, center.z) < 0) {
+				dev.cubism.debug.LoadTrace.event("entity outside every face: " + entity);
+			}
 			boolean spectator = entity.isSpectator();
 			int face = layout.crossingFace(center.x, center.y, center.z, spectator ? SPECTATOR_MARGIN : entity instanceof ServerPlayer || ridden(entity) != null ? PLAYER_BACKUP_MARGIN : MARGIN);
 			if (face < 0) {

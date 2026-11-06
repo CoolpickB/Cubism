@@ -165,6 +165,13 @@ public final class CubeShaderPatch {
 		    float cubismCameraAlt() {
 		        return cubism_active != 0 ? cubismAlt(cubism_cubeFromFeet[3].xyz) : cameraPosition.y;
 		    }
+		    // The distance that the border fog grows with. The pack takes a box upright in the frame it draws in, which is the
+		    // frame of the face in the programs of the ground and the frame of the camera face in the deferred pass. The two
+		    // did not agree on a folded face, and the fog over the far ground jumped at a crossing. The straight distance is
+		    // the same in every frame, and it reaches the render distance before the chunks of any face end.
+		    float cubismBorderDist(vec3 playerPos) {
+		        return cubism_active != 0 ? length(playerPos) : max(length(playerPos.xz), abs(playerPos.y));
+		    }
 		    // The rounded up at a point of view space.
 		    vec3 cubismUpAtView(vec3 viewPos) {
 		        vec3 p = (cubism_cubeFromView * vec4(viewPos, 1.0)).xyz;
@@ -442,6 +449,9 @@ public final class CubeShaderPatch {
 				                    #ifdef CUBEWORLD
 				                        if (cubism_active != 0 && dot(lightVec, cubism_shadowLight) < 0.0) shadowLength = 0.0;
 				                    #endif""");
+		}
+		if (name.endsWith(MAIN_FOG) || name.endsWith("/program/gbuffers_terrain.glsl") || name.endsWith("/program/gbuffers_water.glsl")) {
+			source = source.replace("max(length(playerPos.xz), abs(playerPos.y))", "cubismBorderDist(playerPos)");
 		}
 		if (name.endsWith(MAIN_FOG) || name.endsWith("/program/deferred1.glsl")) {
 			// The fog thickens toward the ground. Its height must follow the cube, or the ground of the camera face
