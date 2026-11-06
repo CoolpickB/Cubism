@@ -28,6 +28,15 @@ public class CubismClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		LoadTrace.enabled |= ClientConfig.traceLoads;
 		CubeSky.init();
+		// Debug: writes a trace of the next seconds to logs/cubism-load-<time>.log, with the lines of DebugTrace.
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+			ClientCommands.literal("cubetrace").then(ClientCommands.argument("seconds", IntegerArgumentType.integer(1, 600)).executes(context -> {
+				LoadTrace.enabled = true;
+				LoadTraceClient.begin("/cubetrace");
+				LoadTrace.endAfter(IntegerArgumentType.getInteger(context, "seconds") * 1000L);
+				context.getSource().sendFeedback(net.minecraft.network.chat.Component.literal("Tracing to logs/cubism-load-*.log"));
+				return 1;
+			}))));
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
 			ClientCommands.literal("cubevoxy").then(ClientCommands.literal("hide").then(
 				ClientCommands.argument("mode", IntegerArgumentType.integer(0, 2)).executes(context -> {

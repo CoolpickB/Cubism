@@ -50,6 +50,7 @@ public abstract class LocalPlayerMixin extends LivingEntity {
 	@Inject(method = "aiStep", at = @At("TAIL"))
 	private void cubism$tickFlight(CallbackInfo ci) {
 		CubeFlight.tick((LocalPlayer) (Object) this);
+		dev.cubism.client.DebugTrace.fall((LocalPlayer) (Object) this);
 	}
 
 	// The pick starts at the eye that the camera shows, which stands along the air frame in flight.

@@ -109,6 +109,7 @@ public final class LoadTraceClient {
 			frames++;
 			frameNanos += nanos;
 			maxFrameNanos = Math.max(maxFrameNanos, nanos);
+			DebugTrace.frame(nanos);
 			if (nanos >= SLOW_FRAME_NANOS) {
 				slowFrames++;
 			}

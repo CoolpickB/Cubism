@@ -13,6 +13,11 @@ import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(EntityRenderDispatcher.class)
 public class EntityRenderDispatcherMixin {
+	@org.spongepowered.asm.mixin.injection.Inject(method = "extractEntity", at = @At("HEAD"))
+	private void cubism$traceEntity(Entity entity, float partialTicks, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<?> cir) {
+		dev.cubism.client.DebugTrace.entity(entity, partialTicks);
+	}
+
 	// Name tags show only near the camera. An entity of another face region shows next to it, not where it is stored.
 	@ModifyReturnValue(method = "distanceToSqr(Lnet/minecraft/world/entity/Entity;)D", at = @At("RETURN"))
 	private double cubism$distanceAcrossSeam(double distance, @Local(argsOnly = true) Entity entity) {
