@@ -20,6 +20,18 @@ public abstract class VoxySectionRendererMixin {
 	@Final
 	private GlBuffer uniform;
 
+	@Shadow
+	private void uploadUniformBuffer(MDICViewport viewport) {
+	}
+
+	/** The second pass for water draws with the list of each face, and the scene block holds the last face that drew. */
+	@Inject(method = "renderTranslucent", at = @At("HEAD"))
+	private void cubeworld$sceneOfFace(MDICViewport viewport, CallbackInfo ci) {
+		if (VoxyFaces.waterPass()) {
+			this.uploadUniformBuffer(viewport);
+		}
+	}
+
 	@Inject(method = "uploadUniformBuffer", at = @At("TAIL"))
 	private void cubeworld$uploadRegion(MDICViewport viewport, CallbackInfo ci) {
 		float[] region = VoxyFaces.region(viewport);

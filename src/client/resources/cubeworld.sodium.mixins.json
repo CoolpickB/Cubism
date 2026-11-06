@@ -24,7 +24,6 @@
 		"VoxySectionManagerMixin",
 		"VoxySectionRendererMixin",
 		"VoxyShaderLoaderMixin",
-		"VoxyTranslucentDepthMixin",
 		"VoxyViewportSelectorMixin"
 	],
 	"injectors": {

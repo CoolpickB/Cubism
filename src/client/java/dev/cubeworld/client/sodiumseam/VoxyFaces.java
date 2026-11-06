@@ -38,7 +38,7 @@ public final class VoxyFaces {
 	private static @Nullable VoxyRenderSystem storesOf;
 	private static int depthCopy, copyWidth, copyHeight, copyFormat;
 	private static final java.util.List<Deferred> DEFERRED = new java.util.ArrayList<>();
-	private static boolean drawingDeferred, copied, laterFace;
+	private static boolean drawingDeferred, copied, laterFace, waterHeld, waterPass, firstWater;
 
 	static {
 		for (int f = 0; f < FACES; f++) {
@@ -222,8 +222,19 @@ public final class VoxyFaces {
 				system.renderOpaque(draw.viewport, draw.depth, draw.color);
 				laterFace = true;
 			}
+			if (waterHeld) {
+				waterPass = true;
+				firstWater = true;
+				for (Deferred draw : DEFERRED) {
+					SeamFaces.setWorking(draw.face);
+					system.renderOpaque(draw.viewport, draw.depth, draw.color);
+					firstWater = false;
+				}
+			}
 		} finally {
 			laterFace = false;
+			waterHeld = false;
+			waterPass = false;
 			SeamFaces.setWorking(-1);
 			DEFERRED.clear();
 			drawingDeferred = false;
@@ -238,6 +249,32 @@ public final class VoxyFaces {
 	 */
 	public static boolean laterFace() {
 		return laterFace;
+	}
+
+	/**
+	 * With a shader pack, the pack draws the water of the levels of detail over the colour of the land behind it, and
+	 * finds the water later where its depth in the translucent depth of Voxy is nearer than the depth of the land. Voxy
+	 * copies its opaque depth over the translucent depth before each translucent pass. When each face drew its water right
+	 * after its land, a later face drew its land over the water of an earlier face, and the copy cleared the depth of
+	 * that water, so the land across an edge showed as if under water. The faces draw the land of all faces first, and
+	 * then the water of all faces in a second pass. Returns true in the first pass, where the water waits.
+	 */
+	public static boolean holdWater(Object pipeline) {
+		if (!drawingDeferred || waterPass || !(pipeline instanceof me.cortex.voxy.client.core.IrisVoxyRenderPipeline)) {
+			return false;
+		}
+		waterHeld = true;
+		return true;
+	}
+
+	/** The second pass of {@link #holdWater}, which draws only the water. */
+	public static boolean waterPass() {
+		return waterPass;
+	}
+
+	/** The first face of the second pass, which copies the opaque depth of all faces over the translucent depth. */
+	public static boolean firstWater() {
+		return firstWater;
 	}
 
 	private record Deferred(int face, Viewport<?> viewport, int depth, int color) {}

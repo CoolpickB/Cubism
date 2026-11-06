@@ -10,6 +10,7 @@ import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
 import me.cortex.voxy.client.core.rendering.hierachical.NodeCleaner;
 import me.cortex.voxy.client.core.rendering.section.backend.AbstractSectionRenderer;
+import org.lwjgl.opengl.GL11C;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -45,9 +46,73 @@ public abstract class VoxyPipelineMixin {
 		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/rendering/section/backend/AbstractSectionRenderer;buildDrawCalls(Lme/cortex/voxy/client/core/rendering/Viewport;)V")
 	)
 	private void cubeworld$drawNewList(AbstractSectionRenderer renderer, Viewport viewport, Operation<Void> original) {
+		if (VoxyFaces.waterPass()) {
+			return;
+		}
 		original.call(renderer, viewport);
 		if (VoxyFaces.laterFace()) {
 			renderer.renderOpaque(viewport);
+		}
+	}
+
+	/**
+	 * The second pass draws only the water of each face, see {@link VoxyFaces#holdWater}, over the depth and stencil that
+	 * the first pass left. The stencil marks where Voxy draws, as the setup leaves it.
+	 */
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/AbstractRenderPipeline;setup(Lme/cortex/voxy/client/core/rendering/Viewport;III)I")
+	)
+	private int cubeworld$keepDepthForWater(AbstractRenderPipeline pipeline, Viewport viewport, int depth, int width, int height, Operation<Integer> original) {
+		if (!VoxyFaces.waterPass()) {
+			return original.call(pipeline, viewport, depth, width, height);
+		}
+		GL11C.glEnable(GL11C.GL_STENCIL_TEST);
+		GL11C.glStencilOp(GL11C.GL_KEEP, GL11C.GL_KEEP, GL11C.GL_KEEP);
+		GL11C.glStencilFunc(GL11C.GL_EQUAL, 1, 0xFF);
+		GL11C.glStencilMask(0xFF);
+		return 0;
+	}
+
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/AbstractRenderPipeline;innerPrimaryWork(Lme/cortex/voxy/client/core/rendering/Viewport;I)V")
+	)
+	private void cubeworld$noWorkForWater(AbstractRenderPipeline pipeline, Viewport viewport, int depth, Operation<Void> original) {
+		if (!VoxyFaces.waterPass()) {
+			original.call(pipeline, viewport, depth);
+		}
+	}
+
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/AbstractRenderPipeline;postOpaquePreTranslucent(Lme/cortex/voxy/client/core/rendering/Viewport;I)V")
+	)
+	private void cubeworld$copyDepthOnce(AbstractRenderPipeline pipeline, Viewport viewport, int depth, Operation<Void> original) {
+		if (!VoxyFaces.waterPass() || VoxyFaces.firstWater()) {
+			original.call(pipeline, viewport, depth);
+		}
+	}
+
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/rendering/section/backend/AbstractSectionRenderer;renderTranslucent(Lme/cortex/voxy/client/core/rendering/Viewport;)V")
+	)
+	private void cubeworld$holdWater(AbstractSectionRenderer renderer, Viewport viewport, Operation<Void> original) {
+		if (!VoxyFaces.holdWater(this)) {
+			original.call(renderer, viewport);
+		}
+	}
+
+	/** The finish copies the translucent depth into the depth of the frame, so it waits for the water. */
+	@WrapOperation(
+		method = "runPipeline",
+		at = @At(value = "INVOKE", target = "Lme/cortex/voxy/client/core/AbstractRenderPipeline;finish(Lme/cortex/voxy/client/core/rendering/Viewport;IIII)V")
+	)
+	private void cubeworld$finishAfterWater(AbstractRenderPipeline pipeline, Viewport viewport, int depth, int framebuffer, int width, int height,
+		Operation<Void> original) {
+		if (!VoxyFaces.holdWater(this)) {
+			original.call(pipeline, viewport, depth, framebuffer, width, height);
 		}
 	}
 
