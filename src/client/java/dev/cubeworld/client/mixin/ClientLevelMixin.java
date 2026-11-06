@@ -1,12 +1,20 @@
 package dev.cubeworld.client.mixin;
 
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import dev.cubeworld.client.SeamClient;
+import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -28,5 +36,19 @@ public abstract class ClientLevelMixin {
 			return original.call(pos, owner[0], owner[1], owner[2]);
 		}
 		return original.call(pos, x, y, z);
+	}
+
+	@Shadow private int serverSimulationDistance;
+
+	/** An entity that dies on another face is in range where it shows, not where it is stored, so it falls over and turns red. */
+	@ModifyReturnValue(method = "shouldTickDeath", at = @At("RETURN"))
+	private boolean cubeworld$deathAcrossSeam(boolean inRange, @Local(argsOnly = true) Entity entity) {
+		SeamLayout layout = SeamClient.layout;
+		Entity player = Minecraft.getInstance().player;
+		if (inRange || layout == null || player == null) {
+			return inRange;
+		}
+		Vec3 shown = SeamInteraction.intoRegionOf(layout, entity.position(), player.getX(), player.getZ());
+		return ChunkPos.containing(BlockPos.containing(shown)).getChessboardDistance(player.chunkPosition()) <= this.serverSimulationDistance;
 	}
 }

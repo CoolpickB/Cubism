@@ -1,5 +1,6 @@
 package dev.cubeworld.worldgen;
 
+import dev.cubeworld.math.CubePlanetMath;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
@@ -21,29 +22,40 @@ public final class SeamPaths {
 	 * Returns the target unchanged when either position lies in no region.
 	 */
 	public static Vec3 aim(SeamLayout layout, Vec3 from, Vec3 target) {
-		Vec3 flat = unfold(layout, from, target);
+		Vec3 flat = unfold(layout, from, target, false);
 		return flat == null ? target : flat;
 	}
 
 	/**
-	 * The heading {@code yaw} of something at {@code target}, as seen in the unfolded plane of the face of {@code from}.
-	 * Unfolding turns a face by a multiple of 90 degrees, so the heading turns with it.
+	 * As {@link #aim}, for the plane of a map. A map shows its own face straight from above, so the rounded ground just
+	 * before the diagonal shows short of the edge line. Plain unfolding puts the same ground just past the diagonal
+	 * as far past the line, and a marker would jump by twice that. Here a target of the next face moves back by twice
+	 * its depth under the plane of that face, down to the edge rounding, so both sides meet at the diagonal.
+	 */
+	public static Vec3 aimOnMap(SeamLayout layout, Vec3 from, Vec3 target) {
+		Vec3 flat = unfold(layout, from, target, true);
+		return flat == null ? target : flat;
+	}
+
+	/**
+	 * The heading {@code yaw} of something at {@code target}, as seen on a map of the face of {@code from}. Unfolding
+	 * turns a face by a multiple of 90 degrees, so the heading turns with it.
 	 */
 	public static float aimYaw(SeamLayout layout, Vec3 from, Vec3 target, float yaw) {
 		double radians = Math.toRadians(yaw);
 		Vec3 ahead = target.add(-Math.sin(radians), 0.0, Math.cos(radians));
-		Vec3 flat = aim(layout, from, target);
-		Vec3 flatAhead = aim(layout, from, ahead);
+		Vec3 flat = aimOnMap(layout, from, target);
+		Vec3 flatAhead = aimOnMap(layout, from, ahead);
 		return (float) Math.toDegrees(Math.atan2(-(flatAhead.x - flat.x), flatAhead.z - flat.z));
 	}
 
 	/** The distance over the surface, which is the length of the straight line in the unfolded plane, or -1 outside the regions. */
 	public static double distance(SeamLayout layout, Vec3 from, Vec3 target) {
-		Vec3 flat = unfold(layout, from, target);
+		Vec3 flat = unfold(layout, from, target, false);
 		return flat == null ? -1.0 : Math.hypot(flat.x - from.x, flat.z - from.z);
 	}
 
-	private static @Nullable Vec3 unfold(SeamLayout layout, Vec3 from, Vec3 target) {
+	private static @Nullable Vec3 unfold(SeamLayout layout, Vec3 from, Vec3 target, boolean onMap) {
 		int fromBlockX = Mth.floor(from.x);
 		int targetBlockX = Mth.floor(target.x);
 		if (!layout.inRegion(fromBlockX, Mth.floor(from.z)) || !layout.inRegion(targetBlockX, Mth.floor(target.z))) {
@@ -65,6 +77,12 @@ public final class SeamPaths {
 		if (dot(nA, nB) == 0.0) {
 			// Neighbor faces: over the one shared edge.
 			best = unfold(nA, nB, q, r);
+			if (onMap) {
+				double shift = 2.0 * Math.max(dot(centered(goal), nB) - r, -CubePlanetMath.edgeRounding());
+				for (int i = 0; i < 3; i++) {
+					best[i] += shift * nB[i];
+				}
+			}
 		} else {
 			// Opposite faces: over the edge of the target to a side face, then over the edge of that face to the viewer. The shortest of the four ways wins.
 			best = null;

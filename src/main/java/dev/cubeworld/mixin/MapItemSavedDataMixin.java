@@ -44,7 +44,7 @@ public abstract class MapItemSavedDataMixin {
 		}
 		Vec3 center = new Vec3(this.centerX, 0.0, this.centerZ);
 		Vec3 pos = new Vec3(xPos, 0.0, zPos);
-		Vec3 flat = SeamPaths.aim(layout, center, pos);
+		Vec3 flat = SeamPaths.aimOnMap(layout, center, pos);
 		original.call(type, level, key, flat.x, flat.z, (double) SeamPaths.aimYaw(layout, center, pos, (float) yRot), name);
 	}
 }
