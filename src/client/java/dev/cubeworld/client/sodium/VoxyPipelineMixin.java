@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubeworld.client.sodiumseam.VoxyFaces;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
+import me.cortex.voxy.client.core.IrisVoxyRenderPipeline;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
@@ -58,6 +59,23 @@ public abstract class VoxyPipelineMixin {
 	private void cubeworld$skipTemporal(AbstractSectionRenderer renderer, Viewport viewport, Operation<Void> original) {
 		if (!VoxyFaces.laterFace()) {
 			original.call(renderer, viewport);
+		}
+	}
+
+	/**
+	 * With a shader pack, Voxy draws its levels of detail straight into the buffers of the pack and keeps their depth in
+	 * its own buffer, which the pack reads later in the frame to find them. Each draw cleared that depth, so the pack
+	 * found only the levels of detail of the last face and drew sky over the others. A later face keeps the depth of the
+	 * earlier faces. All faces share the screen and the projection, so its depth tests against them as the faces do in
+	 * the frame.
+	 */
+	@WrapOperation(
+		method = "initDepthStencil",
+		at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/GL45;glClearNamedFramebufferfi(IIIFI)V")
+	)
+	private void cubeworld$keepEarlierFaces(int framebuffer, int buffer, int drawBuffer, float depth, int stencil, Operation<Void> original) {
+		if (!(VoxyFaces.laterFace() && (Object) this instanceof IrisVoxyRenderPipeline)) {
+			original.call(framebuffer, buffer, drawBuffer, depth, stencil);
 		}
 	}
 

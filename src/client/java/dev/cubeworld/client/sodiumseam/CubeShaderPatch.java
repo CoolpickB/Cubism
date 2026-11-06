@@ -1,7 +1,10 @@
 package dev.cubeworld.client.sodiumseam;
 
+import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.CubeSky;
+import dev.cubeworld.worldgen.SeamLayout;
 import java.nio.file.Path;
+import net.minecraft.client.Minecraft;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.irisshaders.iris.gl.uniform.UniformHolder;
 import net.irisshaders.iris.gl.uniform.UniformUpdateFrequency;
@@ -34,8 +37,66 @@ public final class CubeShaderPatch {
 	};
 	/** The programs that draw the ground and what stands on it. They take the rounded up at each point. */
 	private static final String[] POINT_UP_PROGRAMS = {
-		"gbuffers_terrain", "gbuffers_water", "gbuffers_block", "gbuffers_entities", "gbuffers_textured", "gbuffers_basic"
+		"gbuffers_terrain", "gbuffers_water", "gbuffers_block", "gbuffers_entities", "gbuffers_textured", "gbuffers_basic", "voxy_opaque", "voxy_translucent"
 	};
+
+	/**
+	 * Voxy draws the levels of detail of every face with the values of the camera face, from a uniform block that the
+	 * program cannot change. These copies stand in for them, so that each point can take the values of its own face, as
+	 * {@link IrisFaceUniforms} gives the pack while a folded face of Sodium draws.
+	 */
+	private static final String VOXY_FACE_VALUES = """
+		mat3 cw_viewToFeet = mat3(vxModelViewInv);
+		mat4 cw_vxModelView = vxModelView;
+		mat4 cw_vxModelViewInv = vxModelViewInv;
+		mat4 cw_vxModelViewPrev = vxModelViewPrev;
+		mat4 cw_shadowModelView = shadowModelView;
+		mat4 cw_shadowModelViewInverse = shadowModelViewInverse;
+		vec3 cw_cameraPosition = cameraPosition;
+		vec3 cw_previousCameraPosition = previousCameraPosition;
+		mat3 cw_faceTurn = mat3(1.0);
+		#define vxModelView cw_vxModelView
+		#define vxModelViewInv cw_vxModelViewInv
+		#define vxModelViewPrev cw_vxModelViewPrev
+		#define shadowModelView cw_shadowModelView
+		#define shadowModelViewInverse cw_shadowModelViewInverse
+		#define cameraPosition cw_cameraPosition
+		#define previousCameraPosition cw_previousCameraPosition
+		""";
+
+	/**
+	 * The face of a point is the one whose up points most along the point from the center of the cube, the same diagonal
+	 * split as the storage. The values of that face are the ones of the camera face turned by its motion.
+	 */
+	private static final String VOXY_FACE_SETUP = """
+		void cubeworldVoxyFace() {
+		    if (cubeworld_active == 0) return;
+		    vec3 view = ScreenToView(vec3(gl_FragCoord.xy / vec2(viewWidth, viewHeight), gl_FragCoord.z));
+		    vec3 cube = (cubeworld_cubeFromView * vec4(view, 1.0)).xyz;
+		    mat4 motion = mat4(1.0);
+		    float best = -1.0e30;
+		    #define CW_FACE(m) { float d = dot(cube, mat3(cubeworld_cubeFromFeet) * m[1].xyz); if (d > best) { best = d; motion = m; } }
+		    CW_FACE(cubeworld_voxyTurn0) CW_FACE(cubeworld_voxyTurn1) CW_FACE(cubeworld_voxyTurn2)
+		    CW_FACE(cubeworld_voxyTurn3) CW_FACE(cubeworld_voxyTurn4) CW_FACE(cubeworld_voxyTurn5)
+		    #undef CW_FACE
+		    mat4 turn = mat4(mat3(motion));
+		    mat4 back = transpose(turn);
+		    vxModelView = vxModelView * turn;
+		    vxModelViewInv = back * vxModelViewInv;
+		    vxModelViewPrev = vxModelViewPrev * turn;
+		    gbufferModelView = vxModelView;
+		    gbufferModelViewInverse = vxModelViewInv;
+		    gbufferPreviousModelView = vxModelViewPrev;
+		    shadowModelView = shadowModelView * turn;
+		    shadowModelViewInverse = back * shadowModelViewInverse;
+		    cameraPosition = mat3(back) * (cameraPosition - motion[3].xyz);
+		    previousCameraPosition = mat3(back) * (previousCameraPosition - motion[3].xyz);
+		    cw_faceTurn = mat3(motion);
+		    eastVec = normalize(gbufferModelView[0].xyz);
+		    northVec = normalize(gbufferModelView[2].xyz);
+		}
+
+		""";
 
 	private static final String SUN_DEFINE =
 		"    #define GetSunVector() normalize((gbufferModelView * vec4(vec3(-sin(overworldAngle), cos(overworldAngle) * SUN_ROTATION_DATA) * 2000.0, 1.0)).xyz)";
@@ -47,8 +108,8 @@ public final class CubeShaderPatch {
 	 * it is the plain y of the face storage, so the cloud height of the pack stays as it is.
 	 */
 	private static final String HELPERS = """
+		#define CUBEWORLD
 		#ifndef VOXY_PATCH
-		    #define CUBEWORLD
 		    uniform int cubeworld_active;
 		    uniform vec3 cubeworld_sunPosition;
 		    uniform vec3 cubeworld_upPosition;
@@ -59,6 +120,7 @@ public final class CubeShaderPatch {
 		    uniform mat3 cubeworld_celestialFrame;
 		    uniform mat3 cubeworld_viewToFeet;
 		    uniform vec3 cubeworld_shadowLight;
+		    uniform vec3 cubeworld_daySkyColor;
 		    // From the storage frame of the face that draws into the one of the camera face. It is the identity except while a
 		    // folded face draws.
 		    uniform mat3 cubeworld_faceTurn;
@@ -66,13 +128,20 @@ public final class CubeShaderPatch {
 		    #define cubeworldFolded() (cubeworld_faceTurn != mat3(1.0))
 		    // From the frame of the camera face back into the one of the face it left, on the frame of a crossing. Else the identity.
 		    uniform mat3 cubeworld_crossTurn;
-		    // The sky color of Iris follows the time at the camera. The light that the sky gives a point follows the time of the
-		    // point, as vanilla dims the sky color of the full day: by the height of the sun.
-		    uniform vec3 cubeworld_daySkyColor;
-		    #define cubeworldSkyColor() (cubeworld_active != 0 ? cubeworld_daySkyColor * clamp(sin(cubeworldSunAngle() * 6.28318531) * 2.0 + 0.5, 0.0, 1.0) : skyColor)
 		    // The normals that the programs of the ground store for the passes after them are read back with the view matrix of the
 		    // camera face. A folded face draws with the matrix of its own face, so it stores them in the frame of the camera face.
 		    #define cubeworld_normalOut(n) ((cubeworld_active != 0 ? cubeworld_viewToFeet : mat3(gbufferModelViewInverse)) * (n))
+		#else
+		    // Voxy takes the other uniforms from the list that CubeShaderPatch adds to voxy.json. That list holds no 3 by 3
+		    // matrices. The program sets the values of the face of each point, see VOXY_FACE_VALUES.
+		    #define cubeworldTurn(v) (cw_faceTurn * (v))
+		    #define cubeworldFolded() (cw_faceTurn != mat3(1.0))
+		    #define cubeworld_normalOut(n) (cw_viewToFeet * (n))
+		    #define cubeworld_celestialFrame mat3(gbufferModelViewInverse)
+		#endif
+		    // The sky color of Iris follows the time at the camera. The light that the sky gives a point follows the time of the
+		    // point, as vanilla dims the sky color of the full day: by the height of the sun.
+		    #define cubeworldSkyColor() (cubeworld_active != 0 ? cubeworld_daySkyColor * clamp(sin(cubeworldSunAngle() * 6.28318531) * 2.0 + 0.5, 0.0, 1.0) : skyColor)
 		    #define CUBEWORLD_UP_VEC (cubeworld_active != 0 ? normalize(cubeworld_upPosition) : normalize(gbufferModelView[1].xyz))
 		    float cubeworldAlt(vec3 p) {
 		        if (cubeworld_active == 0) return p.y;
@@ -136,22 +205,6 @@ public final class CubeShaderPatch {
 		        float timeOfDay = (2.0 * d + 0.5 - cos(d * 3.14159265) * 0.5) / 3.0;
 		        return fract(timeOfDay + 0.25);
 		    }
-		#else
-		    // The programs of Voxy declare their own uniforms. They keep the flat world.
-		    #define cubeworld_active 0
-		    #define cubeworld_cubeFromFeet mat4(1.0)
-		    #define cubeworld_normalOut(n) (mat3(gbufferModelViewInverse) * (n))
-		    #define cubeworldAlt(p) ((p).y)
-		    #define cubeworldNormal(p) (p)
-		    #define cubeworldToFeet(d) (d)
-		    #define cubeworldFeetAlt(p) ((p).y + cameraPosition.y)
-		    #define cubeworldCameraAlt() (cameraPosition.y)
-		    #define cubeworldSunAngle() (sunAngle)
-		    #define cubeworldTurn(v) (v)
-		    #define cubeworldFolded() false
-		    #define cubeworldSkyColor() skyColor
-		    #define cubeworld_celestialFrame mat3(gbufferModelViewInverse)
-		#endif
 		""";
 
 	/**
@@ -468,6 +521,20 @@ public final class CubeShaderPatch {
 		if (name.contains("/program/")) {
 			source = source.replace("mat3(gbufferModelViewInverse) * normalM", "cubeworld_normalOut(normalM)");
 		}
+		if (name.endsWith("/program/voxy.json")) {
+			// The uniforms of the cube that the helpers read in the program of Voxy, which declares only the listed ones.
+			source = source.replace("        \"shadowProjectionInverse\",\n", """
+				        "shadowProjectionInverse",
+				        "cubeworld_active", "cubeworld_sunPosition", "cubeworld_upPosition", "cubeworld_cubeFromFeet", "cubeworld_cubeFromView",
+				        "cubeworld_core", "cubeworld_centerY", "cubeworld_shadowLight", "cubeworld_daySkyColor",
+				        "cubeworld_voxyTurn0", "cubeworld_voxyTurn1", "cubeworld_voxyTurn2", "cubeworld_voxyTurn3", "cubeworld_voxyTurn4", "cubeworld_voxyTurn5",
+				""");
+		}
+		if (name.endsWith("/program/voxy_opaque.glsl") || name.endsWith("/program/voxy_translucent.glsl")) {
+			source = source.replace("mat4 gbufferPreviousProjection = vxProjPrev;\n", "mat4 gbufferPreviousProjection = vxProjPrev;\n" + VOXY_FACE_VALUES)
+				.replace("void voxy_emitFragment(VoxyFragmentParameters parameters) {\n",
+					VOXY_FACE_SETUP + "void voxy_emitFragment(VoxyFragmentParameters parameters) {\n    cubeworldVoxyFace();\n");
+		}
 		for (String program : POINT_UP_PROGRAMS) {
 			if (name.endsWith("/program/" + program + ".glsl")) {
 				return "#define CUBEWORLD_POINT_UP\n" + source.replace(UP, "upVec = cubeworldPointUp();");
@@ -660,6 +727,19 @@ public final class CubeShaderPatch {
 		uniforms.uniformMatrix3(UniformUpdateFrequency.PER_FRAME, "cubeworld_faceTurn", Matrix3f::new);
 		uniforms.uniformMatrix3(UniformUpdateFrequency.PER_FRAME, "cubeworld_crossTurn", FrameCrossing::backTurn);
 		uniforms.uniform3f(UniformUpdateFrequency.PER_FRAME, "cubeworld_daySkyColor", () -> new Vector3f(CubeSky.daySky()));
+		// The turn of each face into the frame of the camera face, for the program of Voxy, which takes no arrays and no 3 by 3 matrices.
+		for (int face = 0; face < SeamLayout.FACES.length; face++) {
+			int f = face;
+			uniforms.uniformMatrix(UniformUpdateFrequency.PER_FRAME, "cubeworld_voxyTurn" + f, () -> {
+				SeamLayout layout = SeamClient.layout;
+				if (layout == null) {
+					return new Matrix4f();
+				}
+				// The face of the camera as this frame sees it. Sodium switches its camera face later in the frame.
+				int[] m = layout.motion(f, SeamFaces.faceOfCamera(Minecraft.getInstance().gameRenderer.mainCamera()));
+				return new Matrix4f(m[0], m[3], m[6], 0, m[1], m[4], m[7], 0, m[2], m[5], m[8], 0, m[9], m[10], m[11], 1);
+			});
+		}
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_core", CubeSky::core);
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubeworld_centerY", CubeSky::centerY);
 	}

@@ -203,6 +203,10 @@ public final class VoxyFaces {
 		if (!active() || drawingDeferred) {
 			return false;
 		}
+		if (viewport == null) {
+			// The shadow pass of a shader pack has no viewport, and Voxy draws nothing then. In the list it would count as the first face.
+			return true;
+		}
 		SeamFaces.afterOpaque = () -> drawDeferred(system);
 		DEFERRED.add(new Deferred(SeamFaces.currentFace(), viewport, depth, color));
 		return true;
