@@ -83,7 +83,7 @@ public final class SeamPaths {
 				double rounding = CubePlanetMath.edgeRounding();
 				double overA = dot(centered(goal), nA) - r;
 				double overB = dot(centered(goal), nB) - r;
-				double shift = 2.0 * Math.max(overB, -rounding) * Math.max(0.0, 1.0 - (overB - overA) / rounding);
+				double shift = 2.0 * Math.max(overB, -rounding) * Math.clamp(1.0 - (overB - overA) / rounding, 0.0, 1.0);
 				for (int i = 0; i < 3; i++) {
 					best[i] += shift * nB[i];
 				}
