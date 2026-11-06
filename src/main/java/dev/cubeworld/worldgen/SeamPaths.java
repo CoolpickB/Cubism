@@ -27,11 +27,10 @@ public final class SeamPaths {
 	}
 
 	/**
-	 * As {@link #aim}, for the plane of a map. A map shows its own face straight from above, so the rounded ground just
-	 * before the diagonal shows short of the edge line. Plain unfolding puts the same ground just past the diagonal
-	 * as far past the line, and a marker would jump by twice that. Here a target of the next face moves back by twice
-	 * its depth under the plane of that face, down to the edge rounding, so both sides meet at the diagonal. The
-	 * {@code y} of {@code target} must be the real height, as the depth comes from it.
+	 * As {@link #aim}, for the plane of a map. A target on another face never shows on the face of the map: it stays at
+	 * or past the edge line. Where the face of the map shows the diagonal past that line, both sides meet there without
+	 * a jump. Where the rounded ground at the diagonal shows short of the line, the marker jumps out to the line as the
+	 * target crosses. The {@code y} of {@code target} must be the real height.
 	 */
 	public static Vec3 aimOnMap(SeamLayout layout, Vec3 from, Vec3 target) {
 		Vec3 flat = unfold(layout, from, target, true);
@@ -86,11 +85,15 @@ public final class SeamPaths {
 			// Neighbor faces: over the one shared edge.
 			best = unfold(nA, nB, q, r);
 			if (onMap) {
-				// Heights over the planes of A and B are equal at the diagonal. The shift fades out over one rounding from there.
+				// Along nB, plain unfolding puts the target at r - overA, and the face side shows the diagonal at r + overB.
+				// A shift of 2 overB makes the two sides meet there, and it fades out over one rounding from the diagonal.
+				// Ground higher than the plane of A lies past the edge line, and plain unfolding folds it back onto the face
+				// of the map. So a marker of another face never comes closer than the edge line.
 				double rounding = CubePlanetMath.edgeRounding();
 				double overA = dot(centered(goal), nA) - r;
 				double overB = dot(centered(goal), nB) - r;
-				double shift = 2.0 * Math.max(overB, -rounding) * Math.clamp(1.0 - (overB - overA) / rounding, 0.0, 1.0);
+				double fade = Math.clamp(1.0 - (overB - overA) / rounding, 0.0, 1.0);
+				double shift = Math.max(r, r - overA + 2.0 * overB * fade) - (r - overA);
 				for (int i = 0; i < 3; i++) {
 					best[i] += shift * nB[i];
 				}
