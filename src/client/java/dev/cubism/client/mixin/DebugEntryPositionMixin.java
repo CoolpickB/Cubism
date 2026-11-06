@@ -84,6 +84,7 @@ public abstract class DebugEntryPositionMixin {
 		// In single player the level here is the one of the server, which holds other chunks than the client.
 		if (ClientConfig.showStorageLine && Minecraft.getInstance().level instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel) {
 			displayer.addToGroup(DebugEntryPosition.GROUP, cubism$holes(layout, clientLevel, camera));
+			displayer.addToGroup(DebugEntryPosition.GROUP, cubism$seamHoles(layout, clientLevel, camera));
 		}
 	}
 
@@ -113,5 +114,47 @@ public abstract class DebugEntryPositionMixin {
 			}
 		}
 		return "Chunks missing: " + missingCount + missing + " | not drawn: " + waitingCount + waiting;
+	}
+
+	/**
+	 * The same for the whole set of neighbor-face chunks that the server sends, out to the full view distance. Each
+	 * chunk shows as the face it is on and its distance from the camera in chunks, so a gap far off can be placed.
+	 */
+	@org.spongepowered.asm.mixin.Unique
+	private static String cubism$seamHoles(SeamLayout layout, net.minecraft.client.multiplayer.ClientLevel level, Entity camera) {
+		it.unimi.dsi.fastutil.longs.LongOpenHashSet chunks = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+		// The server sends one chunk past the view distance, see ChunkMapMixin.
+		layout.collectNeighborChunks(camera.getBlockX(), camera.getBlockY(), camera.getBlockZ(), SeamClient.serverViewRadius + 1, chunks);
+		int cameraFace = layout.faceIndexAt(camera.getBlockX());
+		int[] missing = new int[SeamLayout.FACES.length];
+		int[] waiting = new int[SeamLayout.FACES.length];
+		int[] far = new int[SeamLayout.FACES.length];
+		int[] cube = new int[3];
+		int[] seen = new int[3];
+		layout.toCube(cameraFace, camera.getBlockX(), camera.getBlockY(), camera.getBlockZ(), cube);
+		for (long packed : chunks) {
+			int x = net.minecraft.world.level.ChunkPos.getX(packed);
+			int z = net.minecraft.world.level.ChunkPos.getZ(packed);
+			int face = layout.faceIndexAt(x * 16 + 8);
+			if (face == cameraFace) {
+				continue;
+			}
+			boolean absent = level.getChunkSource().getChunk(x, z, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false) == null;
+			boolean notReady = !absent && SeamClient.SODIUM && !dev.cubism.client.compat.sodium.SodiumLink.isReady(level, x, z);
+			if (absent || notReady) {
+				(absent ? missing : waiting)[face]++;
+				layout.toStorage(face, cube[0], cube[1], cube[2], seen);
+				int distance = (int) Math.sqrt(Math.pow((x * 16 + 8 - seen[0]) / 16.0, 2) + Math.pow((z * 16 + 8 - seen[2]) / 16.0, 2));
+				far[face] = Math.max(far[face], distance);
+			}
+		}
+		StringBuilder line = new StringBuilder("Seam chunks ").append(chunks.size()).append(':');
+		for (int face = 0; face < SeamLayout.FACES.length; face++) {
+			if (missing[face] + waiting[face] > 0) {
+				line.append(' ').append(SeamLayout.FACES[face].name()).append(" missing ").append(missing[face])
+					.append(" not drawn ").append(waiting[face]).append(" (to ").append(far[face]).append(')');
+			}
+		}
+		return line.toString();
 	}
 }
