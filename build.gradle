@@ -21,7 +21,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"cubeworld" {
+		"cubism" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}
@@ -58,8 +58,8 @@ java {
 	targetCompatibility = JavaVersion.VERSION_25
 }
 
-// Set cubeworld.deployDir in ~/.gradle/gradle.properties to copy each build into the mods folder of a test instance.
-def deployDir = providers.gradleProperty('cubeworld.deployDir')
+// Set cubism.deployDir in ~/.gradle/gradle.properties to copy each build into the mods folder of a test instance.
+def deployDir = providers.gradleProperty('cubism.deployDir')
 if (deployDir.isPresent()) {
 	tasks.register('deployToInstance', Copy) {
 		dependsOn tasks.named('jar')

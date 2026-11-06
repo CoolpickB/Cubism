@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "dev.cubism.client.compat.sodium.mixin",
+	"plugin": "dev.cubism.client.compat.CompatMixinPlugin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"ChunkBuilderMeshingTaskMixin",
+		"LevelSliceMixin",
+		"SodiumWorldRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

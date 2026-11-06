@@ -1,4 +1,4 @@
-# Cube World: goals
+# Cubism: goals
 
 ## What the mod is
 

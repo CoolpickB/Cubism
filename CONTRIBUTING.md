@@ -1,4 +1,4 @@
-# Contributing to Cube World
+# Contributing to Cubism
 
 We accept pull requests, mostly for support of other mods and shader packs. Read [GOALS.md](GOALS.md) first. It gives the core model of the cube that every system obeys.
 
@@ -18,16 +18,16 @@ Each integration has its own package and its own mixin config:
 
 | Part | Location |
 |---|---|
-| Mixins | `src/client/java/dev/cubeworld/client/compat/<mod id>/mixin/` |
-| Helper classes | `src/client/java/dev/cubeworld/client/compat/<mod id>/` |
-| Mixin config | `src/client/resources/cubeworld.compat.<mod id>.mixins.json` |
+| Mixins | `src/client/java/dev/cubism/client/compat/<mod id>/mixin/` |
+| Helper classes | `src/client/java/dev/cubism/client/compat/<mod id>/` |
+| Mixin config | `src/client/resources/cubism.compat.<mod id>.mixins.json` |
 
 `CompatMixinPlugin` applies a config only when the mod with that id is loaded. It takes the id from the package name, so the package name must be the exact Fabric mod id.
 
 To add an integration:
 
 1. Make the two packages for the mod id.
-2. Copy `cubeworld.compat.voxy.mixins.json` to a new file for the mod. Change `package` and the list of mixins.
+2. Copy `cubism.compat.voxy.mixins.json` to a new file for the mod. Change `package` and the list of mixins.
 3. Add the new config to `mixins` in `src/main/resources/fabric.mod.json`, with `"environment": "client"`.
 4. Add the mod to `build.gradle` as `clientCompileOnly` from the Modrinth Maven. Put its version in `gradle.properties`.
 

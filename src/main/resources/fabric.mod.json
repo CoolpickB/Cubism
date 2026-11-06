@@ -1,9 +1,9 @@
 {
 	"schemaVersion": 1,
-	"id": "cubeworld",
+	"id": "cubism",
 	"version": "${version}",
-	"name": "Cube World",
-	"description": "Generates a 3D cubic planet with 6-directional inverse-pyramid gravity and a dynamic bedrock core.",
+	"name": "Cubism",
+	"description": "Makes the overworld one cube planet that floats in empty space.",
 	"authors": [
 		"Coolpick"
 	],
@@ -11,28 +11,28 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"dev.cubeworld.CubeWorldMod"
+			"dev.cubism.CubismMod"
 		],
 		"client": [
-			"dev.cubeworld.client.CubeWorldClient"
+			"dev.cubism.client.CubismClient"
 		]
 	},
 	"mixins": [
-		"cubeworld.mixins.json",
+		"cubism.mixins.json",
 		{
-			"config": "cubeworld.client.mixins.json",
+			"config": "cubism.client.mixins.json",
 			"environment": "client"
 		},
 		{
-			"config": "cubeworld.compat.sodium.mixins.json",
+			"config": "cubism.compat.sodium.mixins.json",
 			"environment": "client"
 		},
 		{
-			"config": "cubeworld.compat.iris.mixins.json",
+			"config": "cubism.compat.iris.mixins.json",
 			"environment": "client"
 		},
 		{
-			"config": "cubeworld.compat.voxy.mixins.json",
+			"config": "cubism.compat.voxy.mixins.json",
 			"environment": "client"
 		}
 	],

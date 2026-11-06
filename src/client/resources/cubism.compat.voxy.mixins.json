@@ -1,0 +1,22 @@
+{
+	"required": true,
+	"package": "dev.cubism.client.compat.voxy.mixin",
+	"plugin": "dev.cubism.client.compat.CompatMixinPlugin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"ViewportAccessor",
+		"VoxyBoundStoreMixin",
+		"VoxyIngestMixin",
+		"VoxyPipelineMixin",
+		"VoxyPreviousMatrixMixin",
+		"VoxyReadyColumnsMixin",
+		"VoxyRenderSystemMixin",
+		"VoxySectionManagerMixin",
+		"VoxySectionRendererMixin",
+		"VoxyShaderLoaderMixin",
+		"VoxyViewportSelectorMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
