@@ -4,6 +4,17 @@ plugins {
 }
 
 repositories {
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
+	}
 }
 
 loom {
@@ -21,10 +32,10 @@ dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	// Sodium is only compiled against, from a local copy that is not redistributed. The mod works without it.
-	clientCompileOnly files("libs/sodium.jar")
-	clientCompileOnly files("libs/iris.jar")
-	clientCompileOnly files("libs/voxy.jar")
+	// Compiled against only. The mod works without them, and their mixins apply only when they are loaded.
+	clientCompileOnly "maven.modrinth:sodium:${project.sodium_version}"
+	clientCompileOnly "maven.modrinth:iris:${project.iris_version}"
+	clientCompileOnly "maven.modrinth:voxy:${project.voxy_version}"
 }
 
 processResources {
@@ -47,12 +58,16 @@ java {
 	targetCompatibility = JavaVersion.VERSION_25
 }
 
-tasks.register('deployToPrism', Copy) {
-	dependsOn tasks.named('jar')
-	from(tasks.named('jar').flatMap { it.archiveFile })
-	into('A:/Programs/Prism/PrismFiles/instances/cubeworld/minecraft/mods')
-}
+// Set cubeworld.deployDir in ~/.gradle/gradle.properties to copy each build into the mods folder of a test instance.
+def deployDir = providers.gradleProperty('cubeworld.deployDir')
+if (deployDir.isPresent()) {
+	tasks.register('deployToInstance', Copy) {
+		dependsOn tasks.named('jar')
+		from(tasks.named('jar').flatMap { it.archiveFile })
+		into(deployDir.get())
+	}
 
-tasks.named('build') {
-	finalizedBy('deployToPrism')
+	tasks.named('build') {
+		finalizedBy('deployToInstance')
+	}
 }
