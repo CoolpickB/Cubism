@@ -1,0 +1,48 @@
+name: Bug report
+description: Something does not work or looks wrong.
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Tell what you did, what you saw, and what you expected to see.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Cube World version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods and shader pack
+      description: List all mods in the mods folder, with versions. If you use a shader pack, give its name, version and profile.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Single player
+        - Multiplayer (dedicated server)
+        - Multiplayer (LAN)
+    validations:
+      required: true
+  - type: textarea
+    id: position
+    attributes:
+      label: Position
+      description: Press F3. Copy the "XYZ" and "Cube face" lines. If the problem is near an edge of the cube, say so.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Attach logs/latest.log. If the game crashed, also attach the file from crash-reports.
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
