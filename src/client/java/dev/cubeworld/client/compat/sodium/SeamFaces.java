@@ -1,9 +1,13 @@
-package dev.cubeworld.client.sodiumseam;
+package dev.cubeworld.client.compat.sodium;
+
+import dev.cubeworld.client.compat.iris.IrisFaceUniforms;
+import dev.cubeworld.client.compat.iris.IrisLink;
+import dev.cubeworld.client.compat.voxy.VoxyFaces;
 
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.textures.GpuSampler;
 import dev.cubeworld.client.SeamClient;
-import dev.cubeworld.client.sodium.ViewportAccessor;
+import dev.cubeworld.client.compat.voxy.mixin.ViewportAccessor;
 import dev.cubeworld.worldgen.SeamLayout;
 import java.util.function.Consumer;
 import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
@@ -60,11 +64,11 @@ public final class SeamFaces {
 	/** The face whose manager runs or draws right now, or -1 while Sodium's own manager does. */
 	private static int working = -1;
 	/** Runs after the opaque terrain of every face is drawn. {@link VoxyFaces} draws there, so this class does not load Voxy. */
-	static @Nullable Runnable afterOpaque;
+	public static @Nullable Runnable afterOpaque;
 
 	private SeamFaces() {}
 
-	static void setWorking(int face) {
+	public static void setWorking(int face) {
 		working = face;
 	}
 
@@ -86,11 +90,6 @@ public final class SeamFaces {
 	/** The face whose sections Sodium handles right now: a folded face inside {@link #drive} and {@link #draw}, else the camera face. */
 	public static int currentFace() {
 		return working >= 0 ? working : primary;
-	}
-
-	/** True outside {@link #drive} and {@link #draw}: Sodium handles the camera face, which it draws before the folded faces. */
-	public static boolean onCameraFace() {
-		return working < 0;
 	}
 
 	public static void setPrimary(int face) {

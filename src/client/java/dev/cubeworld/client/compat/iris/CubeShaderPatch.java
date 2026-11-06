@@ -1,4 +1,6 @@
-package dev.cubeworld.client.sodiumseam;
+package dev.cubeworld.client.compat.iris;
+
+import dev.cubeworld.client.compat.sodium.SeamFaces;
 
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.CubeSky;

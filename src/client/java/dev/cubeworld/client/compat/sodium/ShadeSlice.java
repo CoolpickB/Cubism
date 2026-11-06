@@ -1,4 +1,4 @@
-package dev.cubeworld.client.sodiumseam;
+package dev.cubeworld.client.compat.sodium;
 
 /** Implemented by the slice of Sodium. */
 public interface ShadeSlice {

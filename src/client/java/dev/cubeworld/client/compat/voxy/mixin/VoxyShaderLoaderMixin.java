@@ -1,6 +1,6 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
-import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import dev.cubeworld.client.compat.voxy.VoxyFaces;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

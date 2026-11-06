@@ -1,6 +1,6 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
-import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import dev.cubeworld.client.compat.voxy.VoxyFaces;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.minecraft.client.multiplayer.ClientLevel;
 import org.spongepowered.asm.mixin.Final;

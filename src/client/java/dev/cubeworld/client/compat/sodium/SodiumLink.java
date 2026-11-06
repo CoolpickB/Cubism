@@ -1,4 +1,4 @@
-package dev.cubeworld.client.sodiumseam;
+package dev.cubeworld.client.compat.sodium;
 
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
 import net.minecraft.client.multiplayer.ClientLevel;

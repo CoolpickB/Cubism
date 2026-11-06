@@ -120,7 +120,7 @@ public abstract class ClientChunkCacheMixin {
 		chunk.replaceWithPacketData(chunkX, chunkZ, data);
 		this.level.onChunkLoaded(pos);
 		if (SeamClient.SODIUM) {
-			dev.cubeworld.client.sodiumseam.SodiumLink.blockData(this.level, chunkX, chunkZ);
+			dev.cubeworld.client.compat.sodium.SodiumLink.blockData(this.level, chunkX, chunkZ);
 		}
 		SeamRenderer.onChunkLoaded(pos);
 		SeamRenderer.markAcrossSeamsDirty(pos);

@@ -1,8 +1,8 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import dev.cubeworld.client.compat.voxy.VoxyFaces;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
 import me.cortex.voxy.client.core.IrisVoxyRenderPipeline;
 import me.cortex.voxy.client.core.gl.GlBuffer;

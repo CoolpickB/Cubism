@@ -1,6 +1,8 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
-import dev.cubeworld.client.sodiumseam.FrameCrossing;
+import dev.cubeworld.client.compat.iris.mixin.IrisCrossingMatrixMixin;
+
+import dev.cubeworld.client.compat.iris.FrameCrossing;
 import org.joml.Matrix4fc;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

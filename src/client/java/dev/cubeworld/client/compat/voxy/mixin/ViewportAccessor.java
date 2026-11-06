@@ -1,4 +1,4 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.render.viewport.frustum.Frustum;

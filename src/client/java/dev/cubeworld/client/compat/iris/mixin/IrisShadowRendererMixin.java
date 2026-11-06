@@ -1,6 +1,6 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.iris.mixin;
 
-import dev.cubeworld.client.sodiumseam.SeamFaces;
+import dev.cubeworld.client.compat.sodium.SeamFaces;
 import net.irisshaders.iris.shadows.ShadowRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

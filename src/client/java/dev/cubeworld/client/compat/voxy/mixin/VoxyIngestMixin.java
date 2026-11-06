@@ -1,8 +1,8 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import dev.cubeworld.client.compat.voxy.VoxyFaces;
 import me.cortex.voxy.common.voxelization.ILightingSupplier;
 import me.cortex.voxy.common.voxelization.VoxelizedSection;
 import me.cortex.voxy.common.world.other.Mapper;

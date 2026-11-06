@@ -1,8 +1,8 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.iris.mixin;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.cubeworld.client.render.CubeSky;
-import dev.cubeworld.client.sodiumseam.CubeShaderPatch;
+import dev.cubeworld.client.compat.iris.CubeShaderPatch;
 import net.irisshaders.iris.shadows.ShadowMatrices;
 import net.irisshaders.iris.uniforms.CelestialUniforms;
 import org.joml.Matrix3f;

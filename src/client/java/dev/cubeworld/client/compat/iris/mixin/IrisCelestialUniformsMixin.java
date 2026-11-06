@@ -1,7 +1,7 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.iris.mixin;
 
 import dev.cubeworld.client.render.CubeSky;
-import dev.cubeworld.client.sodiumseam.CubeShaderPatch;
+import dev.cubeworld.client.compat.iris.CubeShaderPatch;
 import net.irisshaders.iris.gl.uniform.UniformHolder;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;

@@ -1,9 +1,9 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.sodium.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubeworld.client.SeamClient;
-import dev.cubeworld.client.sodiumseam.ShadeSlice;
+import dev.cubeworld.client.compat.sodium.ShadeSlice;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.caffeinemc.mods.sodium.client.render.chunk.compile.tasks.ChunkBuilderMeshingTask;
 import net.caffeinemc.mods.sodium.client.world.LevelSlice;

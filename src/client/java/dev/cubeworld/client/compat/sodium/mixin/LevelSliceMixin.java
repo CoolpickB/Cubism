@@ -1,8 +1,8 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.sodium.mixin;
 
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.CubeShade;
-import dev.cubeworld.client.sodiumseam.ShadeSlice;
+import dev.cubeworld.client.compat.sodium.ShadeSlice;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.caffeinemc.mods.sodium.client.world.LevelSlice;
 import net.minecraft.client.multiplayer.ClientLevel;

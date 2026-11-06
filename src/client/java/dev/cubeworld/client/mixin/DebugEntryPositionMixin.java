@@ -105,7 +105,7 @@ public abstract class DebugEntryPositionMixin {
 					if (missingCount++ < 4) {
 						missing.append(' ').append(x).append(',').append(z);
 					}
-				} else if (SeamClient.SODIUM && !dev.cubeworld.client.sodiumseam.SodiumLink.isReady(level, x, z)) {
+				} else if (SeamClient.SODIUM && !dev.cubeworld.client.compat.sodium.SodiumLink.isReady(level, x, z)) {
 					if (waitingCount++ < 4) {
 						waiting.append(' ').append(x).append(',').append(z);
 					}

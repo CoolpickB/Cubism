@@ -1,0 +1,18 @@
+{
+	"required": true,
+	"package": "dev.cubeworld.client.compat.iris.mixin",
+	"plugin": "dev.cubeworld.client.compat.CompatMixinPlugin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"IrisCelestialUniformsMixin",
+		"IrisCrossingMatrixMixin",
+		"IrisCrossingPositionMixin",
+		"IrisExtendedShaderMixin",
+		"IrisIncludeGraphMixin",
+		"IrisShadowMatricesMixin",
+		"IrisShadowRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

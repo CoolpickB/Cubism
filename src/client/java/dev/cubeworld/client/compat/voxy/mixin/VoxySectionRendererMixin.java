@@ -1,6 +1,6 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
-import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import dev.cubeworld.client.compat.voxy.VoxyFaces;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.rendering.section.backend.mdic.MDICSectionRenderer;
 import me.cortex.voxy.client.core.rendering.section.backend.mdic.MDICViewport;

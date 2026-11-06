@@ -1,4 +1,4 @@
-package dev.cubeworld.client.sodiumseam;
+package dev.cubeworld.client.compat.iris;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import java.nio.FloatBuffer;
@@ -29,7 +29,7 @@ public final class IrisFaceUniforms {
 
 	private IrisFaceUniforms() {}
 
-	static void beginFace(int[] faceMotion) {
+	public static void beginFace(int[] faceMotion) {
 		motion = faceMotion;
 		// The backend binds a pipeline, and Iris sets up its program, only when the pipeline changes. Sodium draws the
 		// camera face first, and the translucent pass of every face uses the same pipeline, so no setup runs for the
@@ -42,7 +42,7 @@ public final class IrisFaceUniforms {
 		}
 	}
 
-	static void endFaces() {
+	public static void endFaces() {
 		motion = null;
 		for (Saved saved : SAVED.values()) {
 			saved.restore();

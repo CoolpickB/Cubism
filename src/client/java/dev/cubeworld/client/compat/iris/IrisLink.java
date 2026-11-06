@@ -1,4 +1,4 @@
-package dev.cubeworld.client.sodiumseam;
+package dev.cubeworld.client.compat.iris;
 
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.UniformBufferManager;
@@ -10,15 +10,15 @@ import net.irisshaders.iris.shadows.ShadowRenderingState;
  * shadows. The managers of the other faces need the same swap, or the shadow pass would overwrite their lists.
  * Only load this class when Iris is present.
  */
-final class IrisLink {
+public final class IrisLink {
 	private IrisLink() {}
 
-	static boolean shadowsActive() {
+	public static boolean shadowsActive() {
 		return ShadowRenderingState.areShadowsCurrentlyBeingRendered();
 	}
 
 	/** Both calls of Iris do nothing when the manager is already in the wanted state. */
-	static void setShadowScope(RenderSectionManager[] managers, UniformBufferManager[] uniforms, boolean shadow) {
+	public static void setShadowScope(RenderSectionManager[] managers, UniformBufferManager[] uniforms, boolean shadow) {
 		for (int f = 0; f < managers.length; f++) {
 			if (managers[f] == null) {
 				continue;

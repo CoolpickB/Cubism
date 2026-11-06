@@ -1,7 +1,7 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.iris.mixin;
 
 import com.google.common.collect.ImmutableList;
-import dev.cubeworld.client.sodiumseam.CubeShaderPatch;
+import dev.cubeworld.client.compat.iris.CubeShaderPatch;
 import java.nio.file.Path;
 import net.irisshaders.iris.shaderpack.include.AbsolutePackPath;
 import net.irisshaders.iris.shaderpack.include.IncludeGraph;

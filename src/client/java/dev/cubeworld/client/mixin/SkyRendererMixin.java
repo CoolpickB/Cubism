@@ -7,7 +7,7 @@ import com.mojang.math.Axis;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import dev.cubeworld.client.SeamClient;
 import dev.cubeworld.client.render.CubeSky;
-import dev.cubeworld.client.sodiumseam.CubeShaderPatch;
+import dev.cubeworld.client.compat.iris.CubeShaderPatch;
 import dev.cubeworld.seam.CubeTime;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.client.Camera;

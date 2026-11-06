@@ -1,7 +1,7 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.voxy.mixin;
 
 import dev.cubeworld.client.ClientConfig;
-import dev.cubeworld.client.sodiumseam.VoxyFaces;
+import dev.cubeworld.client.compat.voxy.VoxyFaces;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;

@@ -1,9 +1,9 @@
-package dev.cubeworld.client.sodium;
+package dev.cubeworld.client.compat.sodium.mixin;
 
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.textures.GpuSampler;
 import dev.cubeworld.client.SeamClient;
-import dev.cubeworld.client.sodiumseam.SeamFaces;
+import dev.cubeworld.client.compat.sodium.SeamFaces;
 import net.caffeinemc.mods.sodium.client.SodiumClientMod;
 import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
