@@ -18,11 +18,13 @@
 		"VoxyBoundStoreMixin",
 		"VoxyIngestMixin",
 		"VoxyPipelineMixin",
+		"VoxyPreviousMatrixMixin",
 		"VoxyReadyColumnsMixin",
 		"VoxyRenderSystemMixin",
 		"VoxySectionManagerMixin",
 		"VoxySectionRendererMixin",
 		"VoxyShaderLoaderMixin",
+		"VoxyTranslucentDepthMixin",
 		"VoxyViewportSelectorMixin"
 	],
 	"injectors": {
