@@ -30,7 +30,8 @@ public final class SeamPaths {
 	 * As {@link #aim}, for the plane of a map. A map shows its own face straight from above, so the rounded ground just
 	 * before the diagonal shows short of the edge line. Plain unfolding puts the same ground just past the diagonal
 	 * as far past the line, and a marker would jump by twice that. Here a target of the next face moves back by twice
-	 * its depth under the plane of that face, down to the edge rounding, so both sides meet at the diagonal.
+	 * its depth under the plane of that face, down to the edge rounding, so both sides meet at the diagonal. The
+	 * {@code y} of {@code target} must be the real height, as the depth comes from it.
 	 */
 	public static Vec3 aimOnMap(SeamLayout layout, Vec3 from, Vec3 target) {
 		Vec3 flat = unfold(layout, from, target, true);
@@ -44,8 +45,8 @@ public final class SeamPaths {
 	public static float aimYaw(SeamLayout layout, Vec3 from, Vec3 target, float yaw) {
 		double radians = Math.toRadians(yaw);
 		Vec3 ahead = target.add(-Math.sin(radians), 0.0, Math.cos(radians));
-		Vec3 flat = aimOnMap(layout, from, target);
-		Vec3 flatAhead = aimOnMap(layout, from, ahead);
+		Vec3 flat = aim(layout, from, target);
+		Vec3 flatAhead = aim(layout, from, ahead);
 		return (float) Math.toDegrees(Math.atan2(-(flatAhead.x - flat.x), flatAhead.z - flat.z));
 	}
 
@@ -78,7 +79,11 @@ public final class SeamPaths {
 			// Neighbor faces: over the one shared edge.
 			best = unfold(nA, nB, q, r);
 			if (onMap) {
-				double shift = 2.0 * Math.max(dot(centered(goal), nB) - r, -CubePlanetMath.edgeRounding());
+				// Heights over the planes of A and B are equal at the diagonal. The shift fades out over one rounding from there.
+				double rounding = CubePlanetMath.edgeRounding();
+				double overA = dot(centered(goal), nA) - r;
+				double overB = dot(centered(goal), nB) - r;
+				double shift = 2.0 * Math.max(overB, -rounding) * Math.max(0.0, 1.0 - (overB - overA) / rounding);
 				for (int i = 0; i < 3; i++) {
 					best[i] += shift * nB[i];
 				}

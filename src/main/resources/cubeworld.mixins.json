@@ -24,6 +24,7 @@
 		"FeaturePlacerMixin",
 		"NaturalSpawnerMixin",
 		"EyeOfEnderMixin",
+		"ExperienceOrbMixin",
 		"MapItemSavedDataMixin",
 		"NoiseBasedChunkGeneratorMixin",
 		"CollectingNeighborUpdaterMixin",

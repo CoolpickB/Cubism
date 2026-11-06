@@ -5,6 +5,9 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import dev.cubeworld.worldgen.SeamLayout;
 import dev.cubeworld.worldgen.SeamPaths;
 import net.minecraft.core.Holder;
+import net.minecraft.core.SectionPos;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.LevelAccessor;
@@ -44,7 +47,14 @@ public abstract class MapItemSavedDataMixin {
 		}
 		Vec3 center = new Vec3(this.centerX, 0.0, this.centerZ);
 		Vec3 pos = new Vec3(xPos, 0.0, zPos);
-		Vec3 flat = SeamPaths.aimOnMap(layout, center, pos);
+		Vec3 flat;
+		// Banners and frames come without a level. Their marker goes where plain unfolding puts it.
+		if (level != null && level.hasChunk(SectionPos.blockToSectionCoord(xPos), SectionPos.blockToSectionCoord(zPos))) {
+			double ground = level.getHeight(Heightmap.Types.WORLD_SURFACE, Mth.floor(xPos), Mth.floor(zPos));
+			flat = SeamPaths.aimOnMap(layout, center, new Vec3(xPos, ground, zPos));
+		} else {
+			flat = SeamPaths.aim(layout, center, pos);
+		}
 		original.call(type, level, key, flat.x, flat.z, (double) SeamPaths.aimYaw(layout, center, pos, (float) yRot), name);
 	}
 }
