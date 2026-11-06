@@ -81,7 +81,8 @@ public abstract class DebugEntryPositionMixin {
 		}
 		int face = SeamInteraction.regionFace(layout, camera.getX(), camera.getZ());
 		displayer.addToGroup(DebugEntryPosition.GROUP, "Cube face: " + (face < 0 ? "none" : SeamLayout.FACES[face].name()));
-		if (ClientConfig.showStorageLine && level instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel) {
+		// In single player the level here is the one of the server, which holds other chunks than the client.
+		if (ClientConfig.showStorageLine && Minecraft.getInstance().level instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel) {
 			displayer.addToGroup(DebugEntryPosition.GROUP, cubeworld$holes(layout, clientLevel, camera));
 		}
 	}
