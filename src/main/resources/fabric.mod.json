@@ -34,6 +34,10 @@
 		{
 			"config": "cubism.compat.voxy.mixins.json",
 			"environment": "client"
+		},
+		{
+			"config": "cubism.compat.entityculling.mixins.json",
+			"environment": "client"
 		}
 	],
 	"custom": {

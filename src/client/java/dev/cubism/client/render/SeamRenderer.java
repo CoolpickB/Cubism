@@ -661,6 +661,9 @@ public final class SeamRenderer {
 			if (entity.shouldRender(camera.x, camera.y, camera.z)) {
 				EntityRenderState state = dispatcher.extractEntity(entity, partialTicks);
 				out.add(state);
+				if (SeamClient.ENTITY_CULLING) {
+					dev.cubism.client.compat.entityculling.EntityCullingLink.shown(entity);
+				}
 				entityMotions.put(state, layout.motion(face, cameraFace));
 			}
 		}

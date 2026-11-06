@@ -36,6 +36,7 @@ dependencies {
 	clientCompileOnly "maven.modrinth:sodium:${project.sodium_version}"
 	clientCompileOnly "maven.modrinth:iris:${project.iris_version}"
 	clientCompileOnly "maven.modrinth:voxy:${project.voxy_version}"
+	clientCompileOnly "maven.modrinth:entityculling:${project.entityculling_version}"
 }
 
 processResources {
