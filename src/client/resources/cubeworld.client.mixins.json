@@ -36,7 +36,6 @@
 		"KeyboardHandlerMixin",
 		"LocalPlayerMixin",
 		"MinecraftMixin",
-		"ModelBlockRendererMixin",
 		"PresetEditorMixin",
 		"RiddenRotationMixin",
 		"RenderSectionRegionMixin",

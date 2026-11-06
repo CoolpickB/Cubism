@@ -5,10 +5,8 @@ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-import dev.cubeworld.gravity.CubePlanet;
 import dev.cubeworld.gravity.GravityEntityAccess;
 import dev.cubeworld.math.CubePlanetMath;
-import dev.cubeworld.network.CubeNetworking;
 import dev.cubeworld.seam.SeamInteraction;
 import dev.cubeworld.worldgen.SeamLayout;
 import it.unimi.dsi.fastutil.floats.FloatArraySet;
@@ -159,39 +157,13 @@ public abstract class EntityMixin implements GravityEntityAccess {
 		}
 	}
 
+	/** Gravity is down in every seam world. A gravity from a save of the old generator is reset. */
 	@Inject(method = "baseTick", at = @At("HEAD"))
 	private void cubeworld$updateGravity(CallbackInfo ci) {
-		CubePlanet planet = CubePlanet.of(this.level);
-		if (planet == null) {
-			if (this.cubeworld$gravity != Direction.DOWN) {
-				this.cubeworld$forceGravityDirection(Direction.DOWN);
-			}
-			this.cubeworld$gravityKnown = false;
-			return;
+		if (this.cubeworld$gravity != Direction.DOWN) {
+			this.cubeworld$forceGravityDirection(Direction.DOWN);
 		}
-		Entity self = (Entity) (Object) this;
-		boolean isPlayer = self instanceof Player;
-		if (this.level.isClientSide()) {
-			// The client simulates only its own player. The server sends the gravity of every other entity.
-			if (!isPlayer || !((Player) self).isLocalPlayer() || !this.cubeworld$gravityKnown) {
-				return;
-			}
-		} else if (!this.cubeworld$gravityKnown) {
-			this.cubeworld$forceGravityDirection(CubePlanetMath.sectorGravity(this.position, planet.centerY()));
-			CubeNetworking.broadcastGravity(self, true);
-			return;
-		} else if (isPlayer) {
-			return;
-		}
-
-		Direction target = CubePlanetMath.stickyGravity(this.level, this.position, planet.centerY(), planet.radius(), this.cubeworld$gravity);
-		if (target != this.cubeworld$gravity && this.cubeworld$setGravityDirection(target)) {
-			if (this.level.isClientSide()) {
-				CubeNetworking.clientGravitySender.accept(target);
-			} else {
-				CubeNetworking.broadcastGravity(self, false);
-			}
-		}
+		this.cubeworld$gravityKnown = false;
 	}
 
 	@Inject(method = "saveWithoutId", at = @At("TAIL"))

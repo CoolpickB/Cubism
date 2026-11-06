@@ -19,7 +19,7 @@ import java.util.function.Supplier;
  * Where each cube face is stored in the level. Every face is stored upright, as the pyramid wedge
  * {@code max(|vx|, |vz|) <= vy - centerY}, in its own region along +X. A storage position maps to the cube with
  * {@code cube = A_face * (storage - offset_face - C) + C}, where {@code C = (0, centerY, 0)} and
- * {@code A_face} is the rotation of {@link OrientedWorldGenLevel#toWorld}.
+ * {@code A_face} is the rotation that turns the UP face onto the face.
  */
 public final class SeamLayout {
 	/** Faces in storage order. UP and EAST are next to each other so that their shared edge is the one seam. */
@@ -91,7 +91,7 @@ public final class SeamLayout {
 		return level.isClientSide() && level.dimension() == Level.OVERWORLD ? client : null;
 	}
 
-	/** Row-major 3x3 matrix of the face rotation, taken from {@link OrientedWorldGenLevel#toWorld}. */
+	/** Row-major 3x3 matrix of the rotation that turns the UP face onto {@code face}. */
 	private static int[] rotation(Direction face) {
 		return switch (face) {
 			case UP -> new int[] {1, 0, 0, 0, 1, 0, 0, 0, 1};

@@ -3,9 +3,7 @@ package dev.cubeworld.mixin;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import dev.cubeworld.math.CubePlanetMath;
 import dev.cubeworld.seam.SeamInteraction;
-import dev.cubeworld.worldgen.CubeChunkGenerator;
 import dev.cubeworld.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -142,14 +140,6 @@ public abstract class FlowingFluidMixin {
 			} else if (this.cubeworld$waitForNeighborFace(level, layout, pos, fluidState)) {
 				ci.cancel();
 			} else if (this.cubeworld$spreadOnDiagonal(level, layout, pos, blockState, fluidState)) {
-				ci.cancel();
-			}
-			return;
-		}
-		if (level.getChunkSource().getGenerator() instanceof CubeChunkGenerator cubeGen) {
-			Direction outward = CubePlanetMath.getPyramidOutwardFace(pos.getX(), pos.getY(), pos.getZ(), cubeGen.centerY());
-			int secondMax = CubePlanetMath.getSecondMaxCoord(pos.getX(), pos.getY(), pos.getZ(), cubeGen.centerY());
-			if (outward != Direction.UP || secondMax >= cubeGen.radiusBlocks() - 2) {
 				ci.cancel();
 			}
 		}

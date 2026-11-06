@@ -13,28 +13,7 @@ public final class CubePlanetMath {
 	public static final int TOP_SURFACE_Y = 64;
 	public static final int CRUST_THICKNESS = 191;
 
-	// Set on the client from the planet payload. The server reads the chunk generator instead.
-	private static volatile int activeClientDiameterChunks = MIN_DIAMETER_CHUNKS;
-	private static volatile boolean activeClientIsCube = false;
-
 	private CubePlanetMath() {}
-
-	public static void setClientCubeState(boolean isCube, int diameterChunks) {
-		activeClientIsCube = isCube;
-		activeClientDiameterChunks = diameterChunks;
-	}
-
-	public static boolean isClientCubeActive() {
-		return activeClientIsCube;
-	}
-
-	public static int getClientCenterY() {
-		return getCenterY(activeClientDiameterChunks);
-	}
-
-	public static int getClientRadius() {
-		return getRadiusBlocks(activeClientDiameterChunks);
-	}
 
 	public static int getRadiusBlocks(int diameterChunks) {
 		return Math.max(MIN_DIAMETER_CHUNKS, diameterChunks) * 8;
@@ -49,102 +28,8 @@ public final class CubePlanetMath {
 		return Math.max(1, r - CRUST_THICKNESS);
 	}
 
-	/** How far above the surface plane the sky check of {@link #stickyGravity} looks. Matches the generated atmosphere. */
+	/** Height of the open sky above the surface of each face. */
 	public static final int ATMOSPHERE_HEIGHT = 96;
-
-	/**
-	 * The sticky gravity rule (GOALS.md, core model: gravity). The feet position decides. The offset uses
-	 * the same block-center convention as {@link #getPyramidOutwardFace}, so the block at index R from the
-	 * center is the first block inside the plane.
-	 *
-	 * <p>Above the plane of its face, an entity is outside the square of every other face, so no other face can
-	 * take it. Below that plane, a face takes the entity when the entity is inside the square of that face and
-	 * the column above the entity, in the frame of that face, is open to the sky. Thus a player flips when the
-	 * player steps out into the open air of the next face, and never in a closed cave.
-	 *
-	 * @return the gravity direction (pointing toward the center)
-	 */
-	public static Direction stickyGravity(BlockGetter level, Vec3 feet, int centerY, int radius, Direction current) {
-		double ox = feet.x - 0.5;
-		double oy = feet.y - centerY - 0.5;
-		double oz = feet.z - 0.5;
-		Direction currentFace = current.getOpposite();
-		if (planeExcess(currentFace, ox, oy, oz, radius) > 0.0) {
-			return current;
-		}
-		BlockPos feetBlock = BlockPos.containing(feet);
-		if (insideSquare(currentFace, ox, oy, oz, radius) && skyOpen(level, feetBlock, currentFace, centerY, radius)) {
-			return current;
-		}
-		Direction best = null;
-		double bestHeight = Double.NEGATIVE_INFINITY;
-		for (Direction face : Direction.values()) {
-			if (face == currentFace || !insideSquare(face, ox, oy, oz, radius)) {
-				continue;
-			}
-			double height = planeExcess(face, ox, oy, oz, radius);
-			if (height > bestHeight && skyOpen(level, feetBlock, face, centerY, radius)) {
-				bestHeight = height;
-				best = face;
-			}
-		}
-		return best == null ? current : best.getOpposite();
-	}
-
-	private static boolean insideSquare(Direction face, double ox, double oy, double oz, int radius) {
-		return switch (face.getAxis()) {
-			case X -> Math.abs(oy) <= radius && Math.abs(oz) <= radius;
-			case Y -> Math.abs(ox) <= radius && Math.abs(oz) <= radius;
-			case Z -> Math.abs(ox) <= radius && Math.abs(oy) <= radius;
-		};
-	}
-
-	/** True when no motion-blocking block is between the feet and the top of the atmosphere of the face. */
-	private static boolean skyOpen(BlockGetter level, BlockPos feetBlock, Direction face, int centerY, int radius) {
-		int axisCoord = face.getAxis().choose(feetBlock.getX(), feetBlock.getY() - centerY, feetBlock.getZ());
-		int distance = axisCoord * face.getAxisDirection().getStep();
-		int steps = radius + ATMOSPHERE_HEIGHT - distance;
-		BlockPos.MutableBlockPos pos = feetBlock.mutable();
-		for (int i = 0; i <= steps; i++) {
-			if (level.getBlockState(pos).isSolid()) {
-				return false;
-			}
-			pos.move(face);
-		}
-		return true;
-	}
-
-	private static double planeExcess(Direction face, double ox, double oy, double oz, int radius) {
-		return face.getStepX() * ox + face.getStepY() * oy + face.getStepZ() * oz - radius;
-	}
-
-	public static Direction sectorGravity(Vec3 pos, int centerY) {
-		return getPyramidOutwardFace((int) Math.floor(pos.x), (int) Math.floor(pos.y), (int) Math.floor(pos.z), centerY).getOpposite();
-	}
-
-	public static Direction getPyramidOutwardFace(int x, int y, int z, int centerY) {
-		int dx = x;
-		int dy = y - centerY;
-		int dz = z;
-		int ax = Math.abs(dx);
-		int ay = Math.abs(dy);
-		int az = Math.abs(dz);
-
-		if (ay >= ax && ay >= az) {
-			return dy >= 0 ? Direction.UP : Direction.DOWN;
-		} else if (ax >= ay && ax >= az) {
-			return dx >= 0 ? Direction.EAST : Direction.WEST;
-		} else {
-			return dz >= 0 ? Direction.SOUTH : Direction.NORTH;
-		}
-	}
-
-	public static int getChebyshevDistance(int x, int y, int z, int centerY) {
-		int ax = Math.abs(x);
-		int ay = Math.abs(y - centerY);
-		int az = Math.abs(z);
-		return Math.max(ax, Math.max(ay, az));
-	}
 
 	public static final int MIN_EDGE_ROUNDING = 2;
 	public static final int MAX_EDGE_ROUNDING = 96;
@@ -216,19 +101,6 @@ public final class CubePlanetMath {
 			out[0] = Math.copySign(r, dx);
 		} else {
 			out[2] = Math.copySign(r, dz);
-		}
-	}
-
-	public static int getSecondMaxCoord(int x, int y, int z, int centerY) {
-		int ax = Math.abs(x);
-		int ay = Math.abs(y - centerY);
-		int az = Math.abs(z);
-		if (ax >= ay && ax >= az) {
-			return Math.max(ay, az);
-		} else if (ay >= ax && ay >= az) {
-			return Math.max(ax, az);
-		} else {
-			return Math.max(ax, ay);
 		}
 	}
 

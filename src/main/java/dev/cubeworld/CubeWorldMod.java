@@ -7,7 +7,6 @@ import dev.cubeworld.seam.SeamTrackingView;
 import dev.cubeworld.worldgen.CubePregen;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import dev.cubeworld.worldgen.CubeChunkGenerator;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -51,11 +50,6 @@ public class CubeWorldMod implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		Registry.register(
-			BuiltInRegistries.CHUNK_GENERATOR,
-			Identifier.fromNamespaceAndPath(MOD_ID, "cube"),
-			CubeChunkGenerator.CODEC
-		);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "seam"), SEAM_TICKET);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "seam_simulation"), SEAM_SIMULATION_TICKET);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "pregen"), CubePregen.TICKET);

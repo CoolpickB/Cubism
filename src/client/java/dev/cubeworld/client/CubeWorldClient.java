@@ -36,10 +36,6 @@ public class CubeWorldClient implements ClientModInitializer {
 					ClientConfig.voxyHide = IntegerArgumentType.getInteger(context, "mode");
 					return 1;
 				})))));
-		CubeNetworking.clientGravitySender = gravity -> ClientPlayNetworking.send(new CubeNetworking.PlayerGravityPayload(gravity));
-
-		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.PlanetPayload.TYPE, (payload, context) ->
-			CubePlanetMath.setClientCubeState(true, payload.diameterChunks()));
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.SeamPayload.TYPE, (payload, context) -> {
 			CubePlanetMath.setEdgeRounding(payload.edgeRounding());
@@ -84,7 +80,6 @@ public class CubeWorldClient implements ClientModInitializer {
 
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			LoadTrace.end("disconnected");
-			CubePlanetMath.setClientCubeState(false, CubePlanetMath.MIN_DIAMETER_CHUNKS);
 			SeamClient.layout = null;
 			SeamLayout.setClient(null);
 			SeamRenderer.clear();
