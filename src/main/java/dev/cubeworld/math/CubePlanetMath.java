@@ -49,15 +49,11 @@ public final class CubePlanetMath {
 		return Math.max(1, r - CRUST_THICKNESS);
 	}
 
-	public static boolean hasHollowCore(int diameterChunks) {
-		return getInnerBedrockRadius(diameterChunks) > 1;
-	}
-
 	/** How far above the surface plane the sky check of {@link #stickyGravity} looks. Matches the generated atmosphere. */
 	public static final int ATMOSPHERE_HEIGHT = 96;
 
 	/**
-	 * The sticky gravity rule (GOALS.md, core model item 6). The feet position decides. The offset uses
+	 * The sticky gravity rule (GOALS.md, core model: gravity). The feet position decides. The offset uses
 	 * the same block-center convention as {@link #getPyramidOutwardFace}, so the block at index R from the
 	 * center is the first block inside the plane.
 	 *
@@ -287,10 +283,6 @@ public final class CubePlanetMath {
 		}
 		Vec3 w = localToWorld(new Vec3(localDir.getStepX(), localDir.getStepY(), localDir.getStepZ()), gravity);
 		return Direction.getApproximateNearest(w.x, w.y, w.z);
-	}
-
-	public static Direction.Axis worldAxis(Direction.Axis localAxis, Direction gravity) {
-		return rotateDirection(Direction.fromAxisAndDirection(localAxis, Direction.AxisDirection.POSITIVE), gravity).getAxis();
 	}
 
 	/**

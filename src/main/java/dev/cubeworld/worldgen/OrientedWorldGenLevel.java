@@ -437,7 +437,7 @@ public final class OrientedWorldGenLevel implements WorldGenLevel {
 		return predicate.test(getFluidState(vPos));
 	}
 
-	// Block states keep their local orientation (GOALS.md, core model item 4).
+	// Block states keep their local orientation (GOALS.md, core model: storage).
 	@Override
 	public boolean setBlock(BlockPos vPos, BlockState state, int flags, int recursionLeft) {
 		BlockPos wPos = toWorld(vPos);

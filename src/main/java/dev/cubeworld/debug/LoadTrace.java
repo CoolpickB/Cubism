@@ -75,6 +75,12 @@ public final class LoadTrace {
 	private static long tickNanos;
 	private static long maxTickNanos;
 
+	/**
+	 * Off unless the client option {@code traceLoads} or the JVM flag {@code -Dcubeworld.loadTrace=true} turns it on, as
+	 * each load writes a file and starts a watchdog thread.
+	 */
+	public static boolean enabled = Boolean.getBoolean("cubeworld.loadTrace");
+
 	private LoadTrace() {
 	}
 
@@ -84,6 +90,9 @@ public final class LoadTrace {
 
 	/** Starts a new trace file. A trace that still runs ends first. */
 	public static synchronized void begin(String why) {
+		if (!enabled) {
+			return;
+		}
 		end("a new trace started");
 		String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
 		Path file = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("cubeworld-load-" + time + ".log");

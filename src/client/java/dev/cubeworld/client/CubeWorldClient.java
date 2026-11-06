@@ -28,6 +28,7 @@ import java.io.File;
 public class CubeWorldClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+		LoadTrace.enabled |= ClientConfig.traceLoads;
 		CubeSky.init();
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
 			ClientCommands.literal("cubevoxy").then(ClientCommands.literal("hide").then(
