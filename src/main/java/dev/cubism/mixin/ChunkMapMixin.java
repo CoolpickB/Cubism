@@ -73,18 +73,23 @@ public abstract class ChunkMapMixin {
 		}
 		ci.cancel();
 		int viewDistance = this.getPlayerViewDistance(player);
+		// Vanilla counts the distance from the chunk of the player, which reaches about one chunk further than the
+		// distance from the player itself. Without the extra chunk, the far ring of a face showed only while the player
+		// stood on that face.
+		int seamDistance = viewDistance + 1;
 		LongOpenHashSet seamChunks = new LongOpenHashSet();
-		layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), viewDistance, seamChunks);
+		layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), seamDistance, seamChunks);
 		if (player.getChunkTrackingView() instanceof SeamTrackingView previous) {
 			// A chunk that just left the distance stays for a few chunks of walking, so that moving along an edge does
-			// not drop and send the chunks at the border of the distance again and again.
+			// not drop and send the chunks at the border of the distance again and again. The square of the face that
+			// the player just left stays too, so that a crossing does not drop it and send it again as seam chunks.
 			LongOpenHashSet loose = new LongOpenHashSet();
-			layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), viewDistance + SEAM_HOLD_CHUNKS, loose);
-			for (long chunk : previous.seamChunks()) {
-				if (loose.contains(chunk)) {
-					seamChunks.add(chunk);
+			layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), seamDistance + SEAM_HOLD_CHUNKS, loose);
+			previous.forEach(pos -> {
+				if (loose.contains(pos.pack())) {
+					seamChunks.add(pos.pack());
 				}
-			}
+			});
 		}
 		LongOpenHashSet nearSeamChunks = new LongOpenHashSet();
 		layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), Math.min(viewDistance, SEAM_NEAR_CHUNKS), nearSeamChunks);

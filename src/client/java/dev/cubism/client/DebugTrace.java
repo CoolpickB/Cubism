@@ -56,7 +56,8 @@ public final class DebugTrace {
 			return;
 		}
 		Vec3 pos = entity.position();
-		Vec3 old = entity.oldPosition();
+		// The renderer lerps from xo. oldPosition() is xOld, which a new living entity leaves at the origin until it ticks.
+		Vec3 old = new Vec3(entity.xo, entity.yo, entity.zo);
 		int face = face(pos.x, pos.z);
 		int oldFace = face(old.x, old.z);
 		Vec3 center = entity.getBoundingBox().getCenter();

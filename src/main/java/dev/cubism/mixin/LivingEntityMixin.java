@@ -27,6 +27,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class LivingEntityMixin extends Entity {
 	/** Edge gravity starts only this far from the ground along the pull, in blocks. */
 	@Unique private static final double EDGE_GRAVITY_GROUND_GAP = 3.0;
+	/** Speed across the pull that a fall onto the next face keeps, in blocks per tick: about a sprint jump. */
+	@Unique private static final double EDGE_FREE_SPEED = 0.3;
+	/** The share of the speed across the pull above {@link #EDGE_FREE_SPEED} that turns along the pull each tick. */
+	@Unique private static final double EDGE_STEER = 0.2;
 	/** The face region where the entity last stood or flew, or -1 before the first air tick. */
 	@Unique private int cubism$fallStartFace = -1;
 
@@ -77,6 +81,11 @@ public abstract class LivingEntityMixin extends Entity {
 	 * stair of blocks, and a pull during each short drop from one step to the next would slide the entity down the
 	 * stair. Past the diagonal, the ground of the next face lies along the pull, not straight down. A fall that stays
 	 * on the face it started from keeps the vanilla pull, also near an edge.
+	 *
+	 * <p>A long fall past an edge reaches the next face with its whole speed across the new pull, and the pull of
+	 * 0.08 a tick bent a speed of 2.5 so slowly that the entity skimmed some 27 blocks along the face. On the next face,
+	 * a part of the speed across the pull above a sprint jump now turns along the pull each tick, so the turn grows
+	 * with the speed. Short jumps stay below that speed and keep their arc.
 	 */
 	@Inject(method = "travelInAir", at = @At("TAIL"))
 	private void cubism$edgeGravity(Vec3 input, CallbackInfo ci) {
@@ -95,10 +104,17 @@ public abstract class LivingEntityMixin extends Entity {
 		}
 		Vec3 center = this.getBoundingBox().getCenter();
 		Vec3 direction = layout.airGravity(center.x, center.y, center.z);
-		if (direction == null || !this.level().noCollision(this, this.getBoundingBox().expandTowards(direction.scale(EDGE_GRAVITY_GROUND_GAP)))) {
-			return;
+		if (direction != null && this.level().noCollision(this, this.getBoundingBox().expandTowards(direction.scale(EDGE_GRAVITY_GROUND_GAP)))) {
+			double gravity = this.getEffectiveGravity();
+			this.setDeltaMovement(this.getDeltaMovement().add(gravity * direction.x * 0.91, gravity * (direction.y + 1.0) * 0.98, gravity * direction.z * 0.91));
 		}
-		double gravity = this.getEffectiveGravity();
-		this.setDeltaMovement(this.getDeltaMovement().add(gravity * direction.x * 0.91, gravity * (direction.y + 1.0) * 0.98, gravity * direction.z * 0.91));
+		Vec3 pull = direction == null ? new Vec3(0.0, -1.0, 0.0) : direction;
+		Vec3 motion = this.getDeltaMovement();
+		Vec3 across = motion.subtract(pull.scale(motion.dot(pull)));
+		double acrossSpeed = across.length();
+		if (acrossSpeed > EDGE_FREE_SPEED) {
+			double turned = (acrossSpeed - EDGE_FREE_SPEED) * EDGE_STEER;
+			this.setDeltaMovement(motion.subtract(across.scale(turned / acrossSpeed)).add(pull.scale(turned)));
+		}
 	}
 }
