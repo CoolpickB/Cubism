@@ -1,8 +1,8 @@
 # Cubism
 
-Cubism is a Fabric mod for Minecraft 26.3. It makes the overworld one cube planet that floats in empty space.
+Cubism is a Minecraft mod that turns the world into a finite cube.
 
-Each of the six faces is a complete Minecraft world. You can walk, build, mine and fall on each face as on a vanilla overworld. When you walk over an edge, you go onto the next face, and the view does not jump. Gravity follows the face under you. A jump off an edge arcs onto the next face.
+You live on a six-sided planet floating in space. Each face plays like a normal Minecraft world, right up to the edge. Step over it and gravity turns with you, onto a side of the game you haven't seen before.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ To play, select the **Cubism** world type when you create a world. The mod must 
 
 | Mod | Support | Notes |
 |---|---|---|
-| C2ME | 🔴 | Blocked as a precaution. It runs world generation on many threads, which can quietly break the cube's generation and damage saves. |
+| C2ME | 🟢 | |
 | Continuity | 🟢 | Connected textures connect across the edges of the cube. |
 | Distant Horizons | 🔴 | Not supported at this time. Support is planned after the first release. |
 | Do a Barrel Roll | 🟢 | |
