@@ -40,7 +40,7 @@ public abstract class ChunkGeneratorMixin {
 			CubeSettings settings = CubeSettings.of(generator);
 			CubePlanetMath.setEdgeRounding(settings.edgeRounding());
 			SeamLayout layout = new SeamLayout(settings.diameterChunks());
-			SeamLayout.setActive(layout);
+			((CubeSettings.Holder) (Object) generator).cubism$setLayout(layout);
 			((SeamRandomState) (Object) randomState).cubism$enableSeams(layout);
 			if (settings.shiftsClimate()) {
 				RandomStateAccessor router = (RandomStateAccessor) (Object) randomState;
@@ -57,7 +57,7 @@ public abstract class ChunkGeneratorMixin {
 		CallbackInfoReturnable<ChunkGeneratorStructureState> cir
 	) {
 		if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
-			StructureMargins.register(cir.getReturnValue());
+			StructureMargins.register(cir.getReturnValue(), SeamLayout.of(generator));
 		}
 	}
 

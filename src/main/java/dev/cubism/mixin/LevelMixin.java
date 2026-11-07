@@ -13,6 +13,7 @@ import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.BlockAndLightGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
@@ -268,10 +269,11 @@ public abstract class LevelMixin implements CubeTimeLevel, BlockAndLightGetter {
 
 	@Unique
 	private @Nullable SeamLayout cubism$seams() {
-		// The layout is known once the first chunk generates. From then on, the answer for this level is final.
-		if (!this.cubism$seamsResolved && (Object) this instanceof ServerLevel level && SeamLayout.active() != null) {
+		// The layout of a cube level is known once the level makes its random state. From then on, the answer is final.
+		if (!this.cubism$seamsResolved && (Object) this instanceof ServerLevel level) {
 			this.cubism$serverSeams = SeamLayout.of(level);
-			this.cubism$seamsResolved = true;
+			this.cubism$seamsResolved = this.cubism$serverSeams != null
+				|| !(level.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator generator && SeamLayout.isSeam(generator));
 		}
 		if (this.cubism$serverSeams == null && SeamInteraction.predicting() && ((Level) (Object) this).isClientSide()) {
 			return SeamLayout.of((Level) (Object) this);

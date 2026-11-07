@@ -20,9 +20,17 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerLevel.class)
 public abstract class ServerLevelMixin {
+	/** The generator of a cube level has its layout from the chunk map, which the level makes in its constructor. */
+	@Inject(method = "<init>", at = @At("TAIL"))
+	private void cubism$registerCube(CallbackInfo ci) {
+		SeamLayout.registerServerLevel((ServerLevel) (Object) this);
+	}
+
 	/** An entity reads the darkness of its own face in its goals, such as a zombie that burns or a spider that turns calm. */
 	@WrapMethod(method = "tickNonPassenger")
 	private void cubism$tickAtLocalTime(Entity entity, Operation<Void> original) {

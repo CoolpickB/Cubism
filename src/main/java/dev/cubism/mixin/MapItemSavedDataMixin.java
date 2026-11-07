@@ -38,7 +38,7 @@ public abstract class MapItemSavedDataMixin {
 	@WrapMethod(method = "addDecoration")
 	private void cubism$placeOnFacePlane(Holder<MapDecorationType> type, @Nullable LevelAccessor level, String key, double xPos,
 		double zPos, double yRot, @Nullable Component name, Operation<Void> original) {
-		SeamLayout layout = this.dimension == Level.OVERWORLD ? SeamLayout.active() : null;
+		SeamLayout layout = SeamLayout.ofServerLevel(this.dimension);
 		if (layout == null) {
 			original.call(type, level, key, xPos, zPos, yRot, name);
 			return;

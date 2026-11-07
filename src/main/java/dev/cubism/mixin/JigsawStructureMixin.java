@@ -37,8 +37,7 @@ public abstract class JigsawStructureMixin {
 		@Local(argsOnly = true) Structure.GenerationContext context
 	) {
 		int height = original.call(provider, random, heights);
-		if (SeamLayout.active() == null || !(context.chunkGenerator() instanceof NoiseBasedChunkGenerator generator)
-			|| !generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)
+		if (SeamLayout.of(context.chunkGenerator()) == null
 			|| !context.registryAccess().lookupOrThrow(Registries.STRUCTURE).getResourceKey((Structure) (Object) this).filter(BuiltinStructures.ANCIENT_CITY::equals).isPresent()) {
 			return height;
 		}

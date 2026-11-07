@@ -98,7 +98,7 @@ public final class CubeStructureMap {
 	) {
 		ChunkGeneratorStructureState state = ChunkGeneratorStructureState.createForNormal(sampler.randomState(), sampler.seed(), ChunkPos.ZERO, biomes, sets);
 		SeamLayout layout = new SeamLayout(cube.diameterChunks());
-		StructureMargins.register(state);
+		StructureMargins.register(state, layout);
 		SeamLayout.withActive(layout, () -> {
 			scan(sampler, layout, state, open, verifier, hit);
 			return null;

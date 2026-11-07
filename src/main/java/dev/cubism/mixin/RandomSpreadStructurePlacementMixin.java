@@ -8,7 +8,9 @@ import dev.cubism.worldgen.StructureMargins;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
@@ -20,22 +22,19 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class RandomSpreadStructurePlacementMixin {
 	@ModifyReturnValue(method = "getPotentialStructureChunk", at = @At("RETURN"))
 	private ChunkPos cubism$moveInward(ChunkPos chunk) {
-		SeamLayout layout = StructureMargins.layout();
+		SeamLayout layout = SeamLayout.active();
 		int margin = layout == null ? StructureMargins.NONE : StructureMargins.of((RandomSpreadStructurePlacement) (Object) this);
 		return margin == StructureMargins.NONE ? chunk : StructureMargins.squeeze(layout, margin, chunk);
 	}
 
 	@WrapMethod(method = "isPlacementChunk")
 	private boolean cubism$isMovedChunk(ChunkGeneratorStructureState state, int sourceX, int sourceZ, Operation<Boolean> original) {
-		if (!StructureMargins.isCube(state)) {
-			StructureMargins.enterOtherGenerator();
-			try {
-				return original.call(state, sourceX, sourceZ);
-			} finally {
-				StructureMargins.leaveOtherGenerator();
-			}
-		}
-		SeamLayout layout = StructureMargins.layout();
+		SeamLayout layout = StructureMargins.layout(state);
+		return SeamLayout.withActive(layout, () -> this.cubism$isMovedChunk(layout, state, sourceX, sourceZ, original));
+	}
+
+	@Unique
+	private boolean cubism$isMovedChunk(@Nullable SeamLayout layout, ChunkGeneratorStructureState state, int sourceX, int sourceZ, Operation<Boolean> original) {
 		RandomSpreadStructurePlacement placement = (RandomSpreadStructurePlacement) (Object) this;
 		int margin = layout == null ? StructureMargins.NONE : StructureMargins.of(placement);
 		if (margin == StructureMargins.NONE) {

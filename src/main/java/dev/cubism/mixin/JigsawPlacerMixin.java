@@ -51,8 +51,8 @@ public abstract class JigsawPlacerMixin {
 		VoxelShape free, VoxelShape piece, BooleanOp op, Operation<Boolean> original,
 		@Local(ordinal = 2) BoundingBox template, @Local(ordinal = 3) BoundingBox placed, @Local(ordinal = 1) StructurePoolElement element
 	) {
-		SeamLayout layout = SeamLayout.active();
-		if (layout != null && this.chunkGenerator instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of(this.chunkGenerator);
+		if (layout != null) {
 			// The height is that of the template. The box in the placer is taller for a piece with connectors of its own,
 			// which the expansion hack makes room for, so a road would pass as tall.
 			if (layout.splitsAtEdge(placed, template.getYSpan() > FLAT_HEIGHT)) {

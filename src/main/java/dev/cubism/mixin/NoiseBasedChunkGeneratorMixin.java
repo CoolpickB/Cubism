@@ -63,6 +63,9 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 	private @Nullable CubeSettings cubism$settings;
 
 	@Unique
+	private volatile @Nullable SeamLayout cubism$layout;
+
+	@Unique
 	private static final int SEA_BARRIER_RANGE = 24;
 
 	@Unique
@@ -99,6 +102,16 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 		this.cubism$settings = settings;
 	}
 
+	@Override
+	public @Nullable SeamLayout cubism$layout() {
+		return this.cubism$layout;
+	}
+
+	@Override
+	public void cubism$setLayout(@Nullable SeamLayout layout) {
+		this.cubism$layout = layout;
+	}
+
 	@Shadow
 	@Final
 	@Mutable
@@ -115,8 +128,8 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 		this.globalFluidPicker = Suppliers.memoize(() -> {
 			Aquifer.FluidPicker picker = vanilla.get();
 			NoiseBasedChunkGenerator generator = (NoiseBasedChunkGenerator) (Object) this;
-			SeamLayout layout = SeamLayout.active();
-			if (layout == null || !generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+			SeamLayout layout = SeamLayout.of(generator);
+			if (layout == null) {
 				return picker;
 			}
 			int seaLevel = generator.generatorSettings().value().seaLevel();
@@ -146,9 +159,9 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 		if (density > 0.0 || state != null && state.is(Blocks.LAVA)) {
 			return state;
 		}
-		SeamLayout layout = SeamLayout.active();
 		NoiseBasedChunkGenerator generator = (NoiseBasedChunkGenerator) (Object) this;
-		if (layout == null || !generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of(generator);
+		if (layout == null) {
 			return state;
 		}
 		if (state == null) {
@@ -176,8 +189,8 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/NoiseSpawnFinder;findSpawnPosition(Ljava/util/List;Lnet/minecraft/world/level/levelgen/densityfunction/DensitySamplerSet;)Lnet/minecraft/core/BlockPos;")
 	)
 	private BlockPos cubism$spawnOnTopFace(List<SpawnTargetPoint> targets, DensitySamplerSet samplers, Operation<BlockPos> original) {
-		SeamLayout layout = SeamLayout.active();
-		if (layout == null || !((NoiseBasedChunkGenerator) (Object) this).generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of((NoiseBasedChunkGenerator) (Object) this);
+		if (layout == null) {
 			return original.call(targets, samplers);
 		}
 		int limit = layout.radius / 2;
@@ -210,9 +223,8 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/Aquifer;computeSubstance(IIID)Lnet/minecraft/world/level/block/state/BlockState;")
 	)
 	private @Nullable BlockState cubism$airOutsideWedge(Aquifer aquifer, int x, int y, int z, double density, Operation<BlockState> original) {
-		SeamLayout layout = SeamLayout.active();
-		if (layout != null && ((NoiseBasedChunkGenerator) (Object) this).generatorSettings().is(CubismMod.SEAM_SETTINGS)
-			&& !layout.insideWedge(x, y, z)) {
+		SeamLayout layout = SeamLayout.of((NoiseBasedChunkGenerator) (Object) this);
+		if (layout != null && !layout.insideWedge(x, y, z)) {
 			return Blocks.AIR.defaultBlockState();
 		}
 		return original.call(aquifer, x, y, z, density);
@@ -227,8 +239,8 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 		LevelHeightAccessor heights, RandomState randomState, int x, int z, @Nullable MutableObject<NoiseColumn> column,
 		@Nullable Predicate<BlockState> tester, Operation<OptionalInt> original
 	) {
-		SeamLayout layout = SeamLayout.active();
-		if (layout != null && ((NoiseBasedChunkGenerator) (Object) this).generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of((NoiseBasedChunkGenerator) (Object) this);
+		if (layout != null) {
 			SeamFold.Fold fold = layout.foldOfColumn(x, z);
 			if (fold != null) {
 				return original.call(heights, randomState, fold.x(x, z), fold.z(x, z), column, tester);
@@ -239,8 +251,8 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 
 	@ModifyReturnValue(method = "buildTerrain", at = @At("RETURN"))
 	private CompletableFuture<ChunkAccess> cubism$clearOutsideWedge(CompletableFuture<ChunkAccess> future) {
-		SeamLayout layout = SeamLayout.active();
-		if (layout == null || !((NoiseBasedChunkGenerator) (Object) this).generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of((NoiseBasedChunkGenerator) (Object) this);
+		if (layout == null) {
 			return future;
 		}
 		return future.thenApply(chunk -> {

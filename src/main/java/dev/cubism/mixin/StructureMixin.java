@@ -39,9 +39,8 @@ import java.util.function.Predicate;
 public abstract class StructureMixin {
 	@ModifyReturnValue(method = "findValidGenerationPoint", at = @At("RETURN"))
 	private Optional<Structure.GenerationStub> cubism$startInsideWedge(Optional<Structure.GenerationStub> stub, Structure.GenerationContext context) {
-		SeamLayout layout = SeamLayout.active();
-		if (stub.isEmpty() || layout == null || !(context.chunkGenerator() instanceof NoiseBasedChunkGenerator generator)
-			|| !generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of(context.chunkGenerator());
+		if (stub.isEmpty() || layout == null) {
 			return stub;
 		}
 		BlockPos start = stub.get().position();
@@ -66,9 +65,8 @@ public abstract class StructureMixin {
 	) {
 		StructureStart start = original.call(
 			selected, dimension, registryAccess, chunkGenerator, biomeSource, climateSampler, randomState, templates, seed, chunk, references, heightAccessor, validBiome);
-		SeamLayout layout = SeamLayout.active();
-		if (!start.isValid() || layout == null || !(chunkGenerator instanceof NoiseBasedChunkGenerator generator)
-			|| !generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of(chunkGenerator);
+		if (!start.isValid() || layout == null) {
 			return start;
 		}
 		if (StructureMargins.settle(layout, selected, start)) {

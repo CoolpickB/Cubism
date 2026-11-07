@@ -100,5 +100,10 @@ public record CubeSettings(int diameterChunks, int edgeRounding, Direction spawn
 		@Nullable CubeSettings cubism$settings();
 
 		void cubism$setSettings(@Nullable CubeSettings settings);
+
+		/** The cube of this generator, set when its level makes the random state. Null before that and for other generators. */
+		@Nullable SeamLayout cubism$layout();
+
+		void cubism$setLayout(@Nullable SeamLayout layout);
 	}
 }

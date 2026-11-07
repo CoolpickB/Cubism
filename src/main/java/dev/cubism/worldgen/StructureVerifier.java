@@ -72,7 +72,7 @@ public final class StructureVerifier {
 			router.cubism$setRouter(CubeDensityFunctions.withClimateShift(router.cubism$getRouter(), cube.temperature(), cube.humidity()));
 		}
 		this.state = ChunkGeneratorStructureState.createForNormal(random, seed, ChunkPos.ZERO, biomes, sets);
-		StructureMargins.register(this.state);
+		StructureMargins.register(this.state, this.layout);
 	}
 
 	/** Templates from the vanilla data pack, for the structures that read them. */

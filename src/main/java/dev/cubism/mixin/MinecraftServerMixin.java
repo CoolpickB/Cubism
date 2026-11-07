@@ -177,8 +177,7 @@ public abstract class MinecraftServerMixin {
 	@Inject(method = "stopServer", at = @At("TAIL"))
 	private void cubism$stopTracking(CallbackInfo ci) {
 		CubePregen.stopTracking();
-		// The layout is static, so a vanilla world that loads next in the same game would see the cube otherwise.
-		SeamLayout.setActive(null);
+		SeamLayout.clearServerLevels();
 		LoadTrace.end("server stopped");
 	}
 }

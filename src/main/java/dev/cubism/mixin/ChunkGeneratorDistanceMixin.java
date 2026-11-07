@@ -1,6 +1,14 @@
 package dev.cubism.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.mojang.datafixers.util.Pair;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import org.jspecify.annotations.Nullable;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubism.CubismMod;
 import dev.cubism.worldgen.SeamLayout;
@@ -19,6 +27,15 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(ChunkGenerator.class)
 public abstract class ChunkGeneratorDistanceMixin {
+	/** The random spread search picks its chunks in a static method without the generator, which reads the cube of this scope. */
+	@WrapMethod(method = "findNearestMapStructure")
+	private @Nullable Pair<BlockPos, Holder<Structure>> cubism$searchInCube(
+		ServerLevel level, HolderSet<Structure> wanted, BlockPos pos, int maxSearchRadius, boolean createReference,
+		Operation<Pair<BlockPos, Holder<Structure>>> original
+	) {
+		return SeamLayout.withActive(SeamLayout.of((ChunkGenerator) (Object) this), () -> original.call(level, wanted, pos, maxSearchRadius, createReference));
+	}
+
 	@WrapOperation(
 		method = "findNearestMapStructure",
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/core/BlockPos;distSqr(Lnet/minecraft/core/Vec3i;)D")
@@ -37,8 +54,8 @@ public abstract class ChunkGeneratorDistanceMixin {
 	}
 
 	private double cubism$distance(Vec3i self, Vec3i other, Operation<Double> original) {
-		SeamLayout layout = SeamLayout.active();
-		if (layout != null && (Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		SeamLayout layout = SeamLayout.of((ChunkGenerator) (Object) this);
+		if (layout != null) {
 			double length = SeamPaths.distance(layout, Vec3.atCenterOf(self), Vec3.atCenterOf(other));
 			if (length >= 0.0) {
 				return length * length;

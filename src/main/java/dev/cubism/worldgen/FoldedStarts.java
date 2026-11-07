@@ -66,7 +66,7 @@ public final class FoldedStarts {
 		ChunkGenerator generator, RegistryAccess registries, ChunkGeneratorStructureState state, StructureManager manager,
 		ChunkAccess host, StructureTemplateManager templates, ResourceKey<Level> level
 	) {
-		SeamLayout layout = SeamLayout.active();
+		SeamLayout layout = SeamLayout.of(generator);
 		ChunkPos hostPos = host.getPos();
 		if (layout == null || !layout.inRegion(hostPos.getMiddleBlockX(), hostPos.getMiddleBlockZ())) {
 			return;

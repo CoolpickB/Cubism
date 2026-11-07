@@ -23,9 +23,9 @@ public abstract class ChunkGeneratorStructureStateMixin {
 	private CompletableFuture<List<ChunkPos>> cubism$onePerFace(
 		CompletableFuture<List<ChunkPos>> rings, @Local(argsOnly = true) Holder<StructureSet> structureSet
 	) {
-		SeamLayout layout = StructureMargins.layout();
 		ChunkGeneratorStructureState state = (ChunkGeneratorStructureState) (Object) this;
-		if (layout == null || !structureSet.is(BuiltinStructureSets.STRONGHOLDS) || !StructureMargins.isCube(state)) {
+		SeamLayout layout = StructureMargins.layout(state);
+		if (layout == null || !structureSet.is(BuiltinStructureSets.STRONGHOLDS)) {
 			return rings;
 		}
 		return CompletableFuture.completedFuture(StrongholdPositions.positions(layout, state.getLevelSeed()));

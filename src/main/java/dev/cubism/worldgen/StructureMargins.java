@@ -17,7 +17,6 @@ import org.jspecify.annotations.Nullable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
@@ -42,35 +41,19 @@ public final class StructureMargins {
 	private static final int MANSION = 86;
 
 	private static final Map<StructurePlacement, Integer> MARGINS = Collections.synchronizedMap(new WeakHashMap<>());
-	/** The structure states of cube generators. The Nether and the End of a cube world share placements but not the cube. */
-	private static final Set<ChunkGeneratorStructureState> CUBE_STATES = Collections.newSetFromMap(Collections.synchronizedMap(new WeakHashMap<>()));
-	private static final ThreadLocal<Boolean> OTHER_GENERATOR = ThreadLocal.withInitial(() -> false);
+	/** The cube of each structure state of a cube generator. The levels of a world share placements but not the cube. */
+	private static final Map<ChunkGeneratorStructureState, SeamLayout> CUBE_STATES = Collections.synchronizedMap(new WeakHashMap<>());
 
 	private StructureMargins() {
 	}
 
-	public static @Nullable SeamLayout layout() {
-		if (OTHER_GENERATOR.get()) {
-			return null;
-		}
-		return SeamLayout.active();
+	/** The cube of a structure state, or null for the state of a generator without a cube. */
+	public static @Nullable SeamLayout layout(ChunkGeneratorStructureState state) {
+		return CUBE_STATES.get(state);
 	}
 
-	public static boolean isCube(ChunkGeneratorStructureState state) {
-		return CUBE_STATES.contains(state);
-	}
-
-	/** Between this and {@link #leaveOtherGenerator}, the placements do not move: the code works for a generator that is not a cube. */
-	public static void enterOtherGenerator() {
-		OTHER_GENERATOR.set(true);
-	}
-
-	public static void leaveOtherGenerator() {
-		OTHER_GENERATOR.set(false);
-	}
-
-	public static void register(ChunkGeneratorStructureState state) {
-		CUBE_STATES.add(state);
+	public static void register(ChunkGeneratorStructureState state, SeamLayout layout) {
+		CUBE_STATES.put(state, layout);
 		for (Holder<StructureSet> set : state.possibleStructureSets()) {
 			int margin = NONE;
 			for (StructureSet.StructureSelectionEntry entry : set.value().structures()) {

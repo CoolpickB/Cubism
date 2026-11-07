@@ -13,7 +13,11 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import org.jspecify.annotations.Nullable;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 
 /**
  * Where each cube face is stored in the level. Every face is stored upright, as the pyramid wedge
@@ -25,9 +29,13 @@ public final class SeamLayout {
 	/** Faces in storage order. UP and EAST are next to each other so that their shared edge is the one seam. */
 	public static final Direction[] FACES = {Direction.UP, Direction.EAST, Direction.DOWN, Direction.WEST, Direction.SOUTH, Direction.NORTH};
 
-	private static volatile @Nullable SeamLayout active;
 	private static volatile @Nullable SeamLayout client;
-	private static final ThreadLocal<SeamLayout> FORCED = new ThreadLocal<>();
+	/** The cube levels of the running server. Filled as each level is made, emptied when the server stops. */
+	private static final Map<ResourceKey<Level>, SeamLayout> SERVER_LEVELS = new ConcurrentHashMap<>();
+	private static final ThreadLocal<Scope> SCOPE = new ThreadLocal<>();
+
+	/** The layout that {@link #withActive} set for this thread. A null layout says that the code works for a generator without a cube. */
+	private record Scope(@Nullable SeamLayout layout) {}
 
 	public final int radius;
 	public final int centerY;
@@ -48,34 +56,65 @@ public final class SeamLayout {
 		this.fold = new SeamFold(this);
 	}
 
-	/** The layout of the server, or the layout that {@link #withActive} sets for this thread. */
+	/**
+	 * The layout that {@link #withActive} set for this thread, or null. Code that runs for a generator but does not
+	 * get it, such as the chunk choice of a structure placement, reads its cube here.
+	 */
 	public static @Nullable SeamLayout active() {
-		SeamLayout forced = FORCED.get();
-		return forced != null ? forced : active;
+		Scope scope = SCOPE.get();
+		return scope != null ? scope.layout() : null;
 	}
 
 	/**
-	 * Runs {@code action} with {@code layout} as the active layout of this thread only. The Customize screen uses it to
-	 * generate structures for the settings that it shows, while no level exists or the settings of a search differ.
+	 * Runs {@code action} with {@code layout} as the active layout of this thread only, see {@link #active}. The
+	 * Customize screen uses it to generate structures for the settings that it shows, while no level exists.
 	 */
-	public static <T> T withActive(SeamLayout layout, Supplier<T> action) {
-		SeamLayout before = FORCED.get();
-		FORCED.set(layout);
+	public static <T> T withActive(@Nullable SeamLayout layout, Supplier<T> action) {
+		Scope before = SCOPE.get();
+		SCOPE.set(new Scope(layout));
 		try {
 			return action.get();
 		} finally {
-			FORCED.set(before);
+			SCOPE.set(before);
 		}
 	}
 
-	public static void setActive(@Nullable SeamLayout layout) {
-		active = layout;
+	/**
+	 * The cube of a generator. A seam generator that made no random state yet, such as the one of the Customize screen,
+	 * has the layout of {@link #withActive}.
+	 */
+	public static @Nullable SeamLayout of(ChunkGenerator generator) {
+		if (!(generator instanceof NoiseBasedChunkGenerator noise) || !isSeam(noise)) {
+			return null;
+		}
+		SeamLayout own = ((CubeSettings.Holder) (Object) noise).cubism$layout();
+		return own != null ? own : active();
+	}
+
+	/** True for a generator whose settings store a cube in seam regions. */
+	public static boolean isSeam(NoiseBasedChunkGenerator generator) {
+		return generator.generatorSettings().is(CubismMod.SEAM_SETTINGS);
 	}
 
 	/** The layout of a level whose generator stores the cube in seam regions, or null for any other level. */
 	public static @Nullable SeamLayout of(ServerLevel level) {
-		return level.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator generator
-			&& generator.generatorSettings().is(CubismMod.SEAM_SETTINGS) ? active : null;
+		return of(level.getChunkSource().getGenerator());
+	}
+
+	/** The layout of a level of the running server by its key, for code that has no level, such as map data. */
+	public static @Nullable SeamLayout ofServerLevel(ResourceKey<Level> dimension) {
+		return SERVER_LEVELS.get(dimension);
+	}
+
+	public static void registerServerLevel(ServerLevel level) {
+		SeamLayout layout = of(level);
+		if (layout != null) {
+			SERVER_LEVELS.put(level.dimension(), layout);
+		}
+	}
+
+	public static void clearServerLevels() {
+		SERVER_LEVELS.clear();
 	}
 
 	/** The layout that the server sent to this client, or null. The client sets it on join and clears it on leave. */

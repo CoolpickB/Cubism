@@ -7,6 +7,7 @@ import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.lighting.BlockLightEngine;
 import net.minecraft.world.level.lighting.LightEngine;
@@ -121,8 +122,9 @@ public abstract class LightEngineSeamMixin extends LightEngine {
 			this.cubism$layout = SeamLayout.of(level);
 			// The server layout is set when the cube world loads, and the client layout on join. Either can come after
 			// the level exists.
-			this.cubism$layoutResolved = level instanceof ServerLevel
-				? SeamLayout.active() != null
+			this.cubism$layoutResolved = level instanceof ServerLevel serverLevel
+				? this.cubism$layout != null
+					|| !(serverLevel.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator generator && SeamLayout.isSeam(generator))
 				: this.cubism$layout != null || level.dimension() != Level.OVERWORLD;
 		}
 		return this.cubism$layout;

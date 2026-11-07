@@ -34,8 +34,7 @@ public abstract class WorldGenRegionMixin {
 	@Unique
 	private @Nullable SeamLayout cubism$layout() {
 		if (!this.seamChecked) {
-			this.seamLayout = this.getLevel().getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator generator
-				&& generator.generatorSettings().is(CubismMod.SEAM_SETTINGS) ? SeamLayout.active() : null;
+			this.seamLayout = SeamLayout.of(this.getLevel());
 			this.seamChecked = true;
 		}
 		return this.seamLayout;
