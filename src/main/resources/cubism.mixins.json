@@ -76,7 +76,10 @@
 		"ServerChunkCacheMixin",
 		"ServerPlayerMixin",
 		"LocateCommandMixin",
-		"WorldCoordinatesMixin"
+		"WorldCoordinatesMixin",
+		"AbstractVillagerInvoker",
+		"VillagerMixin",
+		"WanderingTraderMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -17,14 +17,17 @@ import java.util.Arrays;
  * @param pregen what to generate before the first player joins
  * @param temperature a shift of the temperature of the climate, in hundredths of its range: 100 is a full range hotter
  * @param humidity a shift of the humidity of the climate, in hundredths of its range
+ * @param finiteLoot whether trades, gifts and drops give the items that a finite cube may lack, see {@code GOALS.md}
  */
-public record CubeSettings(int diameterChunks, int edgeRounding, Direction spawnFace, Pregen pregen, int temperature, int humidity) {
+public record CubeSettings(
+	int diameterChunks, int edgeRounding, Direction spawnFace, Pregen pregen, int temperature, int humidity, boolean finiteLoot
+) {
 	public static final int MIN_CLIMATE_SHIFT = -100;
 	public static final int MAX_CLIMATE_SHIFT = 100;
 
 	/** The cube of worlds made before these settings existed. New worlds take their values from the world preset. */
 	public static final CubeSettings DEFAULT = new CubeSettings(
-		CubePlanetMath.MIN_DIAMETER_CHUNKS, CubePlanetMath.DEFAULT_EDGE_ROUNDING, Direction.UP, Pregen.OFF, 0, 0
+		CubePlanetMath.MIN_DIAMETER_CHUNKS, CubePlanetMath.DEFAULT_EDGE_ROUNDING, Direction.UP, Pregen.OFF, 0, 0, false
 	);
 
 	public static final Codec<CubeSettings> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -37,7 +40,9 @@ public record CubeSettings(int diameterChunks, int edgeRounding, Direction spawn
 		Pregen.CODEC.optionalFieldOf("pregen", Pregen.OFF).forGetter(CubeSettings::pregen),
 		// A world without the fields has the climate of the vanilla noise.
 		Codec.intRange(MIN_CLIMATE_SHIFT, MAX_CLIMATE_SHIFT).optionalFieldOf("temperature", 0).forGetter(CubeSettings::temperature),
-		Codec.intRange(MIN_CLIMATE_SHIFT, MAX_CLIMATE_SHIFT).optionalFieldOf("humidity", 0).forGetter(CubeSettings::humidity)
+		Codec.intRange(MIN_CLIMATE_SHIFT, MAX_CLIMATE_SHIFT).optionalFieldOf("humidity", 0).forGetter(CubeSettings::humidity),
+		// A world without the field keeps the vanilla trades, gifts and drops.
+		Codec.BOOL.optionalFieldOf("finite_loot", false).forGetter(CubeSettings::finiteLoot)
 	).apply(i, CubeSettings::new));
 
 	public enum Pregen implements StringRepresentable {
@@ -60,23 +65,27 @@ public record CubeSettings(int diameterChunks, int edgeRounding, Direction spawn
 	}
 
 	public CubeSettings withDiameterChunks(int diameterChunks) {
-		return new CubeSettings(diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity);
+		return new CubeSettings(diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, this.finiteLoot);
 	}
 
 	public CubeSettings withEdgeRounding(int edgeRounding) {
-		return new CubeSettings(this.diameterChunks, edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity);
+		return new CubeSettings(this.diameterChunks, edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, this.finiteLoot);
 	}
 
 	public CubeSettings withPregen(Pregen pregen) {
-		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, pregen, this.temperature, this.humidity);
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, pregen, this.temperature, this.humidity, this.finiteLoot);
 	}
 
 	public CubeSettings withTemperature(int temperature) {
-		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, temperature, this.humidity);
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, temperature, this.humidity, this.finiteLoot);
 	}
 
 	public CubeSettings withHumidity(int humidity) {
-		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, humidity);
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, humidity, this.finiteLoot);
+	}
+
+	public CubeSettings withFiniteLoot(boolean finiteLoot) {
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, finiteLoot);
 	}
 
 	/** True when the climate differs from the vanilla noise. */

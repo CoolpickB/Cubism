@@ -1,0 +1,11 @@
+{
+  "amount": 1,
+  "trades": [
+    "cubism:wandering_trader/echo_shard",
+    "cubism:wandering_trader/sniffer_egg",
+    "cubism:wandering_trader/copper_nautilus_armor",
+    "cubism:wandering_trader/iron_nautilus_armor",
+    "cubism:wandering_trader/golden_nautilus_armor",
+    "cubism:wandering_trader/diamond_nautilus_armor"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "gives": {
+    "id": "minecraft:tide_armor_trim_smithing_template"
+  },
+  "max_uses": 1,
+  "reputation_discount": 0.05,
+  "xp": 15,
+  "wants": {
+    "id": "minecraft:emerald",
+    "count": 16
+  }
+}

@@ -13,7 +13,8 @@
           "diameter_chunks": 24,
           "edge_rounding": 2,
           "spawn_face": "up",
-          "pregen": "whole_cube"
+          "pregen": "whole_cube",
+          "finite_loot": true
         }
       }
     },

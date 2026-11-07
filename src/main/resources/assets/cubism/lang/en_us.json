@@ -35,6 +35,8 @@
   "cubism.customize.pregen.whole_cube": "Whole Cube",
   "cubism.customize.pregen.none": "Chunks generate as you explore",
   "cubism.customize.pregen.columns": "About %s chunk columns before you join",
+  "cubism.customize.finite_loot": "Finite-cube loot",
+  "cubism.customize.finite_loot.tooltip": "Adds trades, gifts and drops for the items that a small cube may not generate: armor trims, pottery sherds, some music discs, sponge, echo shards and more. Vanilla loot stays the same.",
   "cubism.customize.biomes": "Biomes",
   "cubism.customize.biomes.count": "Biomes (%s/%s)",
   "cubism.customize.structures": "Structures",

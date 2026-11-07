@@ -1,0 +1,25 @@
+{
+  "amount": 1,
+  "trades": [
+    "cubism:wandering_trader/prize_pottery_sherd",
+    "cubism:wandering_trader/archer_pottery_sherd",
+    "cubism:wandering_trader/miner_pottery_sherd",
+    "cubism:wandering_trader/skull_pottery_sherd",
+    "cubism:wandering_trader/arms_up_pottery_sherd",
+    "cubism:wandering_trader/brewer_pottery_sherd",
+    "cubism:wandering_trader/mourner_pottery_sherd",
+    "cubism:wandering_trader/plenty_pottery_sherd",
+    "cubism:wandering_trader/explorer_pottery_sherd",
+    "cubism:wandering_trader/blade_pottery_sherd",
+    "cubism:wandering_trader/shelter_pottery_sherd",
+    "cubism:wandering_trader/angler_pottery_sherd",
+    "cubism:wandering_trader/snort_pottery_sherd",
+    "cubism:wandering_trader/heartbreak_pottery_sherd",
+    "cubism:wandering_trader/friend_pottery_sherd",
+    "cubism:wandering_trader/sheaf_pottery_sherd",
+    "cubism:wandering_trader/heart_pottery_sherd",
+    "cubism:wandering_trader/danger_pottery_sherd",
+    "cubism:wandering_trader/burn_pottery_sherd",
+    "cubism:wandering_trader/howl_pottery_sherd"
+  ]
+}

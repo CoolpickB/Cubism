@@ -1,0 +1,9 @@
+{
+  "amount": 1,
+  "trades": [
+    "cubism:armorer/coast_trim",
+    "cubism:armorer/dune_trim",
+    "cubism:armorer/wild_trim",
+    "cubism:armorer/sentry_trim"
+  ]
+}

@@ -7,6 +7,7 @@ import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.StringWidget;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.layouts.HeaderAndFooterLayout;
 import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
@@ -65,6 +66,9 @@ final class CubeSettingsScreen extends Screen {
 			.withValues(CubeSettings.Pregen.values())
 			.create(0, 0, WIDTH, 20, Component.translatable("cubism.customize.pregen"), (button, pregen) -> this.update(this.settings.withPregen(pregen))));
 		this.pregenLabel = content.addChild(new StringWidget(WIDTH, 12, Component.empty(), this.font));
+		content.addChild(CycleButton.onOffBuilder(this.settings.finiteLoot())
+			.withTooltip(value -> Tooltip.create(Component.translatable("cubism.customize.finite_loot.tooltip")))
+			.create(0, 0, WIDTH, 20, Component.translatable("cubism.customize.finite_loot"), (button, value) -> this.update(this.settings.withFiniteLoot(value))));
 		this.update(this.settings);
 
 		LinearLayout footer = this.layout.addToFooter(LinearLayout.horizontal().spacing(8));

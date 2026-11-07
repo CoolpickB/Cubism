@@ -1,0 +1,12 @@
+{
+  "gives": {
+    "id": "minecraft:miner_pottery_sherd"
+  },
+  "max_uses": 1,
+  "reputation_discount": 0.05,
+  "xp": 0,
+  "wants": {
+    "id": "minecraft:emerald",
+    "count": 12
+  }
+}

@@ -1,5 +1,6 @@
 package dev.cubism;
 
+import dev.cubism.loot.FiniteLoot;
 import dev.cubism.network.CubeNetworking;
 import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamLight;
@@ -59,6 +60,7 @@ public class CubismMod implements ModInitializer {
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "seam"), SEAM_TICKET);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "seam_simulation"), SEAM_SIMULATION_TICKET);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "pregen"), CubePregen.TICKET);
+		FiniteLoot.register();
 		CubeNetworking.register();
 		ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> SeamLight.onChunkLoad(level, chunk));
 		ServerTickEvents.END_LEVEL_TICK.register(level -> {

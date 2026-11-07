@@ -1,0 +1,8 @@
+{
+  "amount": 1,
+  "trades": [
+    "cubism:armorer/raiser_trim",
+    "cubism:armorer/host_trim",
+    "cubism:armorer/shaper_trim"
+  ]
+}
