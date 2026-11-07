@@ -19,7 +19,7 @@ To play, select the **Cubism** world type when you create a world. The mod must 
 |---|---|---|
 | C2ME | 🟢 | |
 | Continuity | 🟢 | Connected textures connect across the edges of the cube. |
-| Distant Horizons | 🔴 | Not supported at this time. Support is planned after the first release. |
+| Distant Horizons | 🔴 | Support planned for the future, use Voxy for now. |
 | Do a Barrel Roll | 🟢 | |
 | Entity Culling | 🟡 | Entity Culling does not cull or stop the entities of other faces. As a result, these entities do not get its performance gain. |
 | Iris | 🟢 | Shader packs generally load fine, but Complementary Unbound r5.9.3 is currently the only one that follows the cube's shape properly. |
@@ -28,7 +28,7 @@ To play, select the **Cubism** world type when you create a world. The mod must 
 | Sodium | 🟢 | |
 | Voxy | 🟢 | |
 | Voxygen | 🟢 | |
-| Xaero's Minimap and Xaero's World Map | 🟡 | The maps show the six faces side by side, not as a cube. We did not test waypoint beacons and distances for a waypoint on another face. |
+| Xaero's Minimap and Xaero's World Map | 🟡 | The maps show the six faces side by side, not as a cube. Waypoint markers and teleports work across faces. |
 
 If you find a problem with another mod, open an issue. See [CONTRIBUTING.md](CONTRIBUTING.md).
 

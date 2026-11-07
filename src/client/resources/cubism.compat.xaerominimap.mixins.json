@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "dev.cubism.client.compat.xaerominimap.mixin",
+	"plugin": "dev.cubism.client.compat.CompatMixinPlugin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"WaypointTeleportMixin",
+		"WaypointWorldRendererMixin",
+		"WaypointWorldRenderReaderMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
