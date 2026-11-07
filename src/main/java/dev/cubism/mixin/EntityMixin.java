@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.cubism.gravity.GravityEntityAccess;
+import dev.cubism.gravity.GravityLock;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.util.Mth;
@@ -83,7 +84,7 @@ public abstract class EntityMixin implements GravityEntityAccess {
 			return null;
 		}
 		int face = SeamInteraction.regionFace(layout, this.position.x, this.position.z);
-		if (this.onGround() || this.cubism$airStartFace < 0) {
+		if (this.onGround() || this.cubism$airStartFace < 0 || GravityLock.locked((Entity) (Object) this)) {
 			this.cubism$airStartFace = face;
 			return null;
 		}

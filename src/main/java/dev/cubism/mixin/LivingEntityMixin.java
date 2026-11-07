@@ -3,6 +3,7 @@ package dev.cubism.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.cubism.gravity.GravityLock;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.world.damagesource.DamageSource;
@@ -85,7 +86,7 @@ public abstract class LivingEntityMixin extends Entity {
 			return;
 		}
 		int face = SeamInteraction.regionFace(layout, this.getX(), this.getZ());
-		if (this.onGround() || ((LivingEntity) (Object) this).hasEffect(MobEffects.LEVITATION)
+		if (this.onGround() || ((LivingEntity) (Object) this).hasEffect(MobEffects.LEVITATION) || GravityLock.locked(this)
 			|| (Object) this instanceof Player player && player.getAbilities().flying || this.cubism$fallStartFace < 0) {
 			this.cubism$fallStartFace = face;
 			return;

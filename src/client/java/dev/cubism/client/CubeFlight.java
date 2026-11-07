@@ -1,5 +1,6 @@
 package dev.cubism.client;
 
+import dev.cubism.gravity.GravityLock;
 import dev.cubism.debug.LoadTrace;
 import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamInteraction;
@@ -351,7 +352,7 @@ public final class CubeFlight {
 	public static Quaternionf frame(Entity entity, float partialTicks) {
 		SeamLayout layout = SeamLayout.of(entity.level());
 		float t = Mth.lerp(partialTicks, weightO, weight);
-		if (layout == null || !(entity instanceof LocalPlayer) || t <= 0.0F) {
+		if (layout == null || !(entity instanceof LocalPlayer) || t <= 0.0F || GravityLock.locked(entity)) {
 			return new Quaternionf();
 		}
 		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), t);
@@ -401,7 +402,8 @@ public final class CubeFlight {
 	 */
 	public static Quaternionf viewFrame(Entity entity, float partialTicks) {
 		SeamLayout layout = SeamLayout.of(entity.level());
-		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity)) {
+		// Under Steadfast the pull stays straight down in the face frame, so the view does too.
+		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity) || GravityLock.locked(entity)) {
 			return new Quaternionf();
 		}
 		// With the tilt off the view tilts only in flight, as the flight frame does, and on the ground it turns at the seam.
@@ -569,6 +571,9 @@ public final class CubeFlight {
 		}
 		// A ridden vehicle carries the player over, as the player alone would cross.
 		Entity body = player.isPassenger() ? player.getRootVehicle() : player;
+		if (GravityLock.holdsFace(player)) {
+			return;
+		}
 		Vec3 center = body.getBoundingBox().getCenter();
 		int toFace = layout.crossingFace(center.x, center.y, center.z, SeamCrossing.MARGIN);
 		if (toFace < 0) {

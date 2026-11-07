@@ -1,6 +1,7 @@
 package dev.cubism.seam;
 
 import net.minecraft.world.phys.shapes.VoxelShape;
+import dev.cubism.gravity.GravityLock;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
 import net.minecraft.core.Direction;
@@ -64,7 +65,7 @@ public final class SeamCrossing {
 		for (Entity entity : entities) {
 			// A passenger crosses with the vehicle that carries it. A player in flight crosses on its own client, which
 			// the server follows when the movement arrives: a crossing from here would pull a fast glider back.
-			if (entity.isPassenger() || entity instanceof Player player && flies(player)) {
+			if (entity.isPassenger() || entity instanceof Player player && flies(player) || GravityLock.holdsFace(entity)) {
 				continue;
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();
@@ -159,7 +160,7 @@ public final class SeamCrossing {
 	 */
 	public static Vec3 shownEye(Player player, Vec3 vanillaEye) {
 		SeamLayout layout = SeamLayout.of(player.level());
-		if (layout == null) {
+		if (layout == null || GravityLock.locked(player)) {
 			return vanillaEye;
 		}
 		Vec3 center = player.position().add(0.0, player.getBbHeight() / 2.0, 0.0);

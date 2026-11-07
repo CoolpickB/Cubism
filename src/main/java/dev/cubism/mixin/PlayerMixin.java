@@ -2,6 +2,7 @@ package dev.cubism.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import dev.cubism.gravity.GravityLock;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.core.BlockPos;
@@ -18,6 +19,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
@@ -26,6 +28,11 @@ import java.util.List;
 public abstract class PlayerMixin extends LivingEntity {
 	protected PlayerMixin(EntityType<? extends LivingEntity> type, Level level) {
 		super(type, level);
+	}
+
+	@Inject(method = "tick", at = @At("TAIL"))
+	private void cubism$treadsTick(CallbackInfo ci) {
+		GravityLock.tickTreads((Player) (Object) this);
 	}
 
 	/** A block across a seam is stored in another face region, but the player reaches it where it shows. */

@@ -100,5 +100,11 @@
   "cubism.customize.history.back": "Previous seed",
   "cubism.customize.history.forward": "Next seed",
   "options.cubism.edgeCameraTilt": "Edge Camera Tilt",
-  "options.cubism.edgeCameraTilt.tooltip": "When on, the camera turns with the ground over a rounded cube edge. Turn it off if the tilt makes you feel sick. When off, the camera stays level with the face and turns quickly when you cross onto the next face. Flight still tilts."
+  "options.cubism.edgeCameraTilt.tooltip": "When on, the camera turns with the ground over a rounded cube edge. Turn it off if the tilt makes you feel sick. When off, the camera stays level with the face and turns quickly when you cross onto the next face. Flight still tilts.",
+  "item.cubism.shulker_treads": "Shulker Treads",
+  "effect.cubism.steadfast": "Steadfast",
+  "item.minecraft.potion.effect.steadfast": "Potion of Steadfastness",
+  "item.minecraft.splash_potion.effect.steadfast": "Splash Potion of Steadfastness",
+  "item.minecraft.lingering_potion.effect.steadfast": "Lingering Potion of Steadfastness",
+  "item.minecraft.tipped_arrow.effect.steadfast": "Arrow of Steadfastness"
 }

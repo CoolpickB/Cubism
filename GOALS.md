@@ -115,6 +115,23 @@ Not covered, by decision:
 
 Tested on the dev server (size 24): each armorer level offers exactly one trim from its pool, the fisherman, cartographer, librarian and weaponsmith offer their trades, a wandering trader offers 11 trades (9 in vanilla), and the gift tables and the creeper drop give the added items. Not tested: the setting turned off, the Customize screen toggle, and a raid.
 
+### Gravity lock
+
+The Steadfast effect keeps an entity on the face where it stands. Mining near a diagonal or deep near the core then does not turn the player onto the next face.
+
+- **How it works.** An entity with Steadfast does not cross a diagonal. It stays in the region of its face, under the vanilla pull. Past the diagonal, collision reads the turned blocks of the next face, so the entity walks on that rock as on a wall. The edge pull and the edge camera tilt are off while the effect lasts.
+- **Change of face.** A player who sneaks on the ground crosses a diagonal as usual. The lock then holds the face that the player stands on.
+- **No safety release.** A locked player who walks off a surface edge falls past the side of the cube.
+- **Shulker Treads.** Boots made of 4 shulker shells and a heavy core (`S S`, `SCS`). They have 3 armor, 2 toughness, 0.1 knockback resistance and the durability of diamond boots (429). They are repaired with shulker shells. While you wear them, you have Steadfast, as the turtle shell gives water breathing.
+- **Potion of Steadfastness.** An awkward potion and a shulker shell make it (3:00). Redstone makes it last 8:00. Gunpowder and dragon breath make the splash and lingering potions, and tipped arrows come from the lingering potion.
+- **Lore.** The core of the overworld is intact inside the inner bedrock, and heavy cores break off it. The cores of the End collapsed into voids. Shulkers grip surfaces against the pull of these voids.
+
+Placeholders: the treads use the diamond boots model and worn texture. The effect icon is a plain purple ring.
+
+Tested on the dev server: the items, the potion and the effect load, and the recipes parse. A pig with Steadfast past a diagonal stayed in its region and fell straight down in the frame of its face. A pig without the effect crossed. Not tested: a player with the treads, sneaking to change face, the camera, and brewing in a stand.
+
+Next: heavy core deposits above the inner bedrock, more of them near the corners of the core. Then the End: voids with a pull, shulkers on the rims of the voids, and a pull on elytra flight that Steadfast ignores.
+
 ## Phases
 
 1. Movement core: crossing, edge gravity, server sync, camera.
