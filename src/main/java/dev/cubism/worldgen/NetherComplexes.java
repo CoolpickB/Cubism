@@ -27,8 +27,6 @@ import java.util.function.Predicate;
  * on faces from the seed, as many as there are strongholds, and no face holds both.
  */
 public final class NetherComplexes {
-	/** The largest distance of a start from the middle of its face, as a share of the radius of the core. */
-	private static final double SPREAD = 1.0 / 3.0;
 	private static final int FORTRESS_SALT = 30084232;
 	private static final int BASTION_SALT = 30084233;
 	/** The height at which vanilla tests the biome of a bastion start. A fortress can start in every Nether biome. */
@@ -70,7 +68,7 @@ public final class NetherComplexes {
 
 	/**
 	 * The start chunks of a split set. A start in a biome that the structure cannot use (a bastion in basalt deltas) moves
-	 * to the nearest chunk of the square of its face that has one, then to a face that holds neither kind. Some seeds
+	 * to the nearest chunk of its face that has one, then to a face that holds neither kind. Some seeds
 	 * have no such chunk, so a bastion of a cube Nether generates in every biome (see StructureMixin).
 	 */
 	public static List<ChunkPos> positions(SeamLayout nether, long seed, StructureSet set, BiomeResolver biomes) {
@@ -95,12 +93,12 @@ public final class NetherComplexes {
 			}
 			return true;
 		};
-		int spread = (int) (nether.radius * SPREAD);
+		int reach = reach(nether);
 		List<ChunkPos> positions = new ArrayList<>();
 		for (int i = 0; i < 2 * count; i++) {
 			// Both kinds draw every position, so the faces of one kind do not move with the count of the other.
-			int x = Math.floorDiv(nether.offsetX(faces.get(i)) + (int) Math.round((random.nextDouble() * 2 - 1) * spread), 16);
-			int z = Math.floorDiv((int) Math.round((random.nextDouble() * 2 - 1) * spread), 16);
+			int x = Math.floorDiv(nether.offsetX(faces.get(i)) + towardCenter(random, reach), 16);
+			int z = Math.floorDiv(towardCenter(random, reach), 16);
 			if (i < count == fortress) {
 				ChunkPos found = nearestValid(nether, new ChunkPos(x, z), faces.get(i), valid);
 				for (int spare = 2 * count; found == null && spare < faces.size(); spare++) {
@@ -112,10 +110,26 @@ public final class NetherComplexes {
 		return positions;
 	}
 
-	/** The chunk of the square of the face nearest to {@code start} that passes {@code valid}, or null. */
+	/**
+	 * How far from the middle of its face a start can be: the edge of the face halfway up the cave, where a fortress or
+	 * a bastion stands. A start there reaches across the diagonal, and the part past it folds onto the next face.
+	 */
+	private static int reach(SeamLayout nether) {
+		return nether.radius + nether.openHeight / 2;
+	}
+
+	/**
+	 * An offset in [-reach, reach]. The sum of two even draws makes offsets near the middle more likely than near the
+	 * edge, so that fewer structures cross an edge, without a bound that keeps them all in the middle of a large face.
+	 */
+	private static int towardCenter(Random random, int reach) {
+		return (int) Math.round((random.nextDouble() + random.nextDouble() - 1) * reach);
+	}
+
+	/** The chunk within {@link #reach} of the middle of the face, nearest to {@code start}, that passes {@code valid}, or null. */
 	private static @Nullable ChunkPos nearestValid(SeamLayout nether, ChunkPos start, int face, Predicate<ChunkPos> valid) {
-		int min = Math.floorDiv(-nether.radius, 16);
-		int max = Math.floorDiv(nether.radius - 1, 16);
+		int min = Math.floorDiv(-reach(nether), 16);
+		int max = Math.floorDiv(reach(nether) - 1, 16);
 		int faceChunk = nether.offsetX(face) / 16;
 		ChunkPos best = null;
 		long bestDistance = Long.MAX_VALUE;
