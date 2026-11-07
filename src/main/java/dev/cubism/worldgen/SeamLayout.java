@@ -398,6 +398,9 @@ public final class SeamLayout {
 	 * The turn over an edge is then as wide as the rounding at the surface and narrows smoothly with depth, at any
 	 * size of cube. A fixed distance in for the levels below the surface too would leave no rounding at all one
 	 * rounding deep, where the pull flipped from one face to the next at once.
+	 *
+	 * <p>In the Nether, the surface of the field is the roof. With the floor as the surface, the whole cave lay above
+	 * it, and the turn was as wide as the height over the floor: tens of blocks for an edge rounding of 2.
 	 */
 	public @Nullable Vec3 airGravity(double x, double y, double z) {
 		int bx = Mth.floor(x);
@@ -407,7 +410,9 @@ public final class SeamLayout {
 		double cx = x - this.offsetX(this.faceIndexAt(bx)) - 0.5;
 		double cy = y - this.centerY - 0.5;
 		double cz = z - 0.5;
-		double core = levelCore(Math.abs(cx), Math.abs(cy), Math.abs(cz), this.radius, CubePlanetMath.edgeRounding());
+		double core = levelCore(
+			Math.abs(cx), Math.abs(cy), Math.abs(cz), this.nether ? this.radius + this.openHeight : this.radius, CubePlanetMath.edgeRounding()
+		);
 		double dx = cx - Math.clamp(cx, -core, core);
 		double dy = cy - Math.clamp(cy, -core, core);
 		double dz = cz - Math.clamp(cz, -core, core);
