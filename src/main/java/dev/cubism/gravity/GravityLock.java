@@ -2,6 +2,8 @@ package dev.cubism.gravity;
 
 import dev.cubism.CubismMod;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
+import dev.cubism.seam.SeamInteraction;
+import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -64,13 +66,6 @@ public final class GravityLock {
 		return Identifier.fromNamespaceAndPath(CubismMod.MOD_ID, path);
 	}
 
-	/**
-	 * Blocks above the bottom of the storage where the lock lets go. Past a diagonal a locked fall runs along the side
-	 * of the next face, and the storage ends at the height of the cube center: the entity would fall out of the world
-	 * there. It crosses instead, into the sky of the face that owns its position.
-	 */
-	private static final int FLOOR_RELEASE = 8;
-
 	/** True while the down of the entity stays with its face region. Elytra flight ignores the lock. */
 	public static boolean locked(Entity entity) {
 		return entity instanceof LivingEntity living && living.hasEffect(STEADFAST) && !living.isFallFlying();
@@ -78,8 +73,25 @@ public final class GravityLock {
 
 	/** True when a locked entity must not cross a diagonal now. A player that sneaks on the ground crosses. */
 	public static boolean holdsFace(Entity entity) {
-		return locked(entity) && !(entity instanceof Player player && player.isShiftKeyDown() && player.onGround())
-			&& entity.getY() >= entity.level().getMinY() + FLOOR_RELEASE;
+		return locked(entity) && !(entity instanceof Player player && player.isShiftKeyDown() && player.onGround());
+	}
+
+	/**
+	 * True when a locked entity below the bottom of the world must not fall out of it. Past a diagonal a locked fall runs
+	 * along the side of the next face, and the storage ends at the top of the inner bedrock, so the fall leaves the
+	 * storage halfway down that face. It goes on there, and collision still reads the blocks of the faces it passes
+	 * (see {@code BlockCollisionsMixin}). Only inside the inner bedrock cube, the core, does the void still kill.
+	 */
+	public static boolean fallsOn(Entity entity) {
+		SeamLayout layout = locked(entity) ? SeamLayout.of(entity.level()) : null;
+		int face = layout == null ? -1 : SeamInteraction.regionFace(layout, entity.getX(), entity.getZ());
+		if (face < 0) {
+			return false;
+		}
+		double cx = Math.abs(entity.getX() - layout.offsetX(face) - 0.5);
+		double cy = Math.abs(entity.getY() - layout.centerY - 0.5);
+		double cz = Math.abs(entity.getZ() - 0.5);
+		return Math.max(cx, Math.max(cy, cz)) > layout.innerBedrockRadius;
 	}
 
 	/** Worn treads give the effect as the turtle shell gives water breathing: on both sides, every tick. */

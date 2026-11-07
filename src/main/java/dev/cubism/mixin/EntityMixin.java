@@ -77,6 +77,13 @@ public abstract class EntityMixin implements GravityEntityAccess {
 		}
 	}
 
+	@Inject(method = "checkBelowWorld", at = @At("HEAD"), cancellable = true)
+	private void cubism$lockedFallGoesOn(CallbackInfo ci) {
+		if (GravityLock.fallsOn((Entity) (Object) this)) {
+			ci.cancel();
+		}
+	}
+
 	@Override
 	public @Nullable Vec3 cubism$edgePull() {
 		SeamLayout layout = SeamLayout.of(this.level);

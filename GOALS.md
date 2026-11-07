@@ -121,7 +121,7 @@ The Steadfast effect keeps an entity on the face where it stands. Mining near a 
 
 - **How it works.** An entity with Steadfast does not cross a diagonal. It stays in the region of its face, under the vanilla pull. Past the diagonal, collision reads the turned blocks of the next face, so the entity walks on that rock as on a wall. The edge pull and the edge camera tilt are off while the effect lasts.
 - **Change of face.** A player who sneaks on the ground crosses a diagonal as usual. The lock then holds the face that the player stands on.
-- **No safety release.** A locked player who walks off a surface edge falls past the side of the cube. The storage of a face ends at the height of the cube center. Thus 8 blocks above that floor the lock lets go, and the entity crosses into the sky of the face that owns its position. It does not fall out of the world.
+- **No safety release.** A locked player who walks off a surface edge falls past the side of the cube. The fall goes on without end, or until the entity lands on the side of a block of a face that it passes. The storage of a face ends at the top of the inner bedrock, but a locked entity below it does not fall out of the world. Only inside the inner bedrock cube, the core, the void still kills.
 - **Elytra.** The lock has no effect while you glide.
 - **F3.** The cube face line shows the face that owns the position, also past a diagonal.
 - **Shulker Treads.** Boots made of 4 shulker shells and a heavy core (`S S`, `SCS`). They have 3 armor, 2 toughness, 0.1 knockback resistance and the durability of diamond boots (429). They are repaired with shulker shells. While you wear them, you have Steadfast, as the turtle shell gives water breathing.
@@ -130,9 +130,9 @@ The Steadfast effect keeps an entity on the face where it stands. Mining near a 
 
 Placeholders: the treads use the diamond boots model and worn texture. The effect icon is a plain purple ring.
 
-Tested on the dev server: the items, the potion and the effect load, and the recipes parse. A pig with Steadfast past a diagonal stayed in its region and fell straight down in the frame of its face. A pig without the effect crossed. A locked pig that fell to the storage floor crossed and did not die. Not tested: a player with the treads, sneaking to change face, the camera, and brewing in a stand.
+Tested on the dev server: the items, the potion and the effect load, and the recipes parse. A pig with Steadfast past a diagonal stayed in its region and fell straight down in the frame of its face. A pig without the effect crossed. A locked pig past a diagonal fell to y -1300 and more, and it did not die or cross. Not tested: a player with the treads, sneaking to change face, the camera, and brewing in a stand.
 
-Next: heavy core deposits above the inner bedrock, more of them near the corners of the core. Then the End: voids with a pull, shulkers on the rims of the voids, and a pull on elytra flight that Steadfast ignores.
+Next: heavy core deposits above the inner bedrock, more of them near the corners of the core. Then the End: voids with a pull, shulkers on the rims of the voids, and a pull on elytra flight that Steadfast ignores. Later, some of these voids can also float far out past the cube, where a long locked fall finds them.
 
 ## Phases
 
