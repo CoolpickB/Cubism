@@ -80,6 +80,9 @@ public abstract class DebugEntryPositionMixin {
 			return;
 		}
 		int face = SeamInteraction.regionFace(layout, camera.getX(), camera.getZ());
+		// Past the diagonal of its region, as under Steadfast, the camera is over the face that owns its position.
+		int owner = face < 0 ? -1 : layout.crossingFace(camera.getX(), camera.getY(), camera.getZ(), 0.0);
+		face = owner < 0 ? face : owner;
 		displayer.addToGroup(DebugEntryPosition.GROUP, "Cube face: " + (face < 0 ? "none" : SeamLayout.FACES[face].name()));
 		// In single player the level here is the one of the server, which holds other chunks than the client.
 		if (ClientConfig.showStorageLine && Minecraft.getInstance().level instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel) {

@@ -64,14 +64,22 @@ public final class GravityLock {
 		return Identifier.fromNamespaceAndPath(CubismMod.MOD_ID, path);
 	}
 
-	/** True while the down of the entity stays with its face region. */
+	/**
+	 * Blocks above the bottom of the storage where the lock lets go. Past a diagonal a locked fall runs along the side
+	 * of the next face, and the storage ends at the height of the cube center: the entity would fall out of the world
+	 * there. It crosses instead, into the sky of the face that owns its position.
+	 */
+	private static final int FLOOR_RELEASE = 8;
+
+	/** True while the down of the entity stays with its face region. Elytra flight ignores the lock. */
 	public static boolean locked(Entity entity) {
-		return entity instanceof LivingEntity living && living.hasEffect(STEADFAST);
+		return entity instanceof LivingEntity living && living.hasEffect(STEADFAST) && !living.isFallFlying();
 	}
 
 	/** True when a locked entity must not cross a diagonal now. A player that sneaks on the ground crosses. */
 	public static boolean holdsFace(Entity entity) {
-		return locked(entity) && !(entity instanceof Player player && player.isShiftKeyDown() && player.onGround());
+		return locked(entity) && !(entity instanceof Player player && player.isShiftKeyDown() && player.onGround())
+			&& entity.getY() >= entity.level().getMinY() + FLOOR_RELEASE;
 	}
 
 	/** Worn treads give the effect as the turtle shell gives water breathing: on both sides, every tick. */
