@@ -93,7 +93,7 @@ public final class NetherComplexes {
 			}
 			return true;
 		};
-		int reach = reach(nether);
+		int reach = StructureMargins.faceReach(nether);
 		List<ChunkPos> positions = new ArrayList<>();
 		for (int i = 0; i < 2 * count; i++) {
 			// Both kinds draw every position, so the faces of one kind do not move with the count of the other.
@@ -111,25 +111,18 @@ public final class NetherComplexes {
 	}
 
 	/**
-	 * How far from the middle of its face a start can be: the edge of the face halfway up the cave, where a fortress or
-	 * a bastion stands. A start there reaches across the diagonal, and the part past it folds onto the next face.
-	 */
-	private static int reach(SeamLayout nether) {
-		return nether.radius + nether.openHeight / 2;
-	}
-
-	/**
-	 * An offset in [-reach, reach]. The sum of two even draws makes offsets near the middle more likely than near the
+	 * An offset in [-reach, reach]. A start at the reach stands at the edge of its face halfway up the cave and reaches
+	 * across the diagonal, and the part past it folds onto the next face. The sum of two even draws makes offsets near the middle more likely than near the
 	 * edge, so that fewer structures cross an edge, without a bound that keeps them all in the middle of a large face.
 	 */
 	private static int towardCenter(Random random, int reach) {
 		return (int) Math.round((random.nextDouble() + random.nextDouble() - 1) * reach);
 	}
 
-	/** The chunk within {@link #reach} of the middle of the face, nearest to {@code start}, that passes {@code valid}, or null. */
+	/** The chunk within {@link StructureMargins#faceReach} of the middle of the face, nearest to {@code start}, that passes {@code valid}, or null. */
 	private static @Nullable ChunkPos nearestValid(SeamLayout nether, ChunkPos start, int face, Predicate<ChunkPos> valid) {
-		int min = Math.floorDiv(-reach(nether), 16);
-		int max = Math.floorDiv(reach(nether) - 1, 16);
+		int min = Math.floorDiv(-StructureMargins.faceReach(nether), 16);
+		int max = Math.floorDiv(StructureMargins.faceReach(nether) - 1, 16);
 		int faceChunk = nether.offsetX(face) / 16;
 		ChunkPos best = null;
 		long bestDistance = Long.MAX_VALUE;

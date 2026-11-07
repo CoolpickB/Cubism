@@ -75,13 +75,13 @@ The Nether is a cube. Its faces carry the vanilla Nether cave on a core of nethe
 - Fortresses and bastions are placed as strongholds are: 1 to 3 of each by cube size, one per face, on random faces. No face holds both.
 - A bastion moves to a chunk with a bastion biome near its place. If its face has none, it generates in the biome that is there, for example basalt deltas.
 - A structure in the Nether folds about the diagonal at its own height. A fortress corridor that reaches past the diagonal turns 90 degrees and continues on the next face. All pieces of one floor of a fortress fold about the same height, so the rooms stay in line with the corridors. A bastion room lies wholly on one face.
+- Ruined portals and fossils keep the margin of the overworld, but the margin is measured from the edge of the face halfway up the cave. On the smallest cube, they start up to 88 blocks from the face center. A start that does not lie whole in its wedge moves inward, as in the overworld.
 
 These parts of the Nether are not built yet:
 
 - A check of the loot of a finite world.
 - Edge rounding in the Nether. The overworld rounding fades with depth, so its bedrock is square. To do the same, the Nether needs storage below its floor, about 20 blocks at a rounding of 96. This changes the dimension type of the Nether, and the Nether of an older world breaks.
 - Generation of the Nether before the first player joins.
-- Ruined portals and fossils in the Nether use the margin rule of the overworld. On the smallest cube, this rule moves their starts to 24 blocks or less from the face center.
 
 The End is vanilla at this time. Before the first release, we plan this change. The design is not final:
 

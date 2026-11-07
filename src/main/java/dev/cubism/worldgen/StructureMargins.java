@@ -84,18 +84,27 @@ public final class StructureMargins {
 	}
 
 	/**
+	 * Half the width of a face where its structures stand. In the Nether, the face widens from the floor to the roof, and
+	 * a structure stands in the cave, so this is the width halfway up the cave.
+	 */
+	public static int faceReach(SeamLayout layout) {
+		return layout.nether ? layout.radius + layout.openHeight / 2 : layout.radius;
+	}
+
+	/**
 	 * The chunk, moved toward the center of its face so that the whole region of the face maps onto the square that lies
-	 * {@code margin} blocks inside the edges. A uniform squeeze keeps the starts of a region spread out: moving only the
+	 * {@code margin} blocks inside the edges at {@link #faceReach}. A uniform squeeze keeps the starts of a region spread out: moving only the
 	 * starts near an edge would put them all on the line at the margin.
 	 */
 	public static ChunkPos squeeze(SeamLayout layout, int margin, ChunkPos chunk) {
 		int centerX = chunk.getMiddleBlockX();
 		int centerZ = chunk.getMiddleBlockZ();
-		if (!layout.inRegion(centerX, centerZ) || margin >= layout.radius) {
+		int reach = faceReach(layout);
+		if (!layout.inRegion(centerX, centerZ) || margin >= reach) {
 			return chunk;
 		}
 		int faceX = layout.offsetX(layout.faceIndexAt(centerX));
-		double scale = (double) (layout.radius - margin) / (layout.spacing / 2);
+		double scale = (double) (reach - margin) / (layout.spacing / 2);
 		int x = Math.floorDiv(faceX + (int) Math.round((centerX - faceX) * scale), 16);
 		int z = Math.floorDiv((int) Math.round(centerZ * scale), 16);
 		return x == chunk.x() && z == chunk.z() ? chunk : new ChunkPos(x, z);
@@ -103,7 +112,7 @@ public final class StructureMargins {
 
 	/** How far, in blocks, {@link #squeeze} can move a start chunk. */
 	public static int maxSqueeze(SeamLayout layout, int margin) {
-		return Math.max(0, layout.spacing / 2 - (layout.radius - margin));
+		return Math.max(0, layout.spacing / 2 - (faceReach(layout) - margin));
 	}
 
 	/** How many chunks a start that does not fit can move inward to try again. */
@@ -115,7 +124,8 @@ public final class StructureMargins {
 	 */
 	public static ChunkPos inward(SeamLayout layout, BoundingBox box, ChunkPos chunk, int steps) {
 		int faceX = layout.offsetX(layout.faceIndexAt(chunk.getMiddleBlockX()));
-		int width = Math.min(layout.radius, box.minY() - layout.centerY);
+		// The Nether wedge is narrowest at the bottom of the box, and the overworld wedge also at the edges of the face.
+		int width = layout.nether ? box.minY() - layout.centerY : Math.min(layout.radius, box.minY() - layout.centerY);
 		int dx = box.maxX() - faceX > width ? -1 : box.minX() - faceX < -width ? 1 : 0;
 		int dz = box.maxZ() > width ? -1 : box.minZ() < -width ? 1 : 0;
 		return new ChunkPos(chunk.x() + dx * steps, chunk.z() + dz * steps);
@@ -155,7 +165,8 @@ public final class StructureMargins {
 	/**
 	 * Whether a generated start lies where the layout can show it whole. A structure with a margin must lie in the square
 	 * of its face and in its wedge, down to its lowest block: the wedge is narrower than the face by the depth, so the
-	 * base of a monument or the basement of an igloo near an edge would be cut off. The ancient city must have its center
+	 * base of a monument or the basement of an igloo near an edge would be cut off. A Nether wedge is wider than the
+	 * square of its floor, so there the wedge alone decides. The ancient city must have its center
 	 * piece, with the portal, in the wedge of its face.
 	 */
 	public static boolean fits(SeamLayout layout, Holder<Structure> structure, StructureStart start) {
@@ -168,7 +179,8 @@ public final class StructureMargins {
 		}
 		int offset = layout.offsetX(layout.faceIndexAt(start.getChunkPos().getMiddleBlockX()));
 		BoundingBox box = start.getBoundingBox();
-		return box.minX() >= offset - layout.radius && box.maxX() <= offset + layout.radius
-			&& box.minZ() >= -layout.radius && box.maxZ() <= layout.radius && WholeRooms.inWedge(layout, box);
+		boolean inSquare = layout.nether || box.minX() >= offset - layout.radius && box.maxX() <= offset + layout.radius
+			&& box.minZ() >= -layout.radius && box.maxZ() <= layout.radius;
+		return inSquare && WholeRooms.inWedge(layout, box);
 	}
 }
