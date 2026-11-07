@@ -22,17 +22,19 @@ import java.util.Arrays;
 
 /**
  * Draws the pre-generation of the cube in the colors and cell size of the vanilla loading map. The whole cube shows as
- * a flat cross of its six faces, which folds into the cube when the generation is done. The spawn face shows as one
- * square with the strips of its neighbor faces around it.
+ * a cube seen from a corner. The face that generates is the face at the right, and when it is done the cube turns to
+ * bring the next face there. At the end the cube turns back to the spawn face on top. The spawn face alone shows as
+ * one square with the strips of its neighbor faces around it.
  *
- * <p>Coordinates are in cells, with x to the right, y down the screen and z toward the viewer. The spawn face is the
- * square z = h, and the folded cube is behind it.
+ * <p>Coordinates are in cells, with x to the right, y down the screen and z toward the viewer. In the cube, the spawn
+ * face is the square z = h, and the cube is behind it, centered on the origin.
  */
 public final class CubeLoadingView {
 	/** Size of a chunk column in GUI pixels, as on the vanilla map. Smaller only if the view does not fit. */
 	private static final float CELL_SIZE = 2.0F;
-	private static final long FOLD_MS = 700L;
-	/** The folded cube stays on the screen this long before the game starts. */
+	/** How long the cube takes to turn the next face to the right. */
+	private static final long TURN_MS = 350L;
+	/** The cube stays on the screen this long after its last turn, before the game starts. */
 	private static final long HOLD_MS = 500L;
 	/** Faces of the cross: the spawn face, then the faces at its right, left, top and bottom, then the opposite face below the bottom one. */
 	private static final int FACES = 6;
@@ -41,10 +43,21 @@ public final class CubeLoadingView {
 	/** Seen from a corner, with the spawn face on top. */
 	private static final Quaternionf CUBE_VIEW = new Quaternionf().rotateX((float) Math.acos(1.0 / Math.sqrt(3.0))).rotateZ(Mth.HALF_PI / 2.0F);
 
+	/** Outward normal of the face at the lower right of the corner view, on the screen. */
+	private static final Vector3f RIGHT_SLOT = new Vector3f((float) Math.sqrt(0.5), (float) Math.sqrt(1.0 / 6.0), (float) Math.sqrt(1.0 / 3.0));
+
 	private static CubePregen.Progress cachedFor;
 	private static int[][] cells;
-	private static long foldStart;
-	/** Fold of the last frame, for the load trace. */
+	/** Faces of the cube view in the order that they generate: the spawn face, its neighbors by region, the opposite face. */
+	private static int[] faceOrder;
+	/** The face at the right, as an index into {@link #faceOrder}, {@link #FACES} for the turn back at the end, -1 before the first. */
+	private static int turnedTo;
+	private static Quaternionf turnFrom;
+	private static Quaternionf turnTo;
+	private static long turnStart;
+	/** When the turn back at the end started, or 0 before it. */
+	private static long finishStart;
+	/** How far the turn back at the end is, from 0 to 1, for the load trace. */
 	public static float lastFold;
 
 	private CubeLoadingView() {
@@ -56,37 +69,25 @@ public final class CubeLoadingView {
 		float h = d / 2.0F;
 		if (cachedFor != progress) {
 			cells = mapCells(progress, d);
+			faceOrder = faceOrder(cells, d);
 			cachedFor = progress;
-			foldStart = 0L;
+			turnedTo = -1;
+			finishStart = 0L;
 		}
 		boolean wholeCube = progress.settings.pregen() == CubeSettings.Pregen.WHOLE_CUBE;
-		float fold = wholeCube ? fold(progress) : 0.0F;
-		lastFold = fold;
-		float halfHeight = wholeCube ? 2.0F * d : h + CubePregen.SPAWN_FACE_MARGIN;
+		// A turning cube reaches out to its half diagonal.
+		float halfHeight = wholeCube ? (float) Math.sqrt(3.0) * h : h + CubePregen.SPAWN_FACE_MARGIN;
 		float scale = Math.min(CELL_SIZE, Math.max(1, maxHalfHeight) / halfHeight);
-		Quaternionf view = new Quaternionf().slerp(CUBE_VIEW, fold);
-		// The cross is centered one face below the spawn face. The folded cube is centered on its own center.
-		Vector3f center = new Vector3f(0.0F, wholeCube ? h : 0.0F, 0.0F).lerp(new Vector3f(0.0F, 0.0F, -h), fold);
-
-		Matrix4f[] transforms = new Matrix4f[FACES];
-		float[] depths = new float[FACES];
-		Integer[] order = new Integer[wholeCube ? FACES : FACES - 1];
-		for (int f = 0; f < order.length; f++) {
-			transforms[f] = new Matrix4f().translate(xCenter, yCenter, 0.0F).scale(scale).rotate(view).translate(center.negate(new Vector3f()))
-				.mul(fold(f, fold * Mth.HALF_PI, h)).translate(NET_CORNER[f][0] * h, NET_CORNER[f][1] * h, h);
-			depths[f] = transforms[f].transformPosition(new Vector3f(h, h, 0.0F)).z;
-			order[f] = f;
+		Matrix4f base = new Matrix4f().translate(xCenter, yCenter, 0.0F).scale(scale);
+		if (wholeCube) {
+			base.rotate(turn(progress));
 		}
-		// Far faces first, so that near faces cover them.
-		Arrays.sort(order, (a, b) -> Float.compare(depths[a], depths[b]));
-
 		Object2IntMap<ChunkStatus> colors = LevelLoadingScreenAccessor.cubism$colors();
-		for (int f : order) {
-			Matrix4f m = transforms[f];
-			// The GUI culls quads that face away. A face seen from behind is drawn mirrored, which puts each cell in the same place.
-			boolean back = m.m00() * m.m11() - m.m10() * m.m01() < 0.0F;
-			if (back) {
-				m.translate(d, 0.0F, 0.0F).scale(-1.0F, 1.0F, 1.0F);
+		for (int f = 0; f < (wholeCube ? FACES : FACES - 1); f++) {
+			Matrix4f m = base.mul(wholeCube ? placed(f, h) : new Matrix4f().translate(NET_CORNER[f][0] * h, NET_CORNER[f][1] * h, h), new Matrix4f());
+			// The GUI culls quads that face away, and the back faces of a cube are hidden anyway.
+			if (m.m00() * m.m11() - m.m10() * m.m01() <= 0.0F) {
+				continue;
 			}
 			graphics.pose().pushMatrix();
 			graphics.pose().mul(new Matrix3x2f(m.m00(), m.m01(), m.m10(), m.m11(), m.m30(), m.m31()));
@@ -95,8 +96,7 @@ public final class CubeLoadingView {
 				for (int t = 0; t < d; t++) {
 					int at = (s * d + t) * 3;
 					if (table[at] >= 0) {
-						int x = back ? d - 1 - s : s;
-						graphics.fill(x, t, x + 1, t + 1, ARGB.opaque(colors.getInt(progress.get(table[at], table[at + 1], table[at + 2]))));
+						graphics.fill(s, t, s + 1, t + 1, ARGB.opaque(colors.getInt(progress.get(table[at], table[at + 1], table[at + 2]))));
 					}
 				}
 			}
@@ -105,9 +105,79 @@ public final class CubeLoadingView {
 		return Math.round(halfHeight * scale);
 	}
 
-	/** True while the cube folds or holds, so that the loading screen stays open for it. */
+	/**
+	 * The turn of the cube for this frame. The face that generates is at the right. When it is done, the cube turns the
+	 * next face there: clockwise on the screen for a face in sight, the short way for a face at the back. When all are
+	 * done, it turns back to the corner view with the spawn face on top.
+	 */
+	private static Quaternionf turn(CubePregen.Progress progress) {
+		int target = progress.pregenFinished ? FACES : currentFace(progress);
+		if (target != turnedTo) {
+			long now = Util.getMillis();
+			Quaternionf current = turnedTo < 0 ? new Quaternionf(CUBE_VIEW) : turnAt(now);
+			Quaternionf next;
+			if (target == FACES) {
+				next = new Quaternionf(CUBE_VIEW);
+				finishStart = now;
+				LoadTrace.event("client: visualizer turns back");
+			} else {
+				Vector3f normal = current.transform(placed(faceOrder[target], 1.0F).transformDirection(new Vector3f(0.0F, 0.0F, 1.0F)));
+				Quaternionf step;
+				if (normal.z > 0.1F) {
+					// A turn about the line of view. With y down the screen, clockwise is a positive angle about z.
+					float angle = (float) (Math.atan2(RIGHT_SLOT.y, RIGHT_SLOT.x) - Math.atan2(normal.y, normal.x));
+					step = new Quaternionf().rotateZ(Mth.positiveModulo(angle, Mth.TWO_PI));
+				} else {
+					step = new Quaternionf().rotationTo(normal, RIGHT_SLOT);
+				}
+				next = step.mul(current);
+			}
+			// The first face is in place at once.
+			turnFrom = turnedTo < 0 ? next : current;
+			turnTo = next;
+			turnStart = now;
+			turnedTo = target;
+		}
+		return turnAt(Util.getMillis());
+	}
+
+	private static Quaternionf turnAt(long millis) {
+		float t = Mth.clamp((millis - turnStart) / (float) TURN_MS, 0.0F, 1.0F);
+		lastFold = finishStart == 0L ? 0.0F : t;
+		// Fast at first, then easing into place.
+		float eased = 1.0F - (1.0F - t) * (1.0F - t) * (1.0F - t);
+		return new Quaternionf(turnFrom).slerp(turnTo, eased);
+	}
+
+	/** The first face in {@link #faceOrder} with a cell that is not full, or the last face. */
+	private static int currentFace(CubePregen.Progress progress) {
+		for (int i = 0; i < FACES; i++) {
+			int[] table = cells[faceOrder[i]];
+			for (int at = 0; at < table.length; at += 3) {
+				if (table[at] >= 0 && progress.get(table[at], table[at + 1], table[at + 2]) != ChunkStatus.FULL) {
+					return i;
+				}
+			}
+		}
+		return FACES - 1;
+	}
+
+	/** {@link CubePregen} generates the spawn face first, then the neighbor faces in the order of their regions, then the opposite face. */
+	private static int[] faceOrder(int[][] tables, int d) {
+		int middle = (d / 2 * d + d / 2) * 3;
+		Integer[] neighbors = {1, 2, 3, 4};
+		Arrays.sort(neighbors, (a, b) -> Integer.compare(tables[a][middle], tables[b][middle]));
+		return new int[] {0, neighbors[0], neighbors[1], neighbors[2], neighbors[3], 5};
+	}
+
+	/** Face {@code f} of the cross, folded into its place on the cube. */
+	private static Matrix4f placed(int f, float h) {
+		return fold(f, Mth.HALF_PI, h).translate(NET_CORNER[f][0] * h, NET_CORNER[f][1] * h, h);
+	}
+
+	/** True while the cube turns back at the end or holds, so that the loading screen stays open for it. */
 	public static boolean isFolding(CubePregen.Progress progress) {
-		return progress == cachedFor && foldStart != 0L && Util.getMillis() - foldStart < FOLD_MS + HOLD_MS;
+		return progress == cachedFor && finishStart != 0L && Util.getMillis() - finishStart < TURN_MS + HOLD_MS;
 	}
 
 	/**
@@ -151,21 +221,6 @@ public final class CubeLoadingView {
 			}
 		}
 		return counts;
-	}
-
-	/** How far the cube is folded, from 0 for the flat cross to 1. The fold starts when the pre-generation is done. */
-	private static float fold(CubePregen.Progress progress) {
-		if (!progress.pregenFinished) {
-			foldStart = 0L;
-			return 0.0F;
-		}
-		if (foldStart == 0L) {
-			foldStart = Util.getMillis();
-			LoadTrace.event("client: visualizer fold starts");
-		}
-		// Faster and faster, so that the faces snap shut at the end.
-		float t = Mth.clamp((Util.getMillis() - foldStart) / (float) FOLD_MS, 0.0F, 1.0F);
-		return t * t;
 	}
 
 	/** Turns face {@code f} of the cross about its edges by {@code angle}. At a right angle, the face is in its place on the cube. */
