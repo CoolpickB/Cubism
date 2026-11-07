@@ -508,9 +508,9 @@ public final class SeamRenderer {
 			// new face reach the vanilla view area. Kept meshes of the old face show until their chunks arrive.
 			for (int face = 0; face < SeamLayout.FACES.length; face++) {
 				// The opposite face shares no seam with the camera face. Its sections can be left over from a quick
-				// second crossing, and its motion would draw them in the sky.
+				// second crossing, and its motion would draw them in the sky. A locked camera past its wedge sees it.
 				int[] shown = layout.motion(face, cameraFace);
-				if (shown[4] == -1) {
+				if (shown[4] == -1 && !SeamClient.seesOpposite(layout, cameraPos)) {
 					continue;
 				}
 				visible.clear();

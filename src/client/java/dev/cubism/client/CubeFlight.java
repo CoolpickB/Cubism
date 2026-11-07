@@ -5,6 +5,7 @@ import dev.cubism.debug.LoadTrace;
 import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.SectionPos;
@@ -279,6 +280,27 @@ public final class CubeFlight {
 	/** The roll about the look that the camera adds to {@link #screenUp}, in radians. */
 	public static float glideRoll(float partialTicks) {
 		return Mth.lerp(partialTicks, glideRollO, glideRoll);
+	}
+
+	/** Ticks before Steadfast ends in which the view wobbles, and the largest roll of the wobble in degrees. */
+	private static final float WOBBLE_TICKS = 100.0F;
+	private static final float WOBBLE_DEGREES = 5.0F;
+
+	/**
+	 * A roll of the view, in radians, that warns that Steadfast runs out: it grows over the last 5 s. The effect of
+	 * worn treads is ambient and lasts 1 s at a time, and it does not wobble.
+	 */
+	public static float steadfastWobble(LocalPlayer player, float partialTicks) {
+		MobEffectInstance effect = player.getEffect(GravityLock.STEADFAST);
+		if (effect == null || effect.isAmbient() || effect.isInfiniteDuration()) {
+			return 0.0F;
+		}
+		float left = effect.getDuration() - partialTicks;
+		if (left >= WOBBLE_TICKS) {
+			return 0.0F;
+		}
+		float strength = 1.0F - Math.max(left, 0.0F) / WOBBLE_TICKS;
+		return strength * WOBBLE_DEGREES * Mth.DEG_TO_RAD * Mth.sin((player.tickCount + partialTicks) * Mth.TWO_PI / 20.0F);
 	}
 
 	/** The up of the screen that vanilla shows, for the camera. */
@@ -571,16 +593,15 @@ public final class CubeFlight {
 		}
 		// A ridden vehicle carries the player over, as the player alone would cross.
 		Entity body = player.isPassenger() ? player.getRootVehicle() : player;
-		if (GravityLock.holdsFace(player)) {
-			return;
-		}
 		Vec3 center = body.getBoundingBox().getCenter();
-		int toFace = layout.crossingFace(center.x, center.y, center.z, SeamCrossing.MARGIN);
+		int forced = GravityLock.forcedFace(player);
+		int toFace = forced >= 0 ? (forced == layout.faceIndexAt(Mth.floor(body.getX())) ? -1 : forced)
+			: GravityLock.holdsFace(player) ? -1 : layout.crossingFace(center.x, center.y, center.z, SeamCrossing.MARGIN);
 		if (toFace < 0) {
 			return;
 		}
 		// A walker crosses by the rule of the server: far enough past the diagonal, or with ground under it in the new frame.
-		if (!flies && layout.crossingFace(center.x, center.y, center.z, SeamCrossing.FORCED_MARGIN) < 0
+		if (forced < 0 && !flies && layout.crossingFace(center.x, center.y, center.z, SeamCrossing.FORCED_MARGIN) < 0
 			&& !SeamCrossing.landsOn(player.level(), body, SeamCrossing.turned(layout, body, toFace).position())) {
 			return;
 		}

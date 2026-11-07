@@ -65,7 +65,17 @@ public final class SeamCrossing {
 		for (Entity entity : entities) {
 			// A passenger crosses with the vehicle that carries it. A player in flight crosses on its own client, which
 			// the server follows when the movement arrives: a crossing from here would pull a fast glider back.
-			if (entity.isPassenger() || entity instanceof Player player && flies(player) || GravityLock.holdsFace(entity)) {
+			if (entity.isPassenger() || entity instanceof Player player && flies(player)) {
+				continue;
+			}
+			// A forced face moves the entity there at once. A player moves on its own client, as for a crossing.
+			int forced = GravityLock.forcedFace(entity);
+			if (forced >= 0 && !(entity instanceof Player) && forced != SeamInteraction.regionFace(layout, entity.getX(), entity.getZ())) {
+				crossing.add(entity);
+				transitions.add(transition(level, layout, entity, forced));
+				continue;
+			}
+			if (GravityLock.holdsFace(entity)) {
 				continue;
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();

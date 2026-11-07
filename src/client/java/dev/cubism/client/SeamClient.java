@@ -30,7 +30,7 @@ public final class SeamClient {
 	/**
 	 * The motion that moves a position in another face region to where it shows from the camera, or null when the
 	 * position is in the region of the camera or in no region. The opposite face shares no seam with the camera face,
-	 * and its motion would put its positions inside the cube, so it gets none either.
+	 * and gets none either, unless the camera is past the wedge of its region (see {@link #seesOpposite}).
 	 */
 	public static int @Nullable [] motionToCamera(double x, double z) {
 		SeamLayout layout = SeamClient.layout;
@@ -39,7 +39,15 @@ public final class SeamClient {
 		}
 		Vec3 camera = Minecraft.getInstance().gameRenderer.mainCamera().position();
 		int[] m = SeamInteraction.regionMotion(layout, x, z, camera.x, camera.z);
-		return m == null || m[4] == -1 ? null : m;
+		return m == null || m[4] == -1 && !seesOpposite(layout, camera) ? null : m;
+	}
+
+	/**
+	 * True when the camera is past the wedge of its region, so the opposite face of the region is in view. Only a
+	 * Steadfast lock keeps a camera there: without it the camera crosses to the face whose air it is in.
+	 */
+	public static boolean seesOpposite(SeamLayout layout, Vec3 camera) {
+		return layout.crossingFace(camera.x, camera.y, camera.z, 0.0) >= 0;
 	}
 
 	/**

@@ -18,6 +18,7 @@
 		"CompassAngleStateMixin",
 		"CompileTaskMixin",
 		"CreateWorldScreenMixin",
+		"EffectsInInventoryMixin",
 		"ElytraAnimationStateMixin",
 		"EntityHitboxDebugRendererMixin",
 		"EntityRenderDispatcherMixin",

@@ -128,7 +128,7 @@ public abstract class CameraMixin {
 		// down that the first tilt carried over it has a yaw half a turn from the last one, and the yaw of vanilla
 		// spun the screen between the two.
 		Quaternionf now = this.entity instanceof LocalPlayer ? CubeFlight.viewFrame(this.entity, 1.0F) : air;
-		float glideRoll = this.entity instanceof LocalPlayer ? CubeFlight.glideRoll(partialTicks) : 0.0F;
+		float glideRoll = this.entity instanceof LocalPlayer player ? CubeFlight.glideRoll(partialTicks) + CubeFlight.steadfastWobble(player, partialTicks) : 0.0F;
 		float yRot = this.entity.getViewYRot(partialTicks);
 		float xRot = this.entity.getViewXRot(partialTicks);
 		if (Math.abs(air.x) < 1.0E-6F && Math.abs(air.y) < 1.0E-6F && Math.abs(air.z) < 1.0E-6F

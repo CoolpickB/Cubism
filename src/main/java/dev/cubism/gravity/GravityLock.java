@@ -4,6 +4,7 @@ import dev.cubism.CubismMod;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -71,9 +72,25 @@ public final class GravityLock {
 		return entity instanceof LivingEntity living && living.hasEffect(STEADFAST) && !living.isFallFlying();
 	}
 
-	/** True when a locked entity must not cross a diagonal now. A player that sneaks on the ground crosses. */
+	/**
+	 * The face that a level 1 to 6 of the effect forces, or -1. The level names the face in the order of
+	 * {@link Direction#from3DDataValue}: down, up, north, south, west, east. So {@code /effect give @s cubism:steadfast
+	 * 30 2} keeps a player on the up face, wherever it is. Level 0 keeps the face the entity is on.
+	 */
+	public static int forcedFace(Entity entity) {
+		if (!locked(entity)) {
+			return -1;
+		}
+		int amplifier = ((LivingEntity) entity).getEffect(STEADFAST).getAmplifier();
+		return amplifier < 1 || amplifier > 6 ? -1 : SeamLayout.indexOf(Direction.from3DDataValue(amplifier - 1));
+	}
+
+	/**
+	 * True when a locked entity must not cross a diagonal now. A player that sneaks on the ground crosses, unless a
+	 * level of the effect forces the face.
+	 */
 	public static boolean holdsFace(Entity entity) {
-		return locked(entity) && !(entity instanceof Player player && player.isShiftKeyDown() && player.onGround());
+		return locked(entity) && (forcedFace(entity) >= 0 || !(entity instanceof Player player && player.isShiftKeyDown() && player.onGround()));
 	}
 
 	/**
@@ -94,10 +111,13 @@ public final class GravityLock {
 		return Math.max(cx, Math.max(cy, cz)) > layout.innerBedrockRadius;
 	}
 
-	/** Worn treads give the effect as the turtle shell gives water breathing: on both sides, every tick. */
+	/**
+	 * Worn treads give the effect as the turtle shell gives water breathing: on both sides, every tick. It lasts 1 s,
+	 * so it ends within a second after the treads come off. An ambient effect does not blink in the HUD as it ends.
+	 */
 	public static void tickTreads(Player player) {
 		if (player.getItemBySlot(EquipmentSlot.FEET).is(SHULKER_TREADS)) {
-			player.addEffect(new MobEffectInstance(STEADFAST, 40, 0, false, false, true));
+			player.addEffect(new MobEffectInstance(STEADFAST, 20, 0, true, false, true));
 		}
 	}
 }

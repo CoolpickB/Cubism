@@ -106,5 +106,11 @@
   "item.minecraft.potion.effect.steadfast": "Potion of Steadfastness",
   "item.minecraft.splash_potion.effect.steadfast": "Splash Potion of Steadfastness",
   "item.minecraft.lingering_potion.effect.steadfast": "Lingering Potion of Steadfastness",
-  "item.minecraft.tipped_arrow.effect.steadfast": "Arrow of Steadfastness"
+  "item.minecraft.tipped_arrow.effect.steadfast": "Arrow of Steadfastness",
+  "effect.cubism.steadfast.down": "Steadfast (Down)",
+  "effect.cubism.steadfast.up": "Steadfast (Up)",
+  "effect.cubism.steadfast.north": "Steadfast (North)",
+  "effect.cubism.steadfast.south": "Steadfast (South)",
+  "effect.cubism.steadfast.west": "Steadfast (West)",
+  "effect.cubism.steadfast.east": "Steadfast (East)"
 }
