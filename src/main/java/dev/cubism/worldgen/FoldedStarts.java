@@ -1,6 +1,5 @@
 package dev.cubism.worldgen;
 
-import dev.cubism.math.CubePlanetMath;
 import dev.cubism.mixin.PoolElementStructurePieceAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -98,7 +97,7 @@ public final class FoldedStarts {
 		int offset = layout.offsetX(fold.from);
 		// An underground structure folds about a hinge at its depth (see SeamFold.Fold#atDepth), so the flat place of this chunk
 		// moves along the edge normal by twice the depth. The window spans all depths down to the bottom of the cube.
-		int deepest = Math.min(r, CubePlanetMath.TOP_SURFACE_Y - host.getMinY());
+		int deepest = Math.min(r, layout.surfaceY - host.getMinY());
 		BlockPos hostMiddle = new BlockPos(host.getPos().getMiddleBlockX(), 0, host.getPos().getMiddleBlockZ());
 		BlockPos deepFlat = fold.atDepth(deepest).inverse(hostMiddle);
 		int minChunkX = Math.floorDiv(Math.min(flat.getX(), deepFlat.getX()) - REACH, 16);

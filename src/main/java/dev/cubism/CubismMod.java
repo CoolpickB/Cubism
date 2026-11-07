@@ -41,6 +41,12 @@ public class CubismMod implements ModInitializer {
 		Identifier.fromNamespaceAndPath(MOD_ID, "seam")
 	);
 
+	/** The vanilla Nether on the faces of a small core, see {@code SeamLayout#nether}. */
+	public static final ResourceKey<NoiseGeneratorSettings> NETHER_SEAM_SETTINGS = ResourceKey.create(
+		Registries.NOISE_SETTINGS,
+		Identifier.fromNamespaceAndPath(MOD_ID, "seam_nether")
+	);
+
 	/** Keeps seam chunks loaded. It expires unless {@link SeamTrackingView#refreshTickets} runs again within its timeout. */
 	public static final TicketType SEAM_TICKET = new TicketType(3L * SeamTrackingView.REFRESH_TICKS, TicketType.FLAG_LOADING);
 	/** Runs entities and block ticks in the seam chunks within simulation distance, refreshed like {@link #SEAM_TICKET}. */

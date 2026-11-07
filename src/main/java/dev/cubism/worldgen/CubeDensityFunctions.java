@@ -53,8 +53,8 @@ public final class CubeDensityFunctions {
 		return hundredths == 0 ? function : DensityFunctions.add(function, DensityFunctions.constant(hundredths / 100.0F));
 	}
 
-	public static NoiseRouter rewriteRouter(NoiseRouter router, int centerY, int radiusBlocks, int innerBedrockRadius) {
-		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, innerBedrockRadius);
+	public static NoiseRouter rewriteRouter(NoiseRouter router, int centerY, int radiusBlocks, int surfaceY, int innerBedrockRadius) {
+		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, surfaceY, innerBedrockRadius);
 		return new NoiseRouter(
 			rule.rewrite(router.temperature()),
 			rule.rewrite(router.vegetation()),
@@ -68,7 +68,7 @@ public final class CubeDensityFunctions {
 	}
 
 	/** Rewrites a density function to work on the cube in world coordinates. The rule memoizes and is not thread-safe. */
-	public static DfRewriteRule cubeRule(int centerY, int radiusBlocks, int innerBedrockRadius) {
+	public static DfRewriteRule cubeRule(int centerY, int radiusBlocks, int surfaceY, int innerBedrockRadius) {
 		Map<DensityFunction, DensityFunction> memo = new IdentityHashMap<>();
 		return new DfRewriteRule() {
 			@Override
@@ -109,7 +109,7 @@ public final class CubeDensityFunctions {
 				}
 
 				DensityFunction rewrittenChildren = unwrapped.rewriteChildren(this);
-				DensityFunction transformed = transformNode(rewrittenChildren, autoShiftYNoise, centerY, radiusBlocks, innerBedrockRadius);
+				DensityFunction transformed = transformNode(rewrittenChildren, autoShiftYNoise, centerY, radiusBlocks, surfaceY, innerBedrockRadius);
 				memo.put(fn, transformed);
 				return transformed;
 			}
@@ -131,6 +131,7 @@ public final class CubeDensityFunctions {
 		Holder<NormalNoise> autoShiftYNoise,
 		int centerY,
 		int radiusBlocks,
+		int surfaceY,
 		int innerBedrockRadius
 	) {
 		if (fn instanceof NoiseFunction nf && nf.yScale() == 0.0) {
@@ -163,6 +164,7 @@ public final class CubeDensityFunctions {
 				gf.toValue(),
 				centerY,
 				radiusBlocks,
+				surfaceY,
 				innerBedrockRadius,
 				gf.range()
 			);
@@ -322,6 +324,7 @@ public final class CubeDensityFunctions {
 		float toValue,
 		int centerY,
 		int radiusBlocks,
+		int surfaceY,
 		int innerBedrockRadius,
 		Interval range
 	) implements DensityFunction {
@@ -334,6 +337,7 @@ public final class CubeDensityFunctions {
 			int cy = this.centerY;
 			int r = this.radiusBlocks;
 			int innerR = this.innerBedrockRadius;
+			float surface = this.surfaceY;
 			float invCrust = 128.0f / (float) Math.max(1, r - innerR);
 
 			return new DensitySampler() {
@@ -346,12 +350,13 @@ public final class CubeDensityFunctions {
 				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
 					float height = (float) CubePlanetMath.roundedCubeDistance(x, y - cy, z, r);
 					float vanillaY;
+					// The crust down to the inner bedrock takes the 128 vanilla heights below the surface.
 					if (height >= 0.0f) {
-						vanillaY = 64.0f + height;
+						vanillaY = surface + height;
 					} else if (height <= innerR - r) {
-						vanillaY = -64.0f;
+						vanillaY = surface - 128.0f;
 					} else {
-						vanillaY = 64.0f + height * invCrust;
+						vanillaY = surface + height * invCrust;
 					}
 
 					float t = Mth.clamp((vanillaY - fromC) * invSpan, 0.0f, 1.0f);

@@ -35,7 +35,7 @@
           "type": "minecraft:multi_noise",
           "preset": "minecraft:nether"
         },
-        "settings": "minecraft:nether"
+        "settings": "cubism:seam_nether"
       }
     }
   }

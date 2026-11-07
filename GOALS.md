@@ -63,9 +63,21 @@ These rules apply to every system in the mod:
 
 ### Nether and End
 
-The Nether and the End are vanilla at this time. Before the first release, we plan these changes. The design is not final:
+The Nether is a cube. Its faces carry the vanilla Nether cave on a core of netherrack:
 
-- The Nether is a cube 8 times smaller than the overworld.
+- A bedrock floor and a bedrock roof close the cave on all six faces, 128 blocks apart.
+- At the lava sea, a Nether face is half as wide as an overworld face.
+- Each face reads the 3D terrain noise in its own frame, so the terrain of each face is vanilla. Near an edge, the noise of the two faces mixes, so caves continue across the edge.
+
+These parts of the Nether are not built yet:
+
+- Portals with a fixed ratio of 2:1. A Nether position is half as far from its face center as the overworld position.
+- The client view of the Nether: the other faces, gravity and the camera at an edge.
+- Fortresses and bastions across an edge, then a check of the loot of a finite world.
+- Generation of the Nether before the first player joins.
+
+The End is vanilla at this time. Before the first release, we plan this change. The design is not final:
+
 - The main island of the End is on one face. The outer islands have their own gravity, and the player changes face between them.
 
 ## Phases

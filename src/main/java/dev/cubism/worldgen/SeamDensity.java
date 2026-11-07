@@ -1,6 +1,7 @@
 package dev.cubism.worldgen;
 
 import com.mojang.serialization.MapCodec;
+import net.minecraft.core.Direction;
 import net.minecraft.util.Interval;
 import net.minecraft.world.level.levelgen.densityfunction.DensityBuffer;
 import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
@@ -36,7 +37,12 @@ public final class SeamDensity {
 			if (cached != null) {
 				return cached;
 			}
-			DensityFunction result = readsCoordinates(fn) ? new ToCube(fn, SeamDensity.this.layout) : fn.rewriteChildren(this);
+			DensityFunction result;
+			if (SeamDensity.this.layout.nether && fn instanceof BlendedNoise) {
+				result = new FaceBlend(fn, SeamDensity.this.layout);
+			} else {
+				result = readsCoordinates(fn) ? new ToCube(fn, SeamDensity.this.layout) : fn.rewriteChildren(this);
+			}
 			SeamDensity.this.memo.put(fn, result);
 			return result;
 		}
@@ -44,7 +50,7 @@ public final class SeamDensity {
 
 	public SeamDensity(SeamLayout layout) {
 		this.layout = layout;
-		this.cubeRule = CubeDensityFunctions.cubeRule(layout.centerY, layout.radius, layout.innerBedrockRadius);
+		this.cubeRule = CubeDensityFunctions.cubeRule(layout.centerY, layout.radius, layout.surfaceY, layout.innerBedrockRadius);
 	}
 
 	public synchronized DensityFunction rewrite(DensityFunction fn) {
@@ -89,6 +95,84 @@ public final class SeamDensity {
 		@Override
 		public MapCodec<? extends DensityFunction> codec() {
 			return this.input.codec();
+		}
+	}
+
+	/**
+	 * The 3D noise of the Nether, read in the storage frame of each face, where its vertical axis is the up of the face.
+	 * In cube coordinates, the noise is stretched along the cube Y axis, which is horizontal on four faces. Within
+	 * {@link #BLEND} of a diagonal, the noise of the faces on both sides is mixed, so terrain goes on across the edge.
+	 */
+	record FaceBlend(DensityFunction input, SeamLayout layout) implements DensityFunction {
+		/** The blend ends where one axis of the cube position is this much larger than the next. */
+		static final int BLEND = 16;
+
+		@Override
+		public DensitySampler compileSampler(CompileContext context) {
+			return new FaceBlendSampler(this.input.compileSampler(context), this.layout);
+		}
+
+		@Override
+		public DensityFunction rewriteChildren(DfRewriteRule rule) {
+			DensityFunction input = rule.rewrite(this.input);
+			return input == this.input ? this : new FaceBlend(input, this.layout);
+		}
+
+		@Override
+		public Interval range() {
+			return this.input.range();
+		}
+
+		@Override
+		public int domainAxes() {
+			return DensityFunction.ALL_AXES;
+		}
+
+		@Override
+		public MapCodec<? extends DensityFunction> codec() {
+			return this.input.codec();
+		}
+	}
+
+	private record FaceBlendSampler(DensitySampler input, SeamLayout layout) implements DensitySampler {
+		@Override
+		public float sampleValue(SamplerContext context, int x, int y, int z) {
+			int[] cube = new int[3];
+			this.layout.toCube(this.layout.faceIndexAt(x), x, y, z, cube);
+			int[] relative = {cube[0], cube[1] - this.layout.centerY, cube[2]};
+			int largest = Math.max(Math.abs(relative[0]), Math.max(Math.abs(relative[1]), Math.abs(relative[2])));
+			int[] storage = new int[3];
+			float sum = 0.0F;
+			int weights = 0;
+			for (int axis = 0; axis < 3; axis++) {
+				int weight = FaceBlend.BLEND - (largest - Math.abs(relative[axis]));
+				if (weight <= 0) {
+					continue;
+				}
+				Direction face = Direction.fromAxisAndDirection(
+					Direction.Axis.VALUES[axis], relative[axis] >= 0 ? Direction.AxisDirection.POSITIVE : Direction.AxisDirection.NEGATIVE
+				);
+				this.layout.toStorage(SeamLayout.indexOf(face), cube[0], cube[1], cube[2], storage);
+				sum += weight * this.input.sampleValue(context, storage[0], storage[1], storage[2]);
+				weights += weight;
+			}
+			return sum / weights;
+		}
+
+		/** A volume of one face that is out of reach of every diagonal reads the noise of its face only, in one call. */
+		@Override
+		public void sampleVolume(SamplerContext context, DensityBuffer output, DensityVolume volume) {
+			int face = this.layout.faceIndexAt(volume.minBlockX());
+			int offset = this.layout.offsetX(face);
+			int across = Math.max(
+				Math.max(Math.abs(volume.minBlockX() - offset), Math.abs(volume.maxBlockX() - offset)),
+				Math.max(Math.abs(volume.minBlockZ()), Math.abs(volume.maxBlockZ()))
+			);
+			if (face == this.layout.faceIndexAt(volume.maxBlockX()) && volume.minBlockY() - this.layout.centerY - across >= FaceBlend.BLEND) {
+				this.input.sampleVolume(context, output, volume);
+			} else {
+				DensitySampler.sampleVolumeNaive(context, output, volume, this);
+			}
 		}
 	}
 

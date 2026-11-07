@@ -36,7 +36,13 @@ public abstract class ChunkGeneratorMixin {
 		long legacyLevelSeed,
 		CallbackInfoReturnable<ChunkGeneratorStructureState> cir
 	) {
-		if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		if ((Object) this instanceof NoiseBasedChunkGenerator generator && SeamLayout.isNether(generator)) {
+			// The server makes the overworld first. A cube Nether beside a world without a cube gets the smallest cube.
+			SeamLayout overworld = SeamLayout.ofServerLevel(Level.OVERWORLD);
+			SeamLayout layout = SeamLayout.nether(overworld != null ? overworld : new SeamLayout(CubeSettings.DEFAULT.diameterChunks()));
+			((CubeSettings.Holder) (Object) generator).cubism$setLayout(layout);
+			((SeamRandomState) (Object) randomState).cubism$enableSeams(layout);
+		} else if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
 			CubeSettings settings = CubeSettings.of(generator);
 			CubePlanetMath.setEdgeRounding(settings.edgeRounding());
 			SeamLayout layout = new SeamLayout(settings.diameterChunks());
@@ -56,7 +62,7 @@ public abstract class ChunkGeneratorMixin {
 		long legacyLevelSeed,
 		CallbackInfoReturnable<ChunkGeneratorStructureState> cir
 	) {
-		if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		if ((Object) this instanceof NoiseBasedChunkGenerator generator && SeamLayout.isSeam(generator)) {
 			StructureMargins.register(cir.getReturnValue(), SeamLayout.of(generator));
 		}
 	}
@@ -72,7 +78,7 @@ public abstract class ChunkGeneratorMixin {
 		ResourceKey<Level> level,
 		CallbackInfo ci
 	) {
-		if ((Object) this instanceof NoiseBasedChunkGenerator generator && generator.generatorSettings().is(CubismMod.SEAM_SETTINGS)) {
+		if ((Object) this instanceof NoiseBasedChunkGenerator generator && SeamLayout.isSeam(generator)) {
 			FoldedStarts.addTo(generator, registries, state, structureManager, centerChunk, templates, level);
 		}
 	}

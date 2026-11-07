@@ -37,23 +37,58 @@ public final class SeamLayout {
 	/** The layout that {@link #withActive} set for this thread. A null layout says that the code works for a generator without a cube. */
 	private record Scope(@Nullable SeamLayout layout) {}
 
+	/** Below the floor of the Nether, the vanilla heights of its gradients go on one block per block of depth. */
+	private static final int NETHER_DEPTH_SPAN = 128;
+	/** Height of the Nether cave, from its floor to the top of its bedrock roof, as in vanilla. */
+	private static final int NETHER_CAVE_HEIGHT = 128;
+	/** How much smaller than the overworld face the Nether face is at its lava sea, see {@link #nether}. */
+	private static final int NETHER_SCALE = 2;
+	/** The vanilla lava sea level of the Nether. */
+	private static final int NETHER_LAVA_LEVEL = 32;
+
 	public final int radius;
 	public final int centerY;
+	/** The storage Y of the top of a face: the overworld surface, or the floor of the Nether. */
+	public final int surfaceY;
+	/** Height of the open space above the top of a face that the region of the face holds. */
+	public final int openHeight;
+	/** True for the Nether, whose 3D terrain noise is read in the frame of each face, see {@link SeamDensity}. */
+	public final boolean nether;
 	public final SeamFold fold;
 	public final int innerBedrockRadius;
-	/** Distance between region centers. A wedge is 2(R + 96) + 1 blocks wide at the top, and region edges are chunk-aligned. */
+	/** Distance between region centers. A wedge is 2(R + open height) + 1 blocks wide at the top, and region edges are chunk-aligned. */
 	public final int spacing;
 	private final int[][] rotations = new int[FACES.length][];
 
 	public SeamLayout(int diameterChunks) {
-		this.radius = CubePlanetMath.getRadiusBlocks(diameterChunks);
-		this.centerY = CubePlanetMath.getCenterY(diameterChunks);
-		this.innerBedrockRadius = CubePlanetMath.getInnerBedrockRadius(diameterChunks);
-		this.spacing = (Math.floorDiv(this.radius + CubePlanetMath.ATMOSPHERE_HEIGHT, 16) + 1) * 32;
+		this(
+			CubePlanetMath.getRadiusBlocks(diameterChunks), CubePlanetMath.TOP_SURFACE_Y, CubePlanetMath.ATMOSPHERE_HEIGHT,
+			CubePlanetMath.getInnerBedrockRadius(diameterChunks), false
+		);
+	}
+
+	private SeamLayout(int radius, int surfaceY, int openHeight, int innerBedrockRadius, boolean nether) {
+		this.nether = nether;
+		this.radius = radius;
+		this.surfaceY = surfaceY;
+		this.centerY = surfaceY - radius;
+		this.openHeight = openHeight;
+		this.innerBedrockRadius = innerBedrockRadius;
+		this.spacing = (Math.floorDiv(this.radius + openHeight, 16) + 1) * 32;
 		for (int i = 0; i < FACES.length; i++) {
 			this.rotations[i] = rotation(FACES[i]);
 		}
 		this.fold = new SeamFold(this);
+	}
+
+	/**
+	 * The Nether of a cube world: a netherrack core whose faces carry the vanilla Nether cave, from the floor at storage
+	 * Y 0 to the roof at 128. Portals map a position on a face to half its distance from the face center, so the core
+	 * is sized for the Nether face at the lava sea to be half as wide as the overworld face.
+	 */
+	public static SeamLayout nether(SeamLayout overworld) {
+		int radius = overworld.radius / NETHER_SCALE - NETHER_LAVA_LEVEL;
+		return new SeamLayout(radius, 0, NETHER_CAVE_HEIGHT, radius - NETHER_DEPTH_SPAN, true);
 	}
 
 	/**
@@ -93,7 +128,11 @@ public final class SeamLayout {
 
 	/** True for a generator whose settings store a cube in seam regions. */
 	public static boolean isSeam(NoiseBasedChunkGenerator generator) {
-		return generator.generatorSettings().is(CubismMod.SEAM_SETTINGS);
+		return generator.generatorSettings().is(CubismMod.SEAM_SETTINGS) || isNether(generator);
+	}
+
+	public static boolean isNether(NoiseBasedChunkGenerator generator) {
+		return generator.generatorSettings().is(CubismMod.NETHER_SEAM_SETTINGS);
 	}
 
 	/** The layout of a level whose generator stores the cube in seam regions, or null for any other level. */
@@ -407,7 +446,7 @@ public final class SeamLayout {
 
 	/** The depth of the hinge for a structure whose middle is at {@code y}, or 0 for a structure on the surface (see {@link SeamFold.Fold#atDepth}). */
 	public int hingeDepth(int y) {
-		int depth = CubePlanetMath.TOP_SURFACE_Y - y;
+		int depth = this.surfaceY - y;
 		return depth > UNDERGROUND ? depth : 0;
 	}
 
@@ -479,7 +518,7 @@ public final class SeamLayout {
 		double core = this.radius - rounding;
 		double ex = Math.max(Math.abs(sx - this.offsetX(this.faceIndexAt(sx))) - core, 0.0);
 		double ez = Math.max(Math.abs(sz) - core, 0.0);
-		double contour = rounding + seaLevel - CubePlanetMath.TOP_SURFACE_Y;
+		double contour = rounding + seaLevel - this.surfaceY;
 		double rise = contour * contour - ex * ex - ez * ez;
 		return rise < 0.0 ? DimensionType.MIN_Y * 2 : (int) Math.ceil(this.centerY + core + Math.sqrt(rise));
 	}
@@ -524,7 +563,7 @@ public final class SeamLayout {
 	private void collectAround(int face, int[] cube, int viewDistance, LongSet out) {
 		int[] viewer = new int[3];
 		int reach = viewDistance * 16;
-		int top = this.centerY + this.radius + CubePlanetMath.ATMOSPHERE_HEIGHT;
+		int top = this.surfaceY + this.openHeight;
 		int half = this.spacing / 2;
 		for (int g = 0; g < FACES.length; g++) {
 			if (g == face || FACES[g] == FACES[face].getOpposite()) {
