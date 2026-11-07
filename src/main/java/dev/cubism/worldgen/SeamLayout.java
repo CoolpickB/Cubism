@@ -544,12 +544,12 @@ public final class SeamLayout {
 	}
 
 	/**
-	 * The radius of the rounded edges and corners of this cube. The Nether has half the rounding of the overworld, as
-	 * its floor cube has about half the radius.
+	 * The radius of the rounded edges and corners of this cube, which gravity and the camera also follow. The Nether
+	 * has the smallest rounding at every setting: its cave noise is flat on each face, and a rounded floor sinks under
+	 * storage Y 0. A rounded Nether needs storage below its floor, as the overworld has under its surface.
 	 */
 	public int edgeRounding() {
-		int overworld = CubePlanetMath.edgeRounding();
-		return this.nether ? Math.max(CubePlanetMath.MIN_EDGE_ROUNDING, overworld / 2) : overworld;
+		return this.nether ? CubePlanetMath.MIN_EDGE_ROUNDING : CubePlanetMath.edgeRounding();
 	}
 
 	/** True when the storage position maps to a cube position below the rounded cube surface. */
