@@ -56,3 +56,5 @@ Give the pack name and version in the pull request. Add screenshots of an edge a
 Do a test in game before you open a pull request. Look at an edge, walk over it, and look at the faces across it. Most bugs show at the seams, not in the middle of a face.
 
 Commit messages are plain sentences that tell what changed and why.
+
+If your change makes a statement in README.md, GOALS.md or this file wrong, correct the statement in the same commit. For example, update the table of other mods when you add support for a mod.

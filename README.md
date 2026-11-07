@@ -24,14 +24,11 @@ These mods work with Cubism:
 | Voxy | Works with and without shader packs. With a shader pack, only Complementary Unbound gets the correct light on the distant terrain of other faces. |
 | Lithium | Cubism turns off four Lithium options for collisions. Lithium writes them to the log at startup. |
 | Do a Barrel Roll | |
-
-We plan support for these mods before version 1.0:
-
-- Entity Culling
-- More Culling
-- Continuity
-- Voxygen
-- Xaero's Minimap and Xaero's World Map
+| Entity Culling | Entity Culling does not cull or stop the entities of other faces. |
+| More Culling | |
+| Continuity | Connected textures connect across the edges of the cube. |
+| Voxygen | |
+| Xaero's Minimap and Xaero's World Map | The maps show the six faces side by side, not as a cube. |
 
 These mods do not work with Cubism at this time:
 

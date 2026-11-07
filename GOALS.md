@@ -61,6 +61,13 @@ These rules apply to every system in the mod:
 - Strongholds: one per face on random faces, 1 to 3 by cube size.
 - The Customize screen shows only structures that the real generator places.
 
+### Nether and End
+
+The Nether and the End are vanilla at this time. Before the first release, we plan these changes. The design is not final:
+
+- The Nether is a cube 8 times smaller than the overworld.
+- The main island of the End is on one face. The outer islands have their own gravity, and the player changes face between them.
+
 ## Phases
 
 1. Movement core: crossing, edge gravity, server sync, camera.
@@ -72,7 +79,6 @@ These rules apply to every system in the mod:
 ## Not in version 1
 
 - Structures that fold across an edge in every case: the corner past two edges is dropped, and strongholds, monuments and mansions do not cross an edge.
-- Nether and End changes. These dimensions stay vanilla.
 - A view of the full cube from space beyond the vanilla render distance.
 
 ## Verification
