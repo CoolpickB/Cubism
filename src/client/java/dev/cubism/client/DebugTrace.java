@@ -56,8 +56,8 @@ public final class DebugTrace {
 			return;
 		}
 		Vec3 pos = entity.position();
-		// The renderer lerps from xo. oldPosition() is xOld, which a new living entity leaves at the origin until it ticks.
-		Vec3 old = new Vec3(entity.xo, entity.yo, entity.zo);
+		// The renderer lerps from xOld. The extract loops set it for an entity that has not ticked yet.
+		Vec3 old = entity.tickCount == 0 ? pos : entity.oldPosition();
 		int face = face(pos.x, pos.z);
 		int oldFace = face(old.x, old.z);
 		Vec3 center = entity.getBoundingBox().getCenter();
@@ -67,8 +67,9 @@ public final class DebugTrace {
 			: layout.crossingFace(center.x, center.y, center.z, PAST_DIAGONAL) >= 0 ? "pastDiagonal"
 			: null;
 		Vec3 camera = Minecraft.getInstance().gameRenderer.mainCamera().position();
-		if (why == null && face >= 0 && face != face(camera.x, camera.z) && entity.onGround() && entity.tickCount % 20 == 0) {
-			why = groundProblem(entity);
+		boolean otherFace = face >= 0 && face != face(camera.x, camera.z);
+		if (why == null && otherFace && entity.tickCount == 0 && entity.level().getGameTime() % 20 == 0) {
+			why = "notTicking";
 		}
 		if (why == null) {
 			return;
@@ -76,24 +77,6 @@ public final class DebugTrace {
 		LoadTrace.event(String.format(Locale.ROOT, "entity %s %s id=%d pos=%s old=%s face=%d oldFace=%d age=%d partial=%.2f camera=%s cameraFace=%d",
 			why, net.minecraft.world.entity.EntityType.getKey(entity.getType()), entity.getId(), vec(pos), vec(old), face, oldFace,
 			entity.tickCount, partialTicks, vec(camera), face(camera.x, camera.z)));
-	}
-
-	/**
-	 * An entity of another face that stands on ground the client has no blocks for, or does not draw, floats in the
-	 * sky where its face should show. Returns null when the ground under it is there and drawn.
-	 */
-	private static @Nullable String groundProblem(Entity entity) {
-		net.minecraft.world.level.Level level = entity.level();
-		net.minecraft.core.BlockPos below = entity.blockPosition().below();
-		boolean solid = false;
-		for (int i = 0; i < 3 && !solid; i++) {
-			solid = !level.getBlockState(below.below(i)).getCollisionShape(level, below.below(i)).isEmpty();
-		}
-		int chunkX = below.getX() >> 4;
-		int chunkZ = below.getZ() >> 4;
-		boolean drawn = !SeamClient.SODIUM || !(level instanceof net.minecraft.client.multiplayer.ClientLevel client)
-			|| dev.cubism.client.compat.sodium.SodiumLink.isReady(client, chunkX, chunkZ);
-		return solid && drawn ? null : solid ? "groundNotDrawn" : "noGroundBlocks";
 	}
 
 	private static int face(double x, double z) {

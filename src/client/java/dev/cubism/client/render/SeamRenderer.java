@@ -654,8 +654,15 @@ public final class SeamRenderer {
 		}
 		for (Entity entity : level.entitiesForRendering()) {
 			int face = SeamInteraction.regionFace(layout, entity.getX(), entity.getZ());
-			if (face < 0 || face == cameraFace || torn(entity)) {
+			if (face < 0 || face == cameraFace) {
 				continue;
+			}
+			// The renderer lerps from the old position. A new entity has it at the origin until it ticks, so vanilla sets
+			// it on the first frame. A torn one is snapped too, as the frame between would draw it out in the sky.
+			if (entity.tickCount == 0 || torn(entity)) {
+				entity.xOld = entity.getX();
+				entity.yOld = entity.getY();
+				entity.zOld = entity.getZ();
 			}
 			Vec3 camera = SeamInteraction.move(layout.motion(cameraFace, face), cameraPos);
 			if (entity.shouldRender(camera.x, camera.y, camera.z)) {
@@ -676,10 +683,11 @@ public final class SeamRenderer {
 	 * two faces, which is out in the sky. Vanilla snaps moves this long, so such an entity only waits for its next tick.
 	 */
 	public static boolean torn(Entity entity) {
-		double dx = entity.getX() - entity.xo;
-		double dy = entity.getY() - entity.yo;
-		double dz = entity.getZ() - entity.zo;
-		return dx * dx + dy * dy + dz * dz > TORN_DISTANCE * TORN_DISTANCE;
+		// The renderer lerps from xOld. Vanilla sets it for a new entity only after this check.
+		double dx = entity.getX() - entity.xOld;
+		double dy = entity.getY() - entity.yOld;
+		double dz = entity.getZ() - entity.zOld;
+		return entity.tickCount > 0 && dx * dx + dy * dy + dz * dz > TORN_DISTANCE * TORN_DISTANCE;
 	}
 
 	private static final double TORN_DISTANCE = 64.0;
