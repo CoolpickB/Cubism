@@ -13,27 +13,24 @@ Each of the six faces is a complete Minecraft world. You can walk, build, mine a
 
 To play, select the **Cubism** world type when you create a world. The mod must be on the server and on each client.
 
-## Other mods
+## Mod support
 
-These mods work with Cubism:
+🟢 Works. 🟡 Works, with limits that the note gives. 🔴 Does not work.
 
-| Mod | Notes |
-|---|---|
-| Sodium | |
-| Iris | All shader packs get the folded faces of the cube. Complementary Unbound r5.9.3 also gets the cube sun, sky and clouds. |
-| Voxy | Works with and without shader packs. With a shader pack, only Complementary Unbound gets the correct light on the distant terrain of other faces. |
-| Lithium | Cubism turns off four Lithium options for collisions. Lithium writes them to the log at startup. |
-| Do a Barrel Roll | |
-| Entity Culling | Entity Culling does not cull or stop the entities of other faces. |
-| More Culling | |
-| Continuity | Connected textures connect across the edges of the cube. |
-| Voxygen | |
-| Xaero's Minimap and Xaero's World Map | The maps show the six faces side by side, not as a cube. |
-
-These mods do not work with Cubism at this time:
-
-- C2ME
-- Distant Horizons
+| Mod | Support | Notes |
+|---|---|---|
+| Sodium | 🟢 | |
+| Iris | 🟢 | All shader packs get the folded faces of the cube. Complementary Unbound r5.9.3 also gets the cube sun, sky and clouds. |
+| Voxy | 🟢 | Works with and without shader packs. With a shader pack, only Complementary Unbound gets the correct light on the distant terrain of other faces. |
+| Lithium | 🟢 | Cubism turns off four Lithium options for collisions. Lithium writes them to the log at startup. |
+| Do a Barrel Roll | 🟢 | |
+| Continuity | 🟢 | Connected textures connect across the edges of the cube. |
+| Voxygen | 🟢 | |
+| Entity Culling | 🟡 | Entity Culling does not cull or stop the entities of other faces. As a result, these entities do not get its performance gain. |
+| More Culling | 🟡 | We tested culling across the edges of the cube. We did not test the other options. |
+| Xaero's Minimap and Xaero's World Map | 🟡 | The maps show the six faces side by side, not as a cube. We did not test waypoint beacons and distances for a waypoint on another face. |
+| C2ME | 🔴 | Cubism declares C2ME incompatible. Fabric does not start the game with the two mods. |
+| Distant Horizons | 🔴 | Not supported at this time. Support is planned after the first release. |
 
 If you find a problem with another mod, open an issue. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
