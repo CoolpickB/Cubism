@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** A wandering trader in a finite-loot world has one more common and one more uncommon trade, from sets of their own. */
+/** A wandering trader in a finite-loot world has an echo shard, one more common and one more uncommon trade, from sets of their own. */
 @Mixin(WanderingTrader.class)
 public abstract class WanderingTraderMixin {
 	@Inject(method = "updateTrades", at = @At("TAIL"))
@@ -17,5 +17,6 @@ public abstract class WanderingTraderMixin {
 		WanderingTrader self = (WanderingTrader) (Object) this;
 		FiniteLoot.addTradeSet((AbstractVillagerInvoker) self, level, self.getOffers(), "wandering_trader/common");
 		FiniteLoot.addTradeSet((AbstractVillagerInvoker) self, level, self.getOffers(), "wandering_trader/uncommon");
+		FiniteLoot.addTradeSet((AbstractVillagerInvoker) self, level, self.getOffers(), "wandering_trader/echo_shard");
 	}
 }
