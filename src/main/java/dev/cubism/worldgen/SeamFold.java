@@ -143,8 +143,10 @@ public final class SeamFold {
 		int[] f = this.layout.rotation(from);
 		int[] up = {f[1], f[4], f[7]};
 		int off = this.layout.offsetX(to);
-		int[] xr = this.range(up, m[0], m[3], m[6], r);
-		int[] zr = this.range(up, m[2], m[5], m[8], r);
+		// In the Nether a structure folds about the diagonal at its height, which lies past the edge of the floor.
+		int reach = this.layout.nether ? this.layout.openHeight : 0;
+		int[] xr = this.range(up, m[0], m[3], m[6], r, reach);
+		int[] zr = this.range(up, m[2], m[5], m[8], r, reach);
 		BoundingBox strip = new BoundingBox(off + xr[0], 0, zr[0], off + xr[1], 0, zr[1]);
 		int[] gx = {m[0], m[3], m[6]};
 		int[] gz = {m[2], m[5], m[8]};
@@ -152,12 +154,12 @@ public final class SeamFold {
 	}
 
 	/** The range of one local axis of the target face over the strip: one row from the edge row to the far edge, and the face width along the edge. */
-	private int[] range(int[] up, int ax, int ay, int az, int r) {
+	private int[] range(int[] up, int ax, int ay, int az, int r, int reach) {
 		int alongUp = up[0] * ax + up[1] * ay + up[2] * az;
 		if (alongUp == 0) {
 			return new int[] {-r, r};
 		}
-		return alongUp > 0 ? new int[] {-r, r - 1} : new int[] {-(r - 1), r};
+		return alongUp > 0 ? new int[] {-r, r - 1 + reach} : new int[] {-(r - 1) - reach, r};
 	}
 
 	private int[] edgeDirection(int[] f, int edge) {

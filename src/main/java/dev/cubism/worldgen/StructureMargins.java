@@ -27,7 +27,7 @@ import java.util.WeakHashMap;
  * does not fit, because the structure reaches deep below the surface where the wedge is narrower, tries again further
  * inward (see {@link #inward}).
  *
- * <p>Jigsaw structures that grow over the surface (villages), mineshafts and strongholds have no margin: the fold or
+ * <p>Jigsaw structures that grow over the surface (villages), mineshafts, Nether fortresses and strongholds have no margin: the fold or
  * their own placement handles the edge. The ancient city has none either. It lies 90 to 150 blocks down (see
  * JigsawStructureMixin), where the wedge of a face is much narrower than the surface, so moving every cell inward would
  * put several times as many cities in that narrow space as the cells hold. Its passages fold across the diagonal and its
@@ -70,7 +70,8 @@ public final class StructureMargins {
 
 	public static int of(Holder<Structure> structure) {
 		StructureType<?> type = structure.value().type();
-		if (type == StructureType.JIGSAW || type == StructureType.MINESHAFT || type == StructureType.STRONGHOLD || type == StructureType.BURIED_TREASURE) {
+		if (type == StructureType.JIGSAW || type == StructureType.MINESHAFT || type == StructureType.FORTRESS || type == StructureType.STRONGHOLD
+			|| type == StructureType.BURIED_TREASURE) {
 			return NONE;
 		}
 		if (structure.is(BuiltinStructures.OCEAN_MONUMENT)) {

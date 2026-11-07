@@ -93,6 +93,11 @@ public final class SeamLayout {
 		return new SeamLayout(radius, 0, NETHER_CAVE_HEIGHT, radius - NETHER_DEPTH_SPAN, true);
 	}
 
+	/** The radius of the overworld cube that this cube belongs to. */
+	public int overworldRadius() {
+		return this.nether ? NETHER_SCALE * (this.radius + NETHER_LAVA_LEVEL) : this.radius;
+	}
+
 	/** Blocks that a portal exit stays inside the edges of its face, so that a new portal and its platform fit on the face. */
 	private static final int PORTAL_EDGE_MARGIN = 8;
 
@@ -474,9 +479,16 @@ public final class SeamLayout {
 	/** Blocks before an edge at which the faces behind its far side start to load for a viewer. */
 	private static final int CROSSING_LEAD = 96;
 
-	/** The depth of the hinge for a structure whose middle is at {@code y}, or 0 for a structure on the surface (see {@link SeamFold.Fold#atDepth}). */
+	/**
+	 * The depth of the hinge for a structure whose middle is at {@code y}, or 0 for a structure on the surface (see
+	 * {@link SeamFold.Fold#atDepth}). In the Nether every structure is inside the cave, so it folds about the diagonal
+	 * at its height, which is a negative depth. A fold about the edge of the floor would open a gap as wide as the height.
+	 */
 	public int hingeDepth(int y) {
 		int depth = this.surfaceY - y;
+		if (this.nether) {
+			return depth;
+		}
 		return depth > UNDERGROUND ? depth : 0;
 	}
 
@@ -498,7 +510,7 @@ public final class SeamLayout {
 		if (pastX && pastZ) {
 			return true;
 		}
-		if (depth > 0) {
+		if (depth != 0) {
 			return false;
 		}
 		boolean straddlesX = maxX > r && minX <= r || minX < -r && maxX >= -r;

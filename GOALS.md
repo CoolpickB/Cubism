@@ -69,12 +69,15 @@ The Nether is a cube. Its faces carry the vanilla Nether cave on a core of nethe
 - At the lava sea, a Nether face is half as wide as an overworld face.
 - A portal leads to the same face. A Nether position is half as far from its face center as the overworld position. Past the edge of the overworld face, the exit moves in to 8 blocks from the edge.
 - Each face reads the 3D terrain noise in its own frame, so the terrain of each face is vanilla. Near an edge, the noise of the two faces mixes, so caves continue across the edge.
+- The client shows the other faces of the Nether, and gravity and the camera turn at an edge as in the overworld.
+- Fortresses and bastions are placed as strongholds are: 1 to 3 of each by cube size, one per face, on random faces. No face holds both.
+- A structure in the Nether folds about the diagonal at its own height. A fortress corridor that reaches past the diagonal turns 90 degrees and continues on the next face. A bastion room lies wholly on one face.
 
 These parts of the Nether are not built yet:
 
-- The client view of the Nether: the other faces, gravity and the camera at an edge.
-- Fortresses and bastions across an edge, then a check of the loot of a finite world.
+- A check of the loot of a finite world.
 - Generation of the Nether before the first player joins.
+- Ruined portals and fossils in the Nether use the margin rule of the overworld. On the smallest cube, this rule moves their starts to 24 blocks or less from the face center.
 
 The End is vanilla at this time. Before the first release, we plan this change. The design is not final:
 

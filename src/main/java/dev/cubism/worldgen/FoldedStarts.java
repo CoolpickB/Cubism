@@ -44,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * Lets a jigsaw structure (a village, an outpost, an ancient city) or a mineshaft cross an edge of the cube. The structure is laid
+ * Lets a jigsaw structure (a village, an outpost, an ancient city), a mineshaft or a Nether fortress cross an edge of the cube. The structure is laid
  * out on the flat plane of its face. The part past the edge goes to the neighbor face as a copy of the start, folded
  * over the edge (see {@link SeamFold}). The copy is a start in a chunk of the neighbor face, so the references, the
  * terrain adaptation and the placement of vanilla find it like any other start, and it is saved with that chunk.
@@ -96,8 +96,9 @@ public final class FoldedStarts {
 		int r = layout.radius;
 		int offset = layout.offsetX(fold.from);
 		// An underground structure folds about a hinge at its depth (see SeamFold.Fold#atDepth), so the flat place of this chunk
-		// moves along the edge normal by twice the depth. The window spans all depths down to the bottom of the cube.
-		int deepest = Math.min(r, layout.surfaceY - host.getMinY());
+		// moves along the edge normal by twice the depth. The window spans all depths down to the bottom of the cube, or
+		// in the Nether all heights up to the roof.
+		int deepest = layout.nether ? -layout.openHeight : Math.min(r, layout.surfaceY - host.getMinY());
 		BlockPos hostMiddle = new BlockPos(host.getPos().getMiddleBlockX(), 0, host.getPos().getMiddleBlockZ());
 		BlockPos deepFlat = fold.atDepth(deepest).inverse(hostMiddle);
 		int minChunkX = Math.floorDiv(Math.min(flat.getX(), deepFlat.getX()) - REACH, 16);
@@ -114,8 +115,7 @@ public final class FoldedStarts {
 					continue;
 				}
 				for (StructureStart source : startsOf(generator, registries, state, templates, level, host, chunkX, chunkZ)) {
-					SeamFold.Fold hinged = fold.atDepth(layout.hingeDepth(source.getPieces().getFirst().getBoundingBox().getCenter().getY()));
-					StructureStart copy = copy(source, hinged, strip, host.getPos(), registries, templates);
+					StructureStart copy = copy(source, layout, fold, strip, host.getPos(), registries, templates);
 					if (copy != null && manager.getStartForStructure(source.getStructure(), host) == null) {
 						manager.setStartForStructure(source.getStructure(), copy, host);
 					}
@@ -126,20 +126,25 @@ public final class FoldedStarts {
 
 	/** The copy of a start folded over an edge, or null when no piece reaches the strip or the copy is centered in another chunk. */
 	private static StructureStart copy(
-		StructureStart source, SeamFold.Fold fold, BoundingBox strip, ChunkPos host, RegistryAccess registries, StructureTemplateManager templates
+		StructureStart source, SeamLayout layout, SeamFold.Fold edgeFold, BoundingBox strip, ChunkPos host, RegistryAccess registries,
+		StructureTemplateManager templates
 	) {
+		SeamFold.Fold startFold = edgeFold.atDepth(layout.hingeDepth(source.getPieces().getFirst().getBoundingBox().getCenter().getY()));
 		List<StructurePiece> pieces = new ArrayList<>();
 		BoundingBox visible = null;
 		for (StructurePiece piece : source.getPieces()) {
+			// A Nether fortress climbs and drops by tens of blocks, so in the Nether each piece folds about the diagonal
+			// at its own height. One hinge for all would put the pieces far below or above it off the next face.
+			SeamFold.Fold fold = layout.nether ? edgeFold.atDepth(layout.hingeDepth(piece.getBoundingBox().getCenter().getY())) : startFold;
 			BoundingBox folded = fold.apply(piece.getBoundingBox());
-			if (!folded.intersects(strip)) {
+			if (!folded.intersects(strip) || layout.nether && !reachesWedge(layout, folded)) {
 				continue;
 			}
 			StructurePiece foldedPiece;
 			if (piece instanceof PoolElementStructurePiece pool) {
 				foldedPiece = copyOf(pool, fold, templates);
-			} else if (MINESHAFT_PIECES.contains(piece.getType())) {
-				foldedPiece = mineshaftCopyOf(piece, folded, fold, registries, templates);
+			} else if (MINESHAFT_PIECES.contains(piece.getType()) || source.getStructure().type() == StructureType.FORTRESS) {
+				foldedPiece = taggedCopyOf(piece, folded, fold, registries, templates);
 			} else {
 				return null;
 			}
@@ -176,13 +181,14 @@ public final class FoldedStarts {
 	}
 
 	/**
-	 * A mineshaft piece keeps its place and shape in its save tag: the box, the facing, and for a crossing its direction
-	 * and for a room the boxes of its entrances. The copy is the piece loaded from that tag with all of them folded.
+	 * A mineshaft or fortress piece keeps its place and shape in its save tag: the box, the facing, and for a mineshaft
+	 * crossing its direction and for a mineshaft room the boxes of its entrances. The copy is the piece loaded from that
+	 * tag with all of them folded.
 	 */
-	private static StructurePiece mineshaftCopyOf(
+	private static StructurePiece taggedCopyOf(
 		StructurePiece piece, BoundingBox folded, SeamFold.Fold fold, RegistryAccess registries, StructureTemplateManager templates
 	) {
-		// Mineshaft pieces do not read from the resource manager.
+		// Mineshaft and fortress pieces do not read from the resource manager.
 		StructurePieceSerializationContext context = new StructurePieceSerializationContext(null, registries, templates);
 		CompoundTag tag = piece.createTag(context);
 		tag.store("BB", BoundingBox.CODEC, folded);
@@ -194,6 +200,22 @@ public final class FoldedStarts {
 		tag.read("Entrances", BoundingBox.CODEC.listOf()).ifPresent(entrances ->
 			tag.store("Entrances", BoundingBox.CODEC.listOf(), entrances.stream().map(fold::apply).toList()));
 		return piece.getType().load(context, tag);
+	}
+
+	/**
+	 * Whether some of the box lies in the wedge of the face whose region holds it. The strip of a Nether fold is as deep
+	 * as the cave, so most pieces of a fortress fold into it outside the wedge. Kept, they would draw nothing and would
+	 * move the center of the copy away from the pieces that draw.
+	 */
+	private static boolean reachesWedge(SeamLayout layout, BoundingBox box) {
+		int offset = layout.offsetX(layout.faceIndexAt((box.minX() + box.maxX()) / 2));
+		int x = nearestToZero(box.minX() - offset, box.maxX() - offset);
+		int z = nearestToZero(box.minZ(), box.maxZ());
+		return Math.max(x, z) <= box.maxY() - layout.centerY;
+	}
+
+	private static int nearestToZero(int min, int max) {
+		return min > 0 ? min : max < 0 ? -max : 0;
 	}
 
 	private static BoundingBox intersection(BoundingBox a, BoundingBox b) {
@@ -218,7 +240,8 @@ public final class FoldedStarts {
 			Climate.Sampler climate = state.randomState().createClimateSampler(SamplerContext.builder().enableCaches().build());
 			for (Holder<StructureSet> set : state.possibleStructureSets()) {
 				StructureStart start = startOf(set, generator, registries, state, templates, level, heights, climate, chunkX, chunkZ);
-				if (start != null && (start.getStructure().type() == StructureType.JIGSAW || start.getStructure().type() == StructureType.MINESHAFT)) {
+				if (start != null && (start.getStructure().type() == StructureType.JIGSAW || start.getStructure().type() == StructureType.MINESHAFT
+					|| start.getStructure().type() == StructureType.FORTRESS)) {
 					starts.add(start);
 				}
 			}

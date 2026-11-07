@@ -27,7 +27,8 @@ import java.util.List;
  * (see {@link dev.cubism.worldgen.FoldedStarts}). The fold opens a gap above an edge, so a house on both sides of it
  * would show a cut. The placer does not take such a piece and tries another one for the connector. A flat piece, such
  * as a road or a field, bends over the edge without a cut and stays. An underground structure folds about the diagonal
- * at the depth of its first piece (see {@link dev.cubism.worldgen.SeamFold.Fold#atDepth}). Its passages cross the
+ * at the depth of its first piece (see {@link dev.cubism.worldgen.SeamFold.Fold#atDepth}), and a structure in the
+ * Nether cave folds each piece at its own height. Its passages cross the
  * diagonal, and a room must lie wholly on one face (see {@link WholeRooms}). The corner is refused for every piece.
  */
 @Mixin(targets = "net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement$Placer")
@@ -58,8 +59,10 @@ public abstract class JigsawPlacerMixin {
 			if (layout.splitsAtEdge(placed, template.getYSpan() > FLAT_HEIGHT)) {
 				return true;
 			}
-			int hinge = layout.hingeDepth(((StructurePiece) this.pieces.getFirst()).getBoundingBox().getCenter().getY());
-			if (hinge > 0 && WholeRooms.isRoom(element, placed) && !WholeRooms.onOneFace(layout, placed, hinge)) {
+			// In the Nether each piece folds at its own height (see FoldedStarts#copy).
+			BoundingBox hingeBox = layout.nether ? placed : ((StructurePiece) this.pieces.getFirst()).getBoundingBox();
+			int hinge = layout.hingeDepth(hingeBox.getCenter().getY());
+			if (hinge != 0 && WholeRooms.isRoom(element, placed) && !WholeRooms.onOneFace(layout, placed, hinge)) {
 				return true;
 			}
 		}

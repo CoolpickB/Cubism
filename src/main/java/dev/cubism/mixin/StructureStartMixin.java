@@ -66,7 +66,10 @@ public abstract class StructureStartMixin implements StartClip {
 		if (clip == null) {
 			int face = layout.faceIndexAt(this.chunkPos.getMiddleBlockX());
 			int x = layout.offsetX(face);
-			clip = new BoundingBox(x - layout.radius, chunkBB.minY(), -layout.radius, x + layout.radius, chunkBB.maxY(), layout.radius);
+			// The cave of the Nether is above its floor, where the wedge reaches past the square of the face. The
+			// wedge, not the square, ends a structure there.
+			int half = layout.nether ? layout.radius + layout.openHeight : layout.radius;
+			clip = new BoundingBox(x - half, chunkBB.minY(), -half, x + half, chunkBB.maxY(), half);
 		}
 		int minX = Math.max(chunkBB.minX(), clip.minX());
 		int minZ = Math.max(chunkBB.minZ(), clip.minZ());
@@ -86,7 +89,7 @@ public abstract class StructureStartMixin implements StartClip {
 		BoundingBox chunkBB, ChunkPos chunkPos, BlockPos reference, Operation<Void> original
 	) {
 		SeamLayout layout = SeamLayout.of(level.getLevel());
-		if (layout != null && layout.hingeDepth(piece.getBoundingBox().getCenter().getY()) > 0 && WholeRooms.isRoom(piece)
+		if (layout != null && layout.hingeDepth(piece.getBoundingBox().getCenter().getY()) != 0 && WholeRooms.isRoom(piece)
 			&& !WholeRooms.inWedge(layout, piece.getBoundingBox())) {
 			return;
 		}
