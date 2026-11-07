@@ -79,13 +79,38 @@ The Nether is a cube. Its faces carry the vanilla Nether cave on a core of nethe
 
 These parts of the Nether are not built yet:
 
-- A check of the loot of a finite world.
+- The loot plan that follows (Loot of a finite world).
 - Edge rounding in the Nether. The overworld rounding fades with depth, so its bedrock is square. To do the same, the Nether needs storage below its floor, about 20 blocks at a rounding of 96. This changes the dimension type of the Nether, and the Nether of an older world breaks.
 - Generation of the Nether before the first player joins.
 
 The End is vanilla at this time. Before the first release, we plan this change. The design is not final:
 
 - The main island of the End is on one face. The outer islands have their own gravity, and the player changes face between them.
+
+### Loot of a finite world (planned, not built)
+
+The overworld and the Nether are finite, as in a skyblock or superflat world. The End stays vanilla and has no limit. A check of three cubes of size 24 found 70 items that have no source unless a structure generates. These structures are not sure to generate: village, trial chambers, mansion, monument, ancient city, temples, outposts, trail ruins, shipwrecks and buried treasure. These structures always generate: stronghold, fortress, bastion, dungeons, mineshafts, ruined portals and the End. We do not force a missing structure. We give each item another source. The loot tables of fishing and bartering do not change, except for one bartering entry.
+
+Sources, by item:
+
+- **Armor trims (14).** The armorer sells one trim at each of the levels 2 to 5, for emeralds. Each level has its own pool, so a villager never offers the same trim twice: 4, 4, 3 and 3 trims. Rerolling the job block changes only the novice trades, so the four trims of a villager stay fixed. These are the 14 trims: sentry, dune, coast, wild, ward, vex, tide, silence, raiser, host, shaper, wayfinder, flow and bolt.
+- **Music discs.** Relic, creator, creator music box, precipice and disc 5 join the discs that a skeleton makes a creeper drop (a tag change). The fragments of disc 5 are not needed.
+- **Banner patterns.** The cartographer sells flow and guster.
+- **Enchantments.** The librarian sells Swift Sneak and Wind Burst (add them to the tradeable tag).
+- **Sea items.** The fisherman sells sponge, prismarine shards and prismarine crystals. At level 5 the fisherman sells the heart of the sea, for a very high price. Prismarine, prismarine bricks, dark prismarine and the sea lantern are crafted from the shards and crystals.
+- **Wind items.** The weaponsmith sells wind charges at level 5. The breeze rod is a gift of the weaponsmith to a hero of the village. The mace also needs a heavy core, which has its own design.
+- **Pottery sherds (20).** The mason gift to a hero of the village includes the sherds. The wandering trader has one or two sherd slots. Suspicious sand and gravel are not added.
+- **Wandering trader.** The trader offers 6 common and 3 uncommon trades (vanilla: 5 and 2). The uncommon pool gets the echo shard, nautilus armor and the sniffer egg. The common pool gets the sherd slots. A sniffer egg gives back sniffers, torchflower seeds and pitcher pods. If the echo shard must be sure to appear, give it its own slot.
+- **Cartographer maps.** No change. A map trade for a structure that did not generate is discarded by its `filtered` step, so the villager does not offer it. This is read from the trade data and not tested in game.
+
+Not covered, by decision:
+
+- Trial keys and ominous trial keys (no trial chambers, so nothing uses them).
+- The heavy core and the mace (own design).
+- Camels and camel husks.
+- The loot-only maps of chests (buried treasure, abandoned camp, desert pyramid, buried mineshaft, buried ancient city, warm ocean ruins).
+
+The check followed every recipe, tag, trade and loot table of 26.3 from the sources that always exist. Do the check again when a loot table, a trade or a structure rule changes.
 
 ## Phases
 
