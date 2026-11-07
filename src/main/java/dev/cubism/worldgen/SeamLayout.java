@@ -4,6 +4,7 @@ import dev.cubism.CubismMod;
 import dev.cubism.math.CubePlanetMath;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -89,6 +90,25 @@ public final class SeamLayout {
 	public static SeamLayout nether(SeamLayout overworld) {
 		int radius = overworld.radius / NETHER_SCALE - NETHER_LAVA_LEVEL;
 		return new SeamLayout(radius, 0, NETHER_CAVE_HEIGHT, radius - NETHER_DEPTH_SPAN, true);
+	}
+
+	/** Blocks that a portal exit stays inside the edges of its face, so that a new portal and its platform fit on the face. */
+	private static final int PORTAL_EDGE_MARGIN = 8;
+
+	/**
+	 * Where a portal of the overworld or the Nether leads in this level, for an entity at a storage position of
+	 * {@code from}: the same face, with the position on the face scaled by {@link #NETHER_SCALE} about the face center.
+	 * The Nether face is wider than half the overworld face above the lava sea, so its outer part maps past the edge of
+	 * the overworld face. The exit is then moved in to the edge, as vanilla moves an exit in to the world border.
+	 */
+	public BlockPos portalExit(SeamLayout from, double x, double y, double z) {
+		int face = from.faceIndexAt(Mth.floor(x));
+		double scale = this.nether ? 1.0 / NETHER_SCALE : NETHER_SCALE;
+		// The face width at the lava sea, which is also where most portals in the Nether stand.
+		double limit = (this.nether ? this.radius + NETHER_LAVA_LEVEL : this.radius) - PORTAL_EDGE_MARGIN;
+		double u = Math.clamp((x - from.offsetX(face) - 0.5) * scale, -limit, limit);
+		double v = Math.clamp((z - 0.5) * scale, -limit, limit);
+		return BlockPos.containing(this.offsetX(face) + 0.5 + u, y, 0.5 + v);
 	}
 
 	/**

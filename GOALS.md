@@ -67,11 +67,11 @@ The Nether is a cube. Its faces carry the vanilla Nether cave on a core of nethe
 
 - A bedrock floor and a bedrock roof close the cave on all six faces, 128 blocks apart.
 - At the lava sea, a Nether face is half as wide as an overworld face.
+- A portal leads to the same face. A Nether position is half as far from its face center as the overworld position. Past the edge of the overworld face, the exit moves in to 8 blocks from the edge.
 - Each face reads the 3D terrain noise in its own frame, so the terrain of each face is vanilla. Near an edge, the noise of the two faces mixes, so caves continue across the edge.
 
 These parts of the Nether are not built yet:
 
-- Portals with a fixed ratio of 2:1. A Nether position is half as far from its face center as the overworld position.
 - The client view of the Nether: the other faces, gravity and the camera at an edge.
 - Fortresses and bastions across an edge, then a check of the loot of a finite world.
 - Generation of the Nether before the first player joins.
