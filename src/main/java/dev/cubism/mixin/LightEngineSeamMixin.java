@@ -125,7 +125,7 @@ public abstract class LightEngineSeamMixin extends LightEngine {
 			this.cubism$layoutResolved = level instanceof ServerLevel serverLevel
 				? this.cubism$layout != null
 					|| !(serverLevel.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator generator && SeamLayout.isSeam(generator))
-				: this.cubism$layout != null || level.dimension() != Level.OVERWORLD;
+				: this.cubism$layout != null || level.dimension() != Level.OVERWORLD && level.dimension() != Level.NETHER;
 		}
 		return this.cubism$layout;
 	}

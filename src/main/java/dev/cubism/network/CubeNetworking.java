@@ -18,6 +18,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -29,11 +30,13 @@ public final class CubeNetworking {
 	private CubeNetworking() {}
 
 	/** Tells the client that the level stores the cube in seam regions, and the shape of the cube. */
-	public record SeamPayload(int diameterChunks, int edgeRounding) implements CustomPacketPayload {
+	/** The cube of the overworld, and whether the Nether is a cube too. Worlds made before the cube Nether have a vanilla Nether. */
+	public record SeamPayload(int diameterChunks, int edgeRounding, boolean cubeNether) implements CustomPacketPayload {
 		public static final Type<SeamPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(CubismMod.MOD_ID, "seam"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, SeamPayload> CODEC = StreamCodec.composite(
 			ByteBufCodecs.VAR_INT, SeamPayload::diameterChunks,
 			ByteBufCodecs.VAR_INT, SeamPayload::edgeRounding,
+			ByteBufCodecs.BOOL, SeamPayload::cubeNether,
 			SeamPayload::new
 		);
 
@@ -104,7 +107,8 @@ public final class CubeNetworking {
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			if (SeamLayout.of(server.overworld()) != null) {
 				CubeSettings settings = CubeSettings.of(server.overworld().getChunkSource().getGenerator());
-				sender.sendPacket(new SeamPayload(settings.diameterChunks(), settings.edgeRounding()));
+				ServerLevel nether = server.getLevel(Level.NETHER);
+				sender.sendPacket(new SeamPayload(settings.diameterChunks(), settings.edgeRounding(), nether != null && SeamLayout.of(nether) != null));
 			}
 		});
 	}

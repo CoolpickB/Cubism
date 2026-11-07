@@ -30,7 +30,8 @@ public final class SeamLayout {
 	/** Faces in storage order. UP and EAST are next to each other so that their shared edge is the one seam. */
 	public static final Direction[] FACES = {Direction.UP, Direction.EAST, Direction.DOWN, Direction.WEST, Direction.SOUTH, Direction.NORTH};
 
-	private static volatile @Nullable SeamLayout client;
+	private static volatile @Nullable SeamLayout clientOverworld;
+	private static volatile @Nullable SeamLayout clientNether;
 	/** The cube levels of the running server. Filled as each level is made, emptied when the server stops. */
 	private static final Map<ResourceKey<Level>, SeamLayout> SERVER_LEVELS = new ConcurrentHashMap<>();
 	private static final ThreadLocal<Scope> SCOPE = new ThreadLocal<>();
@@ -176,9 +177,10 @@ public final class SeamLayout {
 		SERVER_LEVELS.clear();
 	}
 
-	/** The layout that the server sent to this client, or null. The client sets it on join and clears it on leave. */
-	public static void setClient(@Nullable SeamLayout layout) {
-		client = layout;
+	/** The layouts that the server sent to this client, or null. The client sets them on join and clears them on leave. */
+	public static void setClient(@Nullable SeamLayout overworld, @Nullable SeamLayout nether) {
+		clientOverworld = overworld;
+		clientNether = nether;
 	}
 
 	/** The layout of a server or client level, or null when the level has no seams. */
@@ -186,7 +188,10 @@ public final class SeamLayout {
 		if (level instanceof ServerLevel serverLevel) {
 			return of(serverLevel);
 		}
-		return level.isClientSide() && level.dimension() == Level.OVERWORLD ? client : null;
+		if (!level.isClientSide()) {
+			return null;
+		}
+		return level.dimension() == Level.OVERWORLD ? clientOverworld : level.dimension() == Level.NETHER ? clientNether : null;
 	}
 
 	/** Row-major 3x3 matrix of the rotation that turns the UP face onto {@code face}. */

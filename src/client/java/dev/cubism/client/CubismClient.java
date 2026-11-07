@@ -16,6 +16,7 @@ import net.minecraft.client.Screenshot;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.piston.MovingPistonBlock;
@@ -46,8 +47,16 @@ public class CubismClient implements ClientModInitializer {
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.SeamPayload.TYPE, (payload, context) -> {
 			CubePlanetMath.setEdgeRounding(payload.edgeRounding());
-			SeamClient.layout = new SeamLayout(payload.diameterChunks());
-			SeamLayout.setClient(SeamClient.layout);
+			SeamLayout overworld = new SeamLayout(payload.diameterChunks());
+			SeamLayout.setClient(overworld, payload.cubeNether() ? SeamLayout.nether(overworld) : null);
+			ClientLevel level = context.client().level;
+			SeamClient.layout = level == null ? null : SeamLayout.of(level);
+		});
+
+		// The seam chunks of the old level are of another cube, or of none.
+		ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register((client, level) -> {
+			SeamRenderer.clear();
+			SeamClient.layout = SeamLayout.of(level);
 		});
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.MovingBlockPayload.TYPE, (payload, context) -> {
@@ -81,7 +90,7 @@ public class CubismClient implements ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			LoadTrace.end("disconnected");
 			SeamClient.layout = null;
-			SeamLayout.setClient(null);
+			SeamLayout.setClient(null, null);
 			SeamRenderer.clear();
 		});
 	}
