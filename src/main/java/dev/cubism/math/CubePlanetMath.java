@@ -43,13 +43,12 @@ public final class CubePlanetMath {
 	}
 
 	/**
-	 * Signed distance from the cube of half size {@code r} with edges and corners rounded by {@link #edgeRounding}.
+	 * Signed distance from the cube of half size {@code r} with edges and corners rounded by {@code rounding}.
 	 * The value is negative inside. With this distance as the terrain height, contours of equal height are rounded
 	 * boxes, so terrain near an edge bends over the edge. The Chebyshev distance makes square contours, and terrain
 	 * on them goes on past the edge as a flat shelf in the sky of the next face.
 	 */
-	public static double roundedCubeDistance(double dx, double dy, double dz, double r) {
-		int rounding = edgeRounding;
+	public static double roundedCubeDistance(double dx, double dy, double dz, double r, int rounding) {
 		double core = r - rounding;
 		double qx = Math.abs(dx) - core;
 		double qy = Math.abs(dy) - core;
@@ -65,8 +64,7 @@ public final class CubePlanetMath {
 	 * deeper than the rounding maps straight out along its face axis, so the points of a face column share one
 	 * surface point, like a vanilla column. At that depth the map jumps across the diagonal between two faces.
 	 */
-	public static void roundedCubeSurfacePoint(double dx, double dy, double dz, double r, double[] out) {
-		int rounding = edgeRounding;
+	public static void roundedCubeSurfacePoint(double dx, double dy, double dz, double r, int rounding, double[] out) {
 		double core = r - rounding;
 		double cx = Math.clamp(dx, -core, core);
 		double cy = Math.clamp(dy, -core, core);

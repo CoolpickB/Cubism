@@ -75,7 +75,7 @@ public final class CubeBiomeMap {
 				noises, seed, settings.useLegacyRandomSource(), settings.defaultBlock(), settings.seaLevel(),
 				CubeDensityFunctions.rewriteRouter(
 					CubeDensityFunctions.withClimateShift(settings.noiseRouter(), cube.temperature(), cube.humidity()),
-					this.centerY, this.radius, CubePlanetMath.TOP_SURFACE_Y, this.innerBedrockRadius
+					this.centerY, this.radius, CubePlanetMath.TOP_SURFACE_Y, this.innerBedrockRadius, this.edgeRounding
 				)
 			);
 			this.randomState = state;

@@ -71,9 +71,10 @@ The Nether is a cube. Its faces carry the vanilla Nether cave on a core of nethe
 - Each face reads the 3D terrain noise in its own frame, so the terrain of each face is vanilla. Near an edge, the noise of the two faces mixes, so caves continue across the edge.
 - The client shows the other faces of the Nether, and gravity and the camera turn at an edge as in the overworld.
 - The biomes are read on the cube halfway up the cave, so a biome is as large as in vanilla.
+- The edges of the Nether have half the `edge_rounding` of the overworld, at least 2 blocks. The roof bends over each edge with this rounding. The floor stays square, so that the ground near an edge does not sink below the bedrock.
 - Fortresses and bastions are placed as strongholds are: 1 to 3 of each by cube size, one per face, on random faces. No face holds both.
 - A bastion moves to a chunk with a bastion biome near its place. If its face has none, it generates in the biome that is there, for example basalt deltas.
-- A structure in the Nether folds about the diagonal at its own height. A fortress corridor that reaches past the diagonal turns 90 degrees and continues on the next face. A bastion room lies wholly on one face.
+- A structure in the Nether folds about the diagonal at its own height. A fortress corridor that reaches past the diagonal turns 90 degrees and continues on the next face. All pieces of one floor of a fortress fold about the same height, so the rooms stay in line with the corridors. A bastion room lies wholly on one face.
 
 These parts of the Nether are not built yet:
 

@@ -53,8 +53,8 @@ public final class CubeDensityFunctions {
 		return hundredths == 0 ? function : DensityFunctions.add(function, DensityFunctions.constant(hundredths / 100.0F));
 	}
 
-	public static NoiseRouter rewriteRouter(NoiseRouter router, int centerY, int radiusBlocks, int surfaceY, int innerBedrockRadius) {
-		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, radiusBlocks, surfaceY, innerBedrockRadius);
+	public static NoiseRouter rewriteRouter(NoiseRouter router, int centerY, int radiusBlocks, int surfaceY, int innerBedrockRadius, int rounding) {
+		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, radiusBlocks, surfaceY, innerBedrockRadius, rounding, false);
 		return new NoiseRouter(
 			rule.rewrite(router.temperature()),
 			rule.rewrite(router.vegetation()),
@@ -69,9 +69,12 @@ public final class CubeDensityFunctions {
 
 	/**
 	 * Rewrites a density function to work on the cube in world coordinates. The rule memoizes and is not thread-safe.
-	 * 2D noise, such as the climate, is read on the surface of the cube at {@code surfaceNoiseRadius}.
+	 * 2D noise, such as the climate, is read on the surface of the cube at {@code surfaceNoiseRadius}. With
+	 * {@code squareFloor}, gradients that end below {@link #SQUARE_FLOOR_TOP} measure height from the unrounded cube.
 	 */
-	public static DfRewriteRule cubeRule(int centerY, int radiusBlocks, int surfaceNoiseRadius, int surfaceY, int innerBedrockRadius) {
+	public static DfRewriteRule cubeRule(
+		int centerY, int radiusBlocks, int surfaceNoiseRadius, int surfaceY, int innerBedrockRadius, int rounding, boolean squareFloor
+	) {
 		Map<DensityFunction, DensityFunction> memo = new IdentityHashMap<>();
 		return new DfRewriteRule() {
 			@Override
@@ -112,7 +115,9 @@ public final class CubeDensityFunctions {
 				}
 
 				DensityFunction rewrittenChildren = unwrapped.rewriteChildren(this);
-				DensityFunction transformed = transformNode(rewrittenChildren, autoShiftYNoise, centerY, radiusBlocks, surfaceNoiseRadius, surfaceY, innerBedrockRadius);
+				DensityFunction transformed = transformNode(
+					rewrittenChildren, autoShiftYNoise, centerY, radiusBlocks, surfaceNoiseRadius, surfaceY, innerBedrockRadius, rounding, squareFloor
+				);
 				memo.put(fn, transformed);
 				return transformed;
 			}
@@ -136,11 +141,13 @@ public final class CubeDensityFunctions {
 		int radiusBlocks,
 		int surfaceNoiseRadius,
 		int surfaceY,
-		int innerBedrockRadius
+		int innerBedrockRadius,
+		int rounding,
+		boolean squareFloor
 	) {
 		if (fn instanceof NoiseFunction nf && nf.yScale() == 0.0) {
 			DensityFunction shiftY = autoShiftYNoise != null
-				? new CubeShiftNoiseFunction(autoShiftYNoise, ShiftAxis.Y, centerY, surfaceNoiseRadius, nf.shiftX().range())
+				? new CubeShiftNoiseFunction(autoShiftYNoise, ShiftAxis.Y, centerY, surfaceNoiseRadius, rounding, nf.shiftX().range())
 				: nf.shiftY();
 
 			return new CubeSurfaceNoiseFunction(
@@ -151,13 +158,14 @@ public final class CubeDensityFunctions {
 				nf.shiftZ(),
 				centerY,
 				surfaceNoiseRadius,
+				rounding,
 				nf.range()
 			);
 		}
 
 		if (fn instanceof ShiftNoiseFunction snf) {
 			ShiftAxis axis = (snf instanceof ShiftNoiseFunction.ShiftB) ? ShiftAxis.Z : ShiftAxis.X;
-			return new CubeShiftNoiseFunction(snf.offsetNoise(), axis, centerY, surfaceNoiseRadius, snf.range());
+			return new CubeShiftNoiseFunction(snf.offsetNoise(), axis, centerY, surfaceNoiseRadius, rounding, snf.range());
 		}
 
 		if (fn instanceof GradientFunction gf && gf.axis() == Direction.Axis.Y) {
@@ -170,12 +178,26 @@ public final class CubeDensityFunctions {
 				radiusBlocks,
 				surfaceY,
 				innerBedrockRadius,
+				rounding,
+				squareFloor && Math.max(gf.fromCoordinate(), gf.toCoordinate()) <= SQUARE_FLOOR_TOP,
 				gf.range()
 			);
 		}
 
 		return fn;
 	}
+
+	/** The height above the square cube along the axis of the face, which is the height in storage. */
+	private static double squareCubeDistance(int x, int y, int z, int r) {
+		return Math.max(Math.abs(x), Math.max(Math.abs(y), Math.abs(z))) - r;
+	}
+
+	/**
+	 * The highest vanilla Y of the floor gradient of the Nether. The rounded cube lies outside the square one, so on a
+	 * rounded floor the ground near an edge sinks under storage Y 0, and lava floods the bedrock there. A square floor
+	 * keeps the ground at the bedrock, and the roof still bends over each edge.
+	 */
+	private static final int SQUARE_FLOOR_TOP = 64;
 
 	public enum ShiftAxis {
 		X, Y, Z
@@ -189,6 +211,7 @@ public final class CubeDensityFunctions {
 		DensityFunction shiftZ,
 		int centerY,
 		int radiusBlocks,
+		int rounding,
 		Interval range
 	) implements DensityFunction {
 		@Override
@@ -200,6 +223,7 @@ public final class CubeDensityFunctions {
 			double s = this.scale;
 			int cy = this.centerY;
 			double r = this.radiusBlocks;
+			int rounding = this.rounding;
 			boolean continentalness = this.noise.is(Noises.CONTINENTALNESS) || this.noise.is(Noises.CONTINENTALNESS_LARGE);
 
 			return new DensitySampler() {
@@ -211,12 +235,12 @@ public final class CubeDensityFunctions {
 				@Override
 				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
 					double[] surface = new double[3];
-					CubePlanetMath.roundedCubeSurfacePoint(x, y - cy, z, r, surface);
+					CubePlanetMath.roundedCubeSurfacePoint(x, y - cy, z, r, rounding, surface);
 					double nx = surface[0] * s + sxSampler.sampleValue(ctx, x, y, z);
 					double ny = surface[1] * s + sySampler.sampleValue(ctx, x, y, z);
 					double nz = surface[2] * s + szSampler.sampleValue(ctx, x, y, z);
 					float value = (float) compiledNoise.get(nx, ny, nz);
-					return continentalness ? value + edgeLandBias(surface, r) : value;
+					return continentalness ? value + edgeLandBias(surface, r, rounding) : value;
 				}
 			};
 		}
@@ -229,7 +253,7 @@ public final class CubeDensityFunctions {
 			if (nx == this.shiftX && ny == this.shiftY && nz == this.shiftZ) {
 				return this;
 			}
-			return new CubeSurfaceNoiseFunction(this.noise, this.scale, nx, ny, nz, this.centerY, this.radiusBlocks, this.range);
+			return new CubeSurfaceNoiseFunction(this.noise, this.scale, nx, ny, nz, this.centerY, this.radiusBlocks, this.rounding, this.range);
 		}
 
 		@Override
@@ -256,13 +280,13 @@ public final class CubeDensityFunctions {
 	 * a sea there coats the slope as a thin sheet that bends over the edge. With the bias, shoulders are land, and
 	 * the sea gathers toward the face centers, a mild version of the bowl that real cube gravity would make.
 	 */
-	private static float edgeLandBias(double[] surface, double r) {
+	private static float edgeLandBias(double[] surface, double r, int rounding) {
 		double ax = Math.abs(surface[0]);
 		double ay = Math.abs(surface[1]);
 		double az = Math.abs(surface[2]);
 		// The distance to the nearest edge, along the face: the largest coordinate is the face axis, the next is the edge.
 		double second = Math.max(Math.min(ax, ay), Math.min(Math.max(ax, ay), az));
-		double width = CubePlanetMath.edgeRounding() + EDGE_LAND_WIDTH;
+		double width = rounding + EDGE_LAND_WIDTH;
 		double t = Mth.clamp(1.0 - (r - second) / width, 0.0, 1.0);
 		return (float) (EDGE_LAND_BIAS * t * t * (3.0 - 2.0 * t));
 	}
@@ -272,6 +296,7 @@ public final class CubeDensityFunctions {
 		ShiftAxis axis,
 		int centerY,
 		int radiusBlocks,
+		int rounding,
 		Interval range
 	) implements DensityFunction {
 		@Override
@@ -280,6 +305,7 @@ public final class CubeDensityFunctions {
 			ShiftAxis ax = this.axis;
 			int cy = this.centerY;
 			double r = this.radiusBlocks;
+			int rounding = this.rounding;
 
 			return new DensitySampler() {
 				@Override
@@ -290,7 +316,7 @@ public final class CubeDensityFunctions {
 				@Override
 				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
 					double[] surface = new double[3];
-					CubePlanetMath.roundedCubeSurfacePoint(x, y - cy, z, r, surface);
+					CubePlanetMath.roundedCubeSurfacePoint(x, y - cy, z, r, rounding, surface);
 					double sx = surface[0] * 0.25;
 					double sy = surface[1] * 0.25;
 					double sz = surface[2] * 0.25;
@@ -330,6 +356,8 @@ public final class CubeDensityFunctions {
 		int radiusBlocks,
 		int surfaceY,
 		int innerBedrockRadius,
+		int rounding,
+		boolean squareFloor,
 		Interval range
 	) implements DensityFunction {
 		@Override
@@ -341,6 +369,8 @@ public final class CubeDensityFunctions {
 			int cy = this.centerY;
 			int r = this.radiusBlocks;
 			int innerR = this.innerBedrockRadius;
+			int rounding = this.rounding;
+			boolean squareFloor = this.squareFloor;
 			float surface = this.surfaceY;
 			float invCrust = 128.0f / (float) Math.max(1, r - innerR);
 
@@ -352,7 +382,7 @@ public final class CubeDensityFunctions {
 
 				@Override
 				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
-					float height = (float) CubePlanetMath.roundedCubeDistance(x, y - cy, z, r);
+					float height = (float) (squareFloor ? squareCubeDistance(x, y - cy, z, r) : CubePlanetMath.roundedCubeDistance(x, y - cy, z, r, rounding));
 					float vanillaY;
 					// The crust down to the inner bedrock takes the 128 vanilla heights below the surface.
 					if (height >= 0.0f) {

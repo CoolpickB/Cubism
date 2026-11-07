@@ -130,12 +130,13 @@ public final class FoldedStarts {
 		StructureTemplateManager templates
 	) {
 		SeamFold.Fold startFold = edgeFold.atDepth(layout.hingeDepth(source.getPieces().getFirst().getBoundingBox().getCenter().getY()));
+		List<Integer> hinges = layout.nether ? crossingHinges(source, layout, edgeFold, strip) : List.of();
 		List<StructurePiece> pieces = new ArrayList<>();
 		BoundingBox visible = null;
 		for (StructurePiece piece : source.getPieces()) {
 			// A Nether fortress climbs and drops by tens of blocks, so in the Nether each piece folds about the diagonal
-			// at its own height. One hinge for all would put the pieces far below or above it off the next face.
-			SeamFold.Fold fold = layout.nether ? edgeFold.atDepth(layout.hingeDepth(piece.getBoundingBox().getCenter().getY())) : startFold;
+			// near its own height. One hinge for all would put the pieces far below or above it off the next face.
+			SeamFold.Fold fold = layout.nether ? edgeFold.atDepth(nearest(hinges, layout.hingeDepth(piece.getBoundingBox().getCenter().getY()))) : startFold;
 			BoundingBox folded = fold.apply(piece.getBoundingBox());
 			if (!folded.intersects(strip) || layout.nether && !reachesWedge(layout, folded)) {
 				continue;
@@ -162,6 +163,48 @@ public final class FoldedStarts {
 		StructureStart copy = new StructureStart(source.getStructure(), host, 0, new PiecesContainer(pieces));
 		((StartClip) (Object) copy).cubism$setClip(strip);
 		return copy;
+	}
+
+	/** Hinges within this many blocks of each other belong to one floor of a fortress. */
+	private static final int FLOOR_GAP = 6;
+
+	/**
+	 * The hinges of the floors where a Nether start crosses the diagonal, one per floor. Pieces of one floor differ in
+	 * height, a room from a corridor by a few blocks, and each block of hinge moves a folded piece by two blocks. So
+	 * every piece takes the hinge of the floor nearest to its height, and the pieces of a floor stay together on the
+	 * next face. A floor gets the hinge of its lowest crossing piece.
+	 */
+	private static List<Integer> crossingHinges(StructureStart source, SeamLayout layout, SeamFold.Fold edgeFold, BoundingBox strip) {
+		List<Integer> crossing = new ArrayList<>();
+		for (StructurePiece piece : source.getPieces()) {
+			int hinge = layout.hingeDepth(piece.getBoundingBox().getCenter().getY());
+			BoundingBox folded = edgeFold.atDepth(hinge).apply(piece.getBoundingBox());
+			if (reachesWedge(layout, piece.getBoundingBox()) && folded.intersects(strip) && reachesWedge(layout, folded)) {
+				crossing.add(hinge);
+			}
+		}
+		// The hinge in the Nether is minus the height, so the largest hinge is the lowest piece.
+		crossing.sort(Collections.reverseOrder());
+		List<Integer> floors = new ArrayList<>();
+		for (int hinge : crossing) {
+			if (floors.isEmpty() || floors.getLast() - hinge > FLOOR_GAP) {
+				floors.add(hinge);
+			}
+		}
+		return floors;
+	}
+
+	/** The hinge of {@code hinges} nearest to {@code own}, or {@code own} when there is none. */
+	private static int nearest(List<Integer> hinges, int own) {
+		int best = own;
+		int bestDistance = Integer.MAX_VALUE;
+		for (int hinge : hinges) {
+			if (Math.abs(hinge - own) < bestDistance) {
+				best = hinge;
+				bestDistance = Math.abs(hinge - own);
+			}
+		}
+		return best;
 	}
 
 	private static PoolElementStructurePiece copyOf(PoolElementStructurePiece piece, SeamFold.Fold fold, StructureTemplateManager templates) {

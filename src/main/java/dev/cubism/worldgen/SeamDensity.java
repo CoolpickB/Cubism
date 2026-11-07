@@ -54,7 +54,9 @@ public final class SeamDensity {
 		// over hundreds of blocks: read at the floor, all six faces got one or two biomes. Halfway up the cave, a block of
 		// the cube is a block of the climate map, as in vanilla.
 		int surfaceNoiseRadius = layout.nether ? layout.radius + layout.openHeight / 2 : layout.radius;
-		this.cubeRule = CubeDensityFunctions.cubeRule(layout.centerY, layout.radius, surfaceNoiseRadius, layout.surfaceY, layout.innerBedrockRadius);
+		this.cubeRule = CubeDensityFunctions.cubeRule(
+			layout.centerY, layout.radius, surfaceNoiseRadius, layout.surfaceY, layout.innerBedrockRadius, layout.edgeRounding(), layout.nether
+		);
 	}
 
 	public synchronized DensityFunction rewrite(DensityFunction fn) {

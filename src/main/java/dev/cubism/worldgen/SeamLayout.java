@@ -416,7 +416,7 @@ public final class SeamLayout {
 		double cy = y - this.centerY - 0.5;
 		double cz = z - 0.5;
 		double core = levelCore(
-			Math.abs(cx), Math.abs(cy), Math.abs(cz), this.nether ? this.radius + this.openHeight : this.radius, CubePlanetMath.edgeRounding()
+			Math.abs(cx), Math.abs(cy), Math.abs(cz), this.nether ? this.radius + this.openHeight : this.radius, this.edgeRounding()
 		);
 		double dx = cx - Math.clamp(cx, -core, core);
 		double dy = cy - Math.clamp(cy, -core, core);
@@ -543,11 +543,20 @@ public final class SeamLayout {
 		return true;
 	}
 
+	/**
+	 * The radius of the rounded edges and corners of this cube. The Nether has half the rounding of the overworld, as
+	 * its floor cube has about half the radius.
+	 */
+	public int edgeRounding() {
+		int overworld = CubePlanetMath.edgeRounding();
+		return this.nether ? Math.max(CubePlanetMath.MIN_EDGE_ROUNDING, overworld / 2) : overworld;
+	}
+
 	/** True when the storage position maps to a cube position below the rounded cube surface. */
 	public boolean belowCubeSurface(int sx, int sy, int sz) {
 		int[] cube = new int[3];
 		this.toCube(this.faceIndexAt(sx), sx, sy, sz, cube);
-		return CubePlanetMath.roundedCubeDistance(cube[0], cube[1] - this.centerY, cube[2], this.radius) < 0.0;
+		return CubePlanetMath.roundedCubeDistance(cube[0], cube[1] - this.centerY, cube[2], this.radius, this.edgeRounding()) < 0.0;
 	}
 
 	/**
@@ -556,7 +565,7 @@ public final class SeamLayout {
 	 * the diagonal at the same level. Past the curve of the sea, the column gets the vanilla level for no fluid.
 	 */
 	public int seaLevelAt(int sx, int sz, int seaLevel) {
-		int rounding = CubePlanetMath.edgeRounding();
+		int rounding = this.edgeRounding();
 		double core = this.radius - rounding;
 		double ex = Math.max(Math.abs(sx - this.offsetX(this.faceIndexAt(sx))) - core, 0.0);
 		double ez = Math.max(Math.abs(sz) - core, 0.0);
@@ -567,7 +576,7 @@ public final class SeamLayout {
 
 	/** True when a storage column lies over the rounded part of an edge, where {@link #seaLevelAt} drops with the column. */
 	public boolean inRoundedEdgeBand(int sx, int sz) {
-		return this.nearEdge(sx, sz, CubePlanetMath.edgeRounding());
+		return this.nearEdge(sx, sz, this.edgeRounding());
 	}
 
 	/** True when a storage column lies within {@code reach} blocks of an edge of its face, measured along the face. */

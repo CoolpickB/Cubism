@@ -165,7 +165,7 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 			return state;
 		}
 		if (state == null) {
-			if (!layout.nearEdge(x, z, CubePlanetMath.edgeRounding() + AQUIFER_CELL_WIDTH)) {
+			if (!layout.nearEdge(x, z, layout.edgeRounding() + AQUIFER_CELL_WIDTH)) {
 				return state;
 			}
 			Aquifer.FluidStatus sea = this.globalFluidPicker.get().computeFluid(x, y, z);

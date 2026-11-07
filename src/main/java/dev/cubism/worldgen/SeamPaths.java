@@ -89,7 +89,7 @@ public final class SeamPaths {
 				// A shift of 2 overB makes the two sides meet there, and it fades out over one rounding from the diagonal.
 				// Ground higher than the plane of A lies past the edge line, and plain unfolding folds it back onto the face
 				// of the map. So a marker of another face never comes closer than the edge line.
-				double rounding = CubePlanetMath.edgeRounding();
+				double rounding = layout.edgeRounding();
 				double overA = dot(centered(goal), nA) - r;
 				double overB = dot(centered(goal), nB) - r;
 				double fade = Math.clamp(1.0 - (overB - overA) / rounding, 0.0, 1.0);
