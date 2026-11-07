@@ -2,6 +2,10 @@
   "amount": 1,
   "trades": [
     "cubism:wandering_trader/echo_shard",
+    "cubism:wandering_trader/echo_shard_2",
+    "cubism:wandering_trader/echo_shard_3",
+    "cubism:wandering_trader/echo_shard_4",
+    "cubism:wandering_trader/echo_shard_5",
     "cubism:wandering_trader/sniffer_egg",
     "cubism:wandering_trader/copper_nautilus_armor",
     "cubism:wandering_trader/iron_nautilus_armor",
