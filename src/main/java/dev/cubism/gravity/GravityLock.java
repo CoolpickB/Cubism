@@ -2,7 +2,6 @@ package dev.cubism.gravity;
 
 import dev.cubism.CubismMod;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
-import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -13,6 +12,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -56,6 +56,8 @@ public final class GravityLock {
 		BuiltInRegistries.ITEM, id("shulker_treads"),
 		new Item(new Item.Properties().humanoidArmor(SHULKER, ArmorType.BOOTS).setId(ResourceKey.create(Registries.ITEM, id("shulker_treads"))))
 	);
+
+	private static final int TREADS_TICKS = 200;
 
 	private GravityLock() {}
 
@@ -101,10 +103,11 @@ public final class GravityLock {
 	 */
 	public static boolean fallsOn(Entity entity) {
 		SeamLayout layout = locked(entity) ? SeamLayout.of(entity.level()) : null;
-		int face = layout == null ? -1 : SeamInteraction.regionFace(layout, entity.getX(), entity.getZ());
-		if (face < 0) {
+		if (layout == null) {
 			return false;
 		}
+		// The strip of the position, not its region: a fall that drifts out past the region in z is still the same face.
+		int face = layout.faceIndexAt(Mth.floor(entity.getX()));
 		double cx = Math.abs(entity.getX() - layout.offsetX(face) - 0.5);
 		double cy = Math.abs(entity.getY() - layout.centerY - 0.5);
 		double cz = Math.abs(entity.getZ() - 0.5);
@@ -112,12 +115,19 @@ public final class GravityLock {
 	}
 
 	/**
-	 * Worn treads give the effect as the turtle shell gives water breathing: on both sides, every tick. It lasts 1 s,
-	 * so it ends within a second after the treads come off. An ambient effect does not blink in the HUD as it ends.
+	 * Worn treads give the effect as the turtle shell gives water breathing: on both sides, every tick, for 10 s, so the
+	 * icon has the normal frame and does not blink. Unlike the shell, the treads take their effect away on the tick that
+	 * they come off. Their effect has no particles, which a potion or a command effect has, so a running potion stays.
 	 */
 	public static void tickTreads(Player player) {
 		if (player.getItemBySlot(EquipmentSlot.FEET).is(SHULKER_TREADS)) {
-			player.addEffect(new MobEffectInstance(STEADFAST, 20, 0, true, false, true));
+			player.addEffect(new MobEffectInstance(STEADFAST, TREADS_TICKS, 0, false, false, true));
+			return;
+		}
+		MobEffectInstance effect = player.getEffect(STEADFAST);
+		if (effect != null && effect.getAmplifier() == 0 && !effect.isVisible() && !effect.isInfiniteDuration()
+			&& effect.getDuration() <= TREADS_TICKS) {
+			player.removeEffect(STEADFAST);
 		}
 	}
 }
