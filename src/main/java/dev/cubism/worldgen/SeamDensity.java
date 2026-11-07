@@ -50,7 +50,11 @@ public final class SeamDensity {
 
 	public SeamDensity(SeamLayout layout) {
 		this.layout = layout;
-		this.cubeRule = CubeDensityFunctions.cubeRule(layout.centerY, layout.radius, layout.surfaceY, layout.innerBedrockRadius);
+		// The floor of the Nether is a cube 128 blocks across at the smallest size, while the climate of vanilla changes
+		// over hundreds of blocks: read at the floor, all six faces got one or two biomes. Halfway up the cave, a block of
+		// the cube is a block of the climate map, as in vanilla.
+		int surfaceNoiseRadius = layout.nether ? layout.radius + layout.openHeight / 2 : layout.radius;
+		this.cubeRule = CubeDensityFunctions.cubeRule(layout.centerY, layout.radius, surfaceNoiseRadius, layout.surfaceY, layout.innerBedrockRadius);
 	}
 
 	public synchronized DensityFunction rewrite(DensityFunction fn) {

@@ -8,11 +8,15 @@ import dev.cubism.worldgen.StrongholdPositions;
 import dev.cubism.worldgen.StructureMargins;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructureSets;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import org.jspecify.annotations.Nullable;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -26,6 +30,10 @@ import java.util.concurrent.CompletableFuture;
 @Mixin(ChunkGeneratorStructureState.class)
 public abstract class ChunkGeneratorStructureStateMixin {
 	/** Made once, so that each split set keeps one placement, which is the key of its ring positions. */
+	@Shadow
+	@Final
+	private BiomeSource biomeSource;
+
 	@Unique
 	private volatile @Nullable List<Holder<StructureSet>> cubism$netherSets;
 
@@ -36,7 +44,9 @@ public abstract class ChunkGeneratorStructureStateMixin {
 		ChunkGeneratorStructureState state = (ChunkGeneratorStructureState) (Object) this;
 		SeamLayout layout = StructureMargins.layout(state);
 		if (layout != null && layout.nether && NetherComplexes.isComplex(structureSet.value())) {
-			return CompletableFuture.completedFuture(NetherComplexes.positions(layout, state.getLevelSeed(), structureSet.value()));
+			return CompletableFuture.completedFuture(
+				NetherComplexes.positions(layout, state.getLevelSeed(), structureSet.value(), this.biomeSource.createResolver(
+					state.randomState().createClimateSampler(SamplerContext.builder().enableCaches().build()))));
 		}
 		if (layout == null || !structureSet.is(BuiltinStructureSets.STRONGHOLDS)) {
 			return rings;

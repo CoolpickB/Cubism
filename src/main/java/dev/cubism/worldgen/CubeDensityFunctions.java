@@ -54,7 +54,7 @@ public final class CubeDensityFunctions {
 	}
 
 	public static NoiseRouter rewriteRouter(NoiseRouter router, int centerY, int radiusBlocks, int surfaceY, int innerBedrockRadius) {
-		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, surfaceY, innerBedrockRadius);
+		DfRewriteRule rule = cubeRule(centerY, radiusBlocks, radiusBlocks, surfaceY, innerBedrockRadius);
 		return new NoiseRouter(
 			rule.rewrite(router.temperature()),
 			rule.rewrite(router.vegetation()),
@@ -67,8 +67,11 @@ public final class CubeDensityFunctions {
 		);
 	}
 
-	/** Rewrites a density function to work on the cube in world coordinates. The rule memoizes and is not thread-safe. */
-	public static DfRewriteRule cubeRule(int centerY, int radiusBlocks, int surfaceY, int innerBedrockRadius) {
+	/**
+	 * Rewrites a density function to work on the cube in world coordinates. The rule memoizes and is not thread-safe.
+	 * 2D noise, such as the climate, is read on the surface of the cube at {@code surfaceNoiseRadius}.
+	 */
+	public static DfRewriteRule cubeRule(int centerY, int radiusBlocks, int surfaceNoiseRadius, int surfaceY, int innerBedrockRadius) {
 		Map<DensityFunction, DensityFunction> memo = new IdentityHashMap<>();
 		return new DfRewriteRule() {
 			@Override
@@ -109,7 +112,7 @@ public final class CubeDensityFunctions {
 				}
 
 				DensityFunction rewrittenChildren = unwrapped.rewriteChildren(this);
-				DensityFunction transformed = transformNode(rewrittenChildren, autoShiftYNoise, centerY, radiusBlocks, surfaceY, innerBedrockRadius);
+				DensityFunction transformed = transformNode(rewrittenChildren, autoShiftYNoise, centerY, radiusBlocks, surfaceNoiseRadius, surfaceY, innerBedrockRadius);
 				memo.put(fn, transformed);
 				return transformed;
 			}
@@ -131,12 +134,13 @@ public final class CubeDensityFunctions {
 		Holder<NormalNoise> autoShiftYNoise,
 		int centerY,
 		int radiusBlocks,
+		int surfaceNoiseRadius,
 		int surfaceY,
 		int innerBedrockRadius
 	) {
 		if (fn instanceof NoiseFunction nf && nf.yScale() == 0.0) {
 			DensityFunction shiftY = autoShiftYNoise != null
-				? new CubeShiftNoiseFunction(autoShiftYNoise, ShiftAxis.Y, centerY, radiusBlocks, nf.shiftX().range())
+				? new CubeShiftNoiseFunction(autoShiftYNoise, ShiftAxis.Y, centerY, surfaceNoiseRadius, nf.shiftX().range())
 				: nf.shiftY();
 
 			return new CubeSurfaceNoiseFunction(
@@ -146,14 +150,14 @@ public final class CubeDensityFunctions {
 				shiftY,
 				nf.shiftZ(),
 				centerY,
-				radiusBlocks,
+				surfaceNoiseRadius,
 				nf.range()
 			);
 		}
 
 		if (fn instanceof ShiftNoiseFunction snf) {
 			ShiftAxis axis = (snf instanceof ShiftNoiseFunction.ShiftB) ? ShiftAxis.Z : ShiftAxis.X;
-			return new CubeShiftNoiseFunction(snf.offsetNoise(), axis, centerY, radiusBlocks, snf.range());
+			return new CubeShiftNoiseFunction(snf.offsetNoise(), axis, centerY, surfaceNoiseRadius, snf.range());
 		}
 
 		if (fn instanceof GradientFunction gf && gf.axis() == Direction.Axis.Y) {

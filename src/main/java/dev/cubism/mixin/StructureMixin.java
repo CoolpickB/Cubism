@@ -18,6 +18,7 @@ import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.chunk.ChunkGenerator;
@@ -63,9 +64,13 @@ public abstract class StructureMixin {
 		BiomeSource biomeSource, Climate.Sampler climateSampler, RandomState randomState, StructureTemplateManager templates, long seed,
 		ChunkPos chunk, int references, LevelHeightAccessor heightAccessor, Predicate<Holder<Biome>> validBiome, Operation<StructureStart> original
 	) {
+		SeamLayout layout = SeamLayout.of(chunkGenerator);
+		if (layout != null && layout.nether && selected.is(BuiltinStructures.BASTION_REMNANT)) {
+			// The bastions of a finite Nether are guaranteed, and the faces of some seeds are all basalt deltas.
+			validBiome = biome -> true;
+		}
 		StructureStart start = original.call(
 			selected, dimension, registryAccess, chunkGenerator, biomeSource, climateSampler, randomState, templates, seed, chunk, references, heightAccessor, validBiome);
-		SeamLayout layout = SeamLayout.of(chunkGenerator);
 		if (!start.isValid() || layout == null) {
 			return start;
 		}
