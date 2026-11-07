@@ -17,18 +17,18 @@ To play, select the **Cubism** world type when you create a world. The mod must 
 
 | Mod | Support | Notes |
 |---|---|---|
-| Sodium | 🟢 | |
-| Iris | 🟢 | Shader packs generally load fine, but Complementary Unbound r5.9.3 is currently the only one that follows the cube's shape properly. |
-| Voxy | 🟢 | |
-| Lithium | 🟢 | Turns off a few options for collisions. |
-| Do a Barrel Roll | 🟢 | |
-| Continuity | 🟢 | Connected textures connect across the edges of the cube. |
-| Voxygen | 🟢 | |
-| Entity Culling | 🟡 | Entity Culling does not cull or stop the entities of other faces. As a result, these entities do not get its performance gain. |
-| More Culling | 🟡 | |
-| Xaero's Minimap and Xaero's World Map | 🟡 | The maps show the six faces side by side, not as a cube. We did not test waypoint beacons and distances for a waypoint on another face. |
 | C2ME | 🔴 | Blocked as a precaution. It runs world generation on many threads, which can quietly break the cube's generation and damage saves. |
+| Continuity | 🟢 | Connected textures connect across the edges of the cube. |
 | Distant Horizons | 🔴 | Not supported at this time. Support is planned after the first release. |
+| Do a Barrel Roll | 🟢 | |
+| Entity Culling | 🟡 | Entity Culling does not cull or stop the entities of other faces. As a result, these entities do not get its performance gain. |
+| Iris | 🟢 | Shader packs generally load fine, but Complementary Unbound r5.9.3 is currently the only one that follows the cube's shape properly. |
+| Lithium | 🟢 | Turns off a few options for collisions. |
+| More Culling | 🟡 | |
+| Sodium | 🟢 | |
+| Voxy | 🟢 | |
+| Voxygen | 🟢 | |
+| Xaero's Minimap and Xaero's World Map | 🟡 | The maps show the six faces side by side, not as a cube. We did not test waypoint beacons and distances for a waypoint on another face. |
 
 If you find a problem with another mod, open an issue. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
