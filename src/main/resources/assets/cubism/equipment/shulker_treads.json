@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "cubism:shulker_treads"
+      }
+    ],
+    "humanoid_baby": [
+      {
+        "texture": "cubism:shulker_treads"
+      }
+    ]
+  }
+}

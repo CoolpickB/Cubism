@@ -50,10 +50,10 @@ public final class GravityLock {
 		BuiltInRegistries.POTION, id("long_steadfast"), new Potion("steadfast", new MobEffectInstance(STEADFAST, 9600))
 	);
 
-	// Diamond values with the knockback resistance of netherite. The worn texture is the diamond one for now.
+	// Diamond values with the knockback resistance of netherite.
 	private static final ArmorMaterial SHULKER = new ArmorMaterial(
 		33, Map.of(ArmorType.BOOTS, 3), 10, SoundEvents.ARMOR_EQUIP_NETHERITE, 2.0F, 0.1F,
-		TagKey.create(Registries.ITEM, id("repairs_shulker_treads")), EquipmentAssets.DIAMOND
+		TagKey.create(Registries.ITEM, id("repairs_shulker_treads")), ResourceKey.create(EquipmentAssets.ROOT_ID, id("shulker_treads"))
 	);
 	public static final Item SHULKER_TREADS = Registry.register(
 		BuiltInRegistries.ITEM, id("shulker_treads"),

@@ -243,7 +243,13 @@ public abstract class CameraMixin {
 		if (span <= 1.0E-4F || span > 1.0F || ahead <= 0.0F) {
 			return last;
 		}
-		AxisAngle4f turn = new AxisAngle4f(new Quaternionf(lastRotation).mul(new Quaternionf(rotationBefore).conjugate()));
+		Quaternionf delta = new Quaternionf(lastRotation).mul(new Quaternionf(rotationBefore).conjugate()).normalize();
+		// With no turn between the frames, rounding can put |w| just over 1, and JOML then gives a NaN axis. A NaN
+		// correction never eases out, and the camera drew nothing until the next crossing.
+		if (Math.abs(delta.w) >= 1.0F - 1.0E-6F) {
+			return last;
+		}
+		AxisAngle4f turn = new AxisAngle4f(delta);
 		float angle = turn.angle > (float) Math.PI ? turn.angle - 2.0F * (float) Math.PI : turn.angle;
 		return new Quaternionf().rotationAxis(angle * Math.min(ahead / span, 3.0F), turn.x, turn.y, turn.z).mul(last);
 	}
