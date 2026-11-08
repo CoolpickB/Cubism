@@ -359,7 +359,8 @@ public final class SeamLayout {
 			return storage;
 		}
 		Vec3 p = this.cubeOffset(SPACE, storage.x, storage.y, storage.z);
-		double top = this.stratosphereTop();
+		// A face region is only this wide, whatever the build height is: a lateral coordinate past it lands in the next region.
+		double top = Math.min(this.stratosphereTop(), this.spacing / 2.0 - 1.0);
 		// Only the part past the core is scaled. The local time follows the direction of that part (see CubeTime.surfaceNormal),
 		// so the owner position has the local time of the position, and no edge of a face lies between them.
 		double inner = this.radius - CubeTime.EDGE_BLEND;

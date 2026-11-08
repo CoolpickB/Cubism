@@ -27,6 +27,12 @@ final class DebugLight {
 			faces.append(CubeTime.offsetTicks(layout, layout.offsetX(f) + 0.5, layout.centerY + layout.radius, 0.5)).append(' ');
 		}
 		line("orbit=%.3f planetSkyEnd body=%s owner=%s ownerRegion=%d", CubeSky.orbit(), fmt(body), fmt(owner), layout.regionOfX((int) Math.floor(owner.x)));
+		Vec3 bodyCube = layout.cubeOffset(layout.regionAt((int) Math.floor(body.x), (int) Math.floor(body.z)), body.x, body.y, body.z);
+		Vec3 ownerCube = layout.cubeOffset(layout.regionAt((int) Math.floor(owner.x), (int) Math.floor(owner.z)), owner.x, owner.y, owner.z);
+		double[] bn = CubeTime.surfaceNormal(layout, body.x, body.y, body.z);
+		double[] on = CubeTime.surfaceNormal(layout, owner.x, owner.y, owner.z);
+		line("radius=%d top=%.1f bodyCube=%s ownerCube=%s", layout.radius, layout.stratosphereTop(), fmt(bodyCube), fmt(ownerCube));
+		line("bodyNormal=(%.1f, %.1f, %.1f) ownerNormal=(%.1f, %.1f, %.1f) bodyRegion=%d", bn[0], bn[1], bn[2], on[0], on[1], on[2], layout.regionAt((int) Math.floor(body.x), (int) Math.floor(body.z)));
 		line("offsetTicks body=%d owner=%d faceMiddles=[%s]", CubeTime.offsetTicks(layout, body.x, body.y, body.z), CubeTime.offsetTicks(layout, owner.x, owner.y, owner.z), faces.toString().trim());
 		line("probe skyLightFactor=%.3f skyLightLevel=%.3f fogEnd=%.1f skyFogEnd=%.1f cloudHeight=%.1f",
 			probe.getValue(EnvironmentAttributes.SKY_LIGHT_FACTOR, 1.0F), probe.getValue(EnvironmentAttributes.SKY_LIGHT_LEVEL, 1.0F),
