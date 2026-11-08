@@ -23,12 +23,15 @@ import org.jspecify.annotations.Nullable;
  * the storage frame of each face, so it matches the world, and it is not generated into chunks.
  *
  * <p>Data layout: for each face, for each node (u outer, v inner) a short with the height over the top of the face,
- * then three bytes of color. Node (i, j) is at {@code -radius + 2 * radius * i / CELLS} along each axis of the face.
+ * then three bytes of color, then a byte that is 1 where the biome is cold enough to snow. Node (i, j) is at {@code -radius + 2 * radius * i / CELLS} along each axis of the face.
  */
 public final class PlanetMap {
 	public static final int CELLS = 64;
+	public static final int BYTES_PER_NODE = 6;
 	private static final int SNOW_ABOVE = 110;
 	private static final int STONE_ABOVE = 80;
+	/** The temperature at and under which a biome snows, as the snowy biomes of shader packs. */
+	private static final float COLD = 0.15F;
 	private static final ExecutorService WORKER = Executors.newSingleThreadExecutor(task -> {
 		Thread thread = new Thread(task, "Cubism planet map");
 		thread.setDaemon(true);
@@ -56,7 +59,7 @@ public final class PlanetMap {
 		RandomState random = level.getChunkSource().randomState();
 		BiomeResolver biomes = generator.getBiomeSource().createResolver(random.createClimateSampler(SamplerContext.builder().enableCaches().build()));
 		int sea = generator.getSeaLevel();
-		ByteArrayOutputStream bytes = new ByteArrayOutputStream(SeamLayout.FACES.length * (CELLS + 1) * (CELLS + 1) * 5);
+		ByteArrayOutputStream bytes = new ByteArrayOutputStream(SeamLayout.FACES.length * (CELLS + 1) * (CELLS + 1) * BYTES_PER_NODE);
 		try (DataOutputStream out = new DataOutputStream(bytes)) {
 			for (int face = 0; face < SeamLayout.FACES.length; face++) {
 				for (int i = 0; i <= CELLS; i++) {
@@ -88,7 +91,7 @@ public final class PlanetMap {
 			float shade = Mth.clamp(1.0F - depth / 60.0F, 0.35F, 1.0F);
 			return scale(temperature <= 0.0F && depth < 4 ? 0xA8C8E8 : biome.getWaterColor() & 0xFFFFFF, shade);
 		}
-		if (aboveSea > SNOW_ABOVE || temperature <= 0.15F) {
+		if (aboveSea > SNOW_ABOVE || temperature <= COLD) {
 			return 0xF2F6F8;
 		}
 		if (aboveSea > STONE_ABOVE) {

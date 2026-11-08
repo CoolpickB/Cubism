@@ -10,6 +10,7 @@
 		"IrisExtendedShaderMixin",
 		"IrisIncludeGraphMixin",
 		"IrisShadowMatricesMixin",
+		"IrisShaderPackMixin",
 		"IrisShadowRendererMixin"
 	],
 	"injectors": {

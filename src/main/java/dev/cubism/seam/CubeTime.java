@@ -144,7 +144,12 @@ public final class CubeTime {
 		EnvironmentAttributeSystem.Builder builder, State state, EnvironmentAttribute<V> attribute, Timeline timeline, ClockManager clocks
 	) {
 		AttributeTrackSamplerAccessor<V, A> track = (AttributeTrackSamplerAccessor<V, A>) (Object) timeline.createTrackSampler(attribute, clocks);
-		if (attribute.isPositional()) {
+		if (attribute == EnvironmentAttributes.MOON_PHASE) {
+			// The moon is one body over the whole cube. With the local time its phase changed where the local day number
+			// did, at a crossing of faces, so it takes the clock of the world.
+			builder.addTimeBasedLayer(attribute, (base, cacheTickId) ->
+				track.cubism$modifier().apply(base, track.cubism$argumentSampler().sample(clocks.getInstance(track.cubism$clock()).totalTicks())));
+		} else if (attribute.isPositional()) {
 			builder.addPositionalLayer(attribute, (base, pos, interpolator) ->
 				track.cubism$modifier().apply(base, track.cubism$argumentSampler().sample(state.ticks(clocks.getInstance(track.cubism$clock()).totalTicks(), state.offsetAt(pos)))));
 		} else {

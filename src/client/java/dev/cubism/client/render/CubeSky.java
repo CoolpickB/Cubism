@@ -265,6 +265,8 @@ public final class CubeSky {
 		if (!active) {
 			return;
 		}
+		// A shader pack reads the texture of the planet on the ground too, for its auroras.
+		PlanetView.prepare();
 		Vec3 sample = layout.ownerStorage(camera);
 		Vec3 planet = new Vec3(layout.offsetX(0) + 0.5, layout.centerY + layout.radius, 0.5);
 		DynamicTexture texture = table;

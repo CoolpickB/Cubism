@@ -18,7 +18,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import org.jspecify.annotations.Nullable;
@@ -43,6 +45,18 @@ public final class PlanetView {
 
 	/** Blocks that each column top sits under the lowest of its nodes. */
 	private static final int SINK = 6;
+
+	/**
+	 * The columns for a shader pack, bound by the pack properties (see IrisShaderPackMixin). The mesh writes no depth, so the
+	 * clouds of the pack find where a ray meets it here. Face k of the cube frame (+X, -X, +Y, -Y, +Z, -Z) is the block of
+	 * 64 by 64 texels from x = 64k. Its texels run along the two other axes in order, from -radius to +radius. Red and
+	 * green hold the top of the column over the top of the face plus {@link #TEXTURE_OFFSET}, low byte first, and blue is
+	 * 255 over a cold biome. Row 64 holds the edge rounding of the mesh at x 0 and the highest top at x 1, in the same
+	 * two bytes.
+	 */
+	public static final Identifier TEXTURE = Identifier.fromNamespaceAndPath("cubism", "dynamic/planet");
+	private static final int TEXTURE_OFFSET = 1024;
+	private static @Nullable DynamicTexture texture;
 
 	private static byte @Nullable [] data;
 	private static @Nullable GpuBuffer mesh;
@@ -74,16 +88,19 @@ public final class PlanetView {
 
 	/** The mesh buffer, built when the data or the layout is new. Null while the server has not sent the map. */
 	static @Nullable GpuBuffer mesh() {
-		SeamLayout layout = SeamClient.layout;
-		if (data == null || layout == null) {
-			return null;
-		}
-		if (mesh == null || builtFor != layout) {
-			close();
-			build(layout, data);
-			builtFor = layout;
-		}
+		prepare();
 		return mesh;
+	}
+
+	/** Builds the mesh and the texture when the data or the layout is new. */
+	static void prepare() {
+		SeamLayout layout = SeamClient.layout;
+		if (data == null || layout == null || (mesh != null && builtFor == layout)) {
+			return;
+		}
+		close();
+		build(layout, data);
+		builtFor = layout;
 	}
 
 	static int vertices() {
@@ -103,16 +120,18 @@ public final class PlanetView {
 		int cells = PlanetMap.CELLS;
 		int nodes = cells + 1;
 		int faces = SeamLayout.FACES.length;
-		if (bytes.length != faces * nodes * nodes * 5) {
+		if (bytes.length != faces * nodes * nodes * PlanetMap.BYTES_PER_NODE) {
 			return;
 		}
 		ByteBuffer in = ByteBuffer.wrap(bytes);
 		short[][] nodeHeight = new short[faces][nodes * nodes];
 		int[][] nodeColor = new int[faces][nodes * nodes];
+		boolean[][] nodeCold = new boolean[faces][nodes * nodes];
 		for (int face = 0; face < faces; face++) {
 			for (int n = 0; n < nodes * nodes; n++) {
 				nodeHeight[face][n] = in.getShort();
 				nodeColor[face][n] = (in.get() & 0xFF) << 16 | (in.get() & 0xFF) << 8 | (in.get() & 0xFF);
+				nodeCold[face][n] = in.get() != 0;
 			}
 		}
 		int[][] top = new int[faces][cells * cells];
@@ -129,6 +148,7 @@ public final class PlanetView {
 				}
 			}
 		}
+		fillTexture(layout, top, nodeCold);
 		Corners corners = new Corners(layout);
 		// The columns on the two sides of a diagonal share the two nodes of their common edge. Their tops differ, and the
 		// higher one gets a wall down to the lower, found by the position of that edge.
@@ -192,6 +212,46 @@ public final class PlanetView {
 				vertices = total;
 			}
 		}
+	}
+
+	private static void fillTexture(SeamLayout layout, int[][] top, boolean[][] nodeCold) {
+		int cells = PlanetMap.CELLS;
+		DynamicTexture target = texture;
+		if (target == null) {
+			target = new DynamicTexture(() -> "Cube planet columns", cells * SeamLayout.FACES.length, cells + 1, false);
+			Minecraft.getInstance().getTextureManager().register(TEXTURE, target);
+			texture = target;
+		}
+		int radius = layout.radius;
+		int highest = Integer.MIN_VALUE;
+		for (int face = 0; face < SeamLayout.FACES.length; face++) {
+			int[] m = layout.rotation(face);
+			for (int i = 0; i < cells; i++) {
+				double u = -radius + 2.0 * radius * (i + 0.5) / cells;
+				for (int j = 0; j < cells; j++) {
+					double v = -radius + 2.0 * radius * (j + 0.5) / cells;
+					double[] c = {m[0] * u + m[1] * radius + m[2] * v, m[3] * u + m[4] * radius + m[5] * v, m[6] * u + m[7] * radius + m[8] * v};
+					int axis = Math.abs(c[0]) >= Math.abs(c[1]) && Math.abs(c[0]) >= Math.abs(c[2]) ? 0 : Math.abs(c[1]) >= Math.abs(c[2]) ? 1 : 2;
+					int x = (axis * 2 + (c[axis] < 0.0 ? 1 : 0)) * cells + texel(c[axis == 0 ? 1 : 0], radius);
+					int y = texel(c[axis == 2 ? 1 : 2], radius);
+					int height = top[face][i * cells + j];
+					highest = Math.max(highest, height);
+					target.getPixels().setPixel(x, y, packed(height, nodeCold[face][i * (cells + 1) + j]));
+				}
+			}
+		}
+		target.getPixels().setPixel(0, cells, packed(layout.edgeRounding(), false));
+		target.getPixels().setPixel(1, cells, packed(highest, false));
+		target.upload();
+	}
+
+	private static int texel(double along, int radius) {
+		return Mth.clamp((int) Math.floor((along + radius) / (2.0 * radius) * PlanetMap.CELLS), 0, PlanetMap.CELLS - 1);
+	}
+
+	private static int packed(int value, boolean cold) {
+		int stored = Mth.clamp(value + TEXTURE_OFFSET, 0, 0xFFFF);
+		return 0xFF000000 | (stored & 0xFF) << 16 | (stored >> 8) << 8 | (cold ? 0xFF : 0);
 	}
 
 	private record EdgeKey(int ax, int ay, int az, int bx, int by, int bz) {}

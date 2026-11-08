@@ -219,3 +219,9 @@ Fourth pass (2026-11-08, untested). The user confirmed that the world renders wi
 - Auroras: a ring around each pole of the sky, the two corners on the sun axis. The ring shows from the ground and from orbit, at night under it, with the moon condition of the pack. The aurora over the camera from the biome condition of the pack fades out in orbit. The aurora is now drawn from inside and from above its band, and over the ground of the planet from orbit.
 - The night nebula no longer draws over the planet.
 - Terrain and Voxy with a pack: the direct light is turned by the tilt of the rounded up near an edge, so it turns over the same width as the time of day. Before, it changed in a hard line at the edge.
+
+Fifth pass (2026-11-08, untested). The user found that the clouds drew in front of the hills of the planet mesh, and that the aurora came and went at a crossing of faces. Changes:
+- The moon phase follows the clock of the world. Before, it took the local time and changed where the local day number changed, at a crossing of faces.
+- The server sends a cold flag for each node of the planet map. The client puts the column tops and the cold flags of the mesh in a texture (`cubism:dynamic/planet`), which a pack reads as `cubism_planetTex`. A mixin adds the `customTexture` line to the properties of the pack.
+- Clouds, both styles: in orbit the march stops where the ray meets a column of the planet mesh.
+- Auroras: no more rings at the poles. The aurora condition of the pack works over the whole cube: "Snowy Biome" shows the aurora over cold cells of the planet at night there, "Full Moon" everywhere at night on full moon nights, "Full Moon in Snowy Biome" over cold cells on full moon nights, "Full Moon or Snowy Biome" both, "Every Night" everywhere. In Voxy water reflections the biome at the camera counts, as Voxy binds no texture of the pack.
