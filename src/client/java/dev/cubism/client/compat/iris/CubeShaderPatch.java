@@ -123,6 +123,7 @@ public final class CubeShaderPatch {
 		    uniform mat3 cubism_viewToFeet;
 		    uniform vec3 cubism_shadowLight;
 		    uniform vec3 cubism_daySkyColor;
+		    uniform float cubism_orbit;
 		    // From the storage frame of the face that draws into the one of the camera face. It is the identity except while a
 		    // folded face draws.
 		    uniform mat3 cubism_faceTurn;
@@ -144,6 +145,8 @@ public final class CubeShaderPatch {
 		    // The sky color of Iris follows the time at the camera. The light that the sky gives a point follows the time of the
 		    // point, as vanilla dims the sky color of the full day: by the height of the sun.
 		    #define cubismSkyColor() (cubism_active != 0 ? cubism_daySkyColor * clamp(sin(cubismSunAngle() * 6.28318531) * 2.0 + 0.5, 0.0, 1.0) : skyColor)
+		    // 0 on the ground, 1 well above the air. In orbit the air no longer lies between the camera and what it sees.
+		    #define cubismSpace() (cubism_active != 0 ? cubism_orbit : 0.0)
 		    #define CUBEWORLD_UP_VEC (cubism_active != 0 ? normalize(cubism_upPosition) : normalize(gbufferModelView[1].xyz))
 		    float cubismAlt(vec3 p) {
 		        if (cubism_active == 0) return p.y;
@@ -387,7 +390,16 @@ public final class CubeShaderPatch {
 			}
 			return source.replace(header, "vec3 GetAuroraBorealisFlat(vec3 viewPos, float VdotU, float dither) {") + CUBE_AURORA;
 		}
+		if (name.endsWith("/lib/atmospherics/sky.glsl")) {
+			// Above the air the sky is black. The fog toward the sky and the sky in reflections take this color too.
+			source = source.replace("        return finalSky;\n", "        finalSky *= 1.0 - cubismSpace();\n        return finalSky;\n");
+		}
 		if (name.endsWith(STARS)) {
+			// In orbit the stars show by day and below the horizon of the ground under the camera. The planet hides them.
+			source = source.replace("    if (VdotU < 0.0) return vec3(0.0);\n", "    if (VdotU < 0.0 && cubismSpace() == 0.0) return vec3(0.0);\n")
+				.replace("    star *= min1(VdotU * 3.0) * max0(", "    star *= mix(min1(max0(VdotU) * 3.0), 1.0, cubismSpace()) * max0(")
+				.replace("    star *= invRainFactor * pow2(pow2(invNoonFactor2)) * (1.0 - 0.5 * sunVisibility);\n",
+					"    star *= mix(invRainFactor * pow2(pow2(invNoonFactor2)) * (1.0 - 0.5 * sunVisibility), 1.0, cubismSpace());\n");
 			// The stars keep their place on the sky, which turns with the sun. Its pole is the axis of the sun, and the
 			// half of the sky past the equator shows the mirror of the other half, as the projection needs y above 0.
 			return source.replace(
@@ -449,6 +461,19 @@ public final class CubeShaderPatch {
 				                    #ifdef CUBEWORLD
 				                        if (cubism_active != 0 && dot(lightVec, cubism_shadowLight) < 0.0) shadowLength = 0.0;
 				                    #endif""");
+		}
+		if (name.endsWith("/program/gbuffers_skybasic.glsl") || name.endsWith("/program/gbuffers_skytextured.glsl")) {
+			// The sun and moon set at the horizon of the ground under the camera. In orbit they set behind the planet,
+			// which draws over them.
+			source = source.replace("GetHorizonFactor(SdotU)", "mix(GetHorizonFactor(SdotU), 1.0, cubismSpace())")
+				.replace("GetHorizonFactor(-SdotU)", "mix(GetHorizonFactor(-SdotU), 1.0, cubismSpace())")
+				.replace("GetHorizonFactor(VdotU)", "mix(GetHorizonFactor(VdotU), 1.0, cubismSpace())");
+		}
+		if (name.endsWith(MAIN_FOG)) {
+			// From orbit the planet is seen through little air, and the far ground ends at the edge of the planet, not in
+			// the sky. Without this the haze and the fog at the end of the view cover the whole planet.
+			source = source.replace("        fog *= altitudeFactor;\n", "        fog *= altitudeFactor * (1.0 - cubismSpace());\n")
+				.replace("        #ifdef IRIS_FEATURE_FADE_VARIABLE\n", "        fog *= 1.0 - cubismSpace();\n\n        #ifdef IRIS_FEATURE_FADE_VARIABLE\n");
 		}
 		if (name.endsWith(MAIN_FOG) || name.endsWith("/program/gbuffers_terrain.glsl") || name.endsWith("/program/gbuffers_water.glsl")) {
 			source = source.replace("max(length(playerPos.xz), abs(playerPos.y))", "cubismBorderDist(playerPos)");
@@ -538,7 +563,7 @@ public final class CubeShaderPatch {
 			source = source.replace("        \"shadowProjectionInverse\",\n", """
 				        "shadowProjectionInverse",
 				        "cubism_active", "cubism_sunPosition", "cubism_upPosition", "cubism_cubeFromFeet", "cubism_cubeFromView",
-				        "cubism_core", "cubism_centerY", "cubism_shadowLight", "cubism_daySkyColor",
+				        "cubism_core", "cubism_centerY", "cubism_shadowLight", "cubism_daySkyColor", "cubism_orbit",
 				        "cubism_voxyTurn0", "cubism_voxyTurn1", "cubism_voxyTurn2", "cubism_voxyTurn3", "cubism_voxyTurn4", "cubism_voxyTurn5",
 				""");
 		}
@@ -754,5 +779,6 @@ public final class CubeShaderPatch {
 		}
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubism_core", CubeSky::core);
 		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubism_centerY", CubeSky::centerY);
+		uniforms.uniform1f(UniformUpdateFrequency.PER_FRAME, "cubism_orbit", CubeSky::orbit);
 	}
 }

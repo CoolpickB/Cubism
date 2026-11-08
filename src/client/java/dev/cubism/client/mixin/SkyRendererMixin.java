@@ -80,14 +80,18 @@ public abstract class SkyRendererMixin {
 		CubeSky.renderAir(renderPass);
 	}
 
-	/** The planet draws after the sun and the moon, so that it hides them when they are behind it. */
+	/**
+	 * The planet draws after the sun and the moon, so that it hides them when they are behind it. It also draws with a
+	 * shader pack: Iris keeps the program of the mod for a pipeline that it has no program for, and the mesh writes no
+	 * depth, so the pack keeps it as the color of the sky.
+	 */
 	@WrapOperation(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SkyRenderer;renderSunMoonAndStars(Lcom/mojang/renderpearl/api/commands/RenderPass;Lcom/mojang/blaze3d/vertex/PoseStack;FFFLnet/minecraft/world/level/MoonPhase;FF)V"))
 	private void cubism$planetOverSun(
 		SkyRenderer renderer, RenderPass renderPass, PoseStack poseStack, float sunAngle, float moonAngle, float starAngle, MoonPhase moonPhase,
 		float rainBrightness, float starBrightness, Operation<Void> original
 	) {
 		original.call(renderer, renderPass, poseStack, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness);
-		if (cubism$celestial != null && CubeSky.active() && !(SeamClient.IRIS && CubeShaderPatch.packInUse())) {
+		if (cubism$celestial != null && CubeSky.active()) {
 			CubeSky.renderPlanet(renderPass);
 		}
 	}
