@@ -6,6 +6,7 @@
 		"AccessibilityOptionsScreenMixin",
 		"AvatarRendererMixin",
 		"AtmosphericFogEnvironmentMixin",
+		"FogRendererMixin",
 		"BlockModelLighterMixin",
 		"CameraMixin",
 		"CloudRendererAccessor",
