@@ -373,7 +373,7 @@ public final class CubeSky {
 		}
 		java.util.Arrays.sort(order, (a, b) -> Double.compare(distance[b], distance[a]));
 		for (int face : order) {
-			renderPass.draw(PlanetView.verticesPerFace(), 1, face * PlanetView.verticesPerFace(), 0);
+			renderPass.draw(PlanetView.faceCount(face), 1, PlanetView.faceStart(face), 0);
 		}
 		renderPass.popDebugGroup();
 	}

@@ -40,6 +40,8 @@ public final class PlanetView {
 	private static byte @Nullable [] data;
 	private static @Nullable GpuBuffer mesh;
 	private static int vertices;
+	private static final int[] faceStart = new int[SeamLayout.FACES.length];
+	private static final int[] faceCount = new int[SeamLayout.FACES.length];
 	private static @Nullable SeamLayout builtFor;
 
 	private PlanetView() {}
@@ -81,11 +83,15 @@ public final class PlanetView {
 		return vertices;
 	}
 
-	/** The faces are stored one after the other, this many vertices each. */
-	static int verticesPerFace() {
-		return PlanetMap.CELLS * PlanetMap.CELLS * 6;
+	static int faceStart(int face) {
+		return faceStart[face];
 	}
 
+	static int faceCount(int face) {
+		return faceCount[face];
+	}
+
+	/** Cells are columns: a flat top at one height, and a wall on each side where the next cell is lower. */
 	private static void build(SeamLayout layout, byte[] bytes) {
 		int cells = PlanetMap.CELLS;
 		int nodes = cells + 1;
@@ -94,60 +100,132 @@ public final class PlanetView {
 			return;
 		}
 		ByteBuffer in = ByteBuffer.wrap(bytes);
-		float[][] position = new float[faces * nodes * nodes][];
-		int[] color = new int[position.length];
-		double rounding = layout.edgeRounding();
-		double core = layout.radius - rounding;
+		short[][] nodeHeight = new short[faces][nodes * nodes];
+		int[][] nodeColor = new int[faces][nodes * nodes];
 		for (int face = 0; face < faces; face++) {
-			int[] m = layout.rotation(face);
-			for (int i = 0; i < nodes; i++) {
-				double u = -layout.radius + 2.0 * layout.radius * i / cells;
-				for (int j = 0; j < nodes; j++) {
-					double v = -layout.radius + 2.0 * layout.radius * j / cells;
-					int height = in.getShort();
-					int rgb = (in.get() & 0xFF) << 16 | (in.get() & 0xFF) << 8 | (in.get() & 0xFF);
-					double qx = Mth.clamp(u, -core, core);
-					double qz = Mth.clamp(v, -core, core);
-					double nx = u - qx;
-					double ny = layout.radius - core;
-					double nz = v - qz;
-					double length = Math.sqrt(nx * nx + ny * ny + nz * nz);
-					double out = rounding + height;
-					double x = qx + nx / length * out;
-					double y = core + ny / length * out;
-					double z = qz + nz / length * out;
-					int index = (face * nodes + i) * nodes + j;
-					position[index] = new float[] {
-						(float) (m[0] * x + m[1] * y + m[2] * z),
-						(float) (m[3] * x + m[4] * y + m[5] * z),
-						(float) (m[6] * x + m[7] * y + m[8] * z)
-					};
-					color[index] = 0xFF000000 | rgb;
+			for (int n = 0; n < nodes * nodes; n++) {
+				nodeHeight[face][n] = in.getShort();
+				nodeColor[face][n] = (in.get() & 0xFF) << 16 | (in.get() & 0xFF) << 8 | (in.get() & 0xFF);
+			}
+		}
+		int[][] top = new int[faces][cells * cells];
+		int[][] cellColor = new int[faces][cells * cells];
+		for (int face = 0; face < faces; face++) {
+			for (int i = 0; i < cells; i++) {
+				for (int j = 0; j < cells; j++) {
+					int a = i * nodes + j;
+					top[face][i * cells + j] = Math.round((nodeHeight[face][a] + nodeHeight[face][a + 1] + nodeHeight[face][a + nodes] + nodeHeight[face][a + nodes + 1]) / 4.0F);
+					cellColor[face][i * cells + j] = 0xFF000000 | nodeColor[face][a];
 				}
 			}
 		}
-		int count = faces * cells * cells * 6;
-		try (ByteBufferBuilder buffer = ByteBufferBuilder.exactlySized(count * DefaultVertexFormat.POSITION_COLOR.getVertexSize())) {
+		Corners corners = new Corners(layout);
+		try (ByteBufferBuilder buffer = new ByteBufferBuilder(1 << 20)) {
 			BufferBuilder builder = new BufferBuilder(buffer, PrimitiveTopology.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+			int total = 0;
 			for (int face = 0; face < faces; face++) {
+				faceStart[face] = total;
 				for (int i = 0; i < cells; i++) {
 					for (int j = 0; j < cells; j++) {
-						int a = (face * nodes + i) * nodes + j;
-						int b = a + nodes;
+						int height = top[face][i * cells + j];
+						int color = cellColor[face][i * cells + j];
+						int wall = shade(color);
+						float[] t00 = corners.at(face, i, j, height);
+						float[] t01 = corners.at(face, i, j + 1, height);
+						float[] t10 = corners.at(face, i + 1, j, height);
+						float[] t11 = corners.at(face, i + 1, j + 1, height);
 						// Counterclockwise seen from outside: u runs along X of the face, v along Z, and the outside is +Y.
-						// One color for the whole cell, so the ground looks blocky and does not blend across the cells.
-						int cellColor = color[a];
-						for (int corner : new int[] {a, a + 1, b, b, a + 1, b + 1}) {
-							float[] p = position[corner];
-							builder.addVertex(p[0], p[1], p[2]).setColor(cellColor);
+						total += emit(builder, color, t00, t01, t10);
+						total += emit(builder, color, t10, t01, t11);
+						if (i + 1 < cells && top[face][(i + 1) * cells + j] < height) {
+							int low = top[face][(i + 1) * cells + j];
+							total += wall(builder, wall, t10, t11, corners.at(face, i + 1, j, low), corners.at(face, i + 1, j + 1, low), true);
+						}
+						if (i > 0 && top[face][(i - 1) * cells + j] < height) {
+							int low = top[face][(i - 1) * cells + j];
+							total += wall(builder, wall, t00, t01, corners.at(face, i, j, low), corners.at(face, i, j + 1, low), false);
+						}
+						if (j + 1 < cells && top[face][i * cells + j + 1] < height) {
+							int low = top[face][i * cells + j + 1];
+							total += wall(builder, wall, t01, t11, corners.at(face, i, j + 1, low), corners.at(face, i + 1, j + 1, low), false);
+						}
+						if (j > 0 && top[face][i * cells + j - 1] < height) {
+							int low = top[face][i * cells + j - 1];
+							total += wall(builder, wall, t00, t10, corners.at(face, i, j, low), corners.at(face, i + 1, j, low), true);
 						}
 					}
 				}
+				faceCount[face] = total - faceStart[face];
 			}
 			try (MeshData data = builder.buildOrThrow()) {
 				mesh = RenderSystem.getDevice().createBuffer(() -> "Cube planet", 32, data.vertexBuffer());
-				vertices = count;
+				vertices = total;
 			}
+		}
+	}
+
+	private static int emit(BufferBuilder builder, int color, float[] a, float[] b, float[] c) {
+		builder.addVertex(a[0], a[1], a[2]).setColor(color);
+		builder.addVertex(b[0], b[1], b[2]).setColor(color);
+		builder.addVertex(c[0], c[1], c[2]).setColor(color);
+		return 3;
+	}
+
+	/**
+	 * A wall along one side of a cell, from the top edge ({@code a}, {@code b}) down to ({@code lowA}, {@code lowB}).
+	 * {@code b} is the end that is further along the edge. {@code positive} picks the winding that faces +u or -v, the
+	 * other one faces -u or +v.
+	 */
+	private static int wall(BufferBuilder builder, int color, float[] a, float[] b, float[] lowA, float[] lowB, boolean positive) {
+		if (positive) {
+			emit(builder, color, a, b, lowA);
+			emit(builder, color, b, lowB, lowA);
+		} else {
+			emit(builder, color, a, lowA, b);
+			emit(builder, color, b, lowA, lowB);
+		}
+		return 6;
+	}
+
+	private static int shade(int color) {
+		int r = (int) (((color >> 16) & 0xFF) * 0.72F);
+		int g = (int) (((color >> 8) & 0xFF) * 0.72F);
+		int b = (int) ((color & 0xFF) * 0.72F);
+		return 0xFF000000 | r << 16 | g << 8 | b;
+	}
+
+	/** The position in the cube frame of a node of a face at a height over the top of the face. */
+	private static final class Corners {
+		private final SeamLayout layout;
+		private final double rounding;
+		private final double core;
+
+		Corners(SeamLayout layout) {
+			this.layout = layout;
+			this.rounding = layout.edgeRounding();
+			this.core = layout.radius - this.rounding;
+		}
+
+		float[] at(int face, int i, int j, int height) {
+			int cells = PlanetMap.CELLS;
+			double u = -this.layout.radius + 2.0 * this.layout.radius * i / cells;
+			double v = -this.layout.radius + 2.0 * this.layout.radius * j / cells;
+			double qx = Mth.clamp(u, -this.core, this.core);
+			double qz = Mth.clamp(v, -this.core, this.core);
+			double nx = u - qx;
+			double ny = this.layout.radius - this.core;
+			double nz = v - qz;
+			double length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+			double out = this.rounding + height;
+			double x = qx + nx / length * out;
+			double y = this.core + ny / length * out;
+			double z = qz + nz / length * out;
+			int[] m = this.layout.rotation(face);
+			return new float[] {
+				(float) (m[0] * x + m[1] * y + m[2] * z),
+				(float) (m[3] * x + m[4] * y + m[5] * z),
+				(float) (m[6] * x + m[7] * y + m[8] * z)
+			};
 		}
 	}
 }
