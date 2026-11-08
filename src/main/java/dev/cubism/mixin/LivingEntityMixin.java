@@ -19,6 +19,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -29,8 +30,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class LivingEntityMixin extends Entity {
 	/** Edge gravity starts only this far from the ground along the pull, in blocks. */
 	@Unique private static final double EDGE_GRAVITY_GROUND_GAP = 3.0;
+	/** Vertical push per tick of jump or sneak in zero pull, as in water. */
+	@Unique private static final double SPACE_SWIM_RISE = 0.04;
 	/** The face region where the entity last stood or flew, or -1 before the first air tick. */
 	@Unique private int cubism$fallStartFace = -1;
+
+	@Shadow protected boolean jumping;
 
 	public LivingEntityMixin(EntityType<?> type, Level level) {
 		super(type, level);
@@ -93,6 +98,10 @@ public abstract class LivingEntityMixin extends Entity {
 			if (!this.isNoGravity() && !((LivingEntity) (Object) this).hasEffect(MobEffects.LEVITATION) && !((Object) this instanceof Player player && player.getAbilities().flying)) {
 				double gravity = this.getEffectiveGravity();
 				this.setDeltaMovement(this.getDeltaMovement().add(gravity * space.x * 0.91, gravity * (space.y + 1.0) * 0.98, gravity * space.z * 0.91));
+			}
+			// With no pull left a body has nothing to push against, so jump rises and sneak sinks, as when swimming.
+			if (space.lengthSqr() < 1.0E-6 && (Object) this instanceof Player swimmer && !swimmer.getAbilities().flying && this.jumping != swimmer.isShiftKeyDown()) {
+				this.setDeltaMovement(this.getDeltaMovement().add(0.0, this.jumping ? SPACE_SWIM_RISE : -SPACE_SWIM_RISE, 0.0));
 			}
 			return;
 		}

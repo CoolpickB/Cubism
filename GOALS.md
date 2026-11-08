@@ -152,7 +152,7 @@ Commands take cube positions, so `/summon armor_stand 0 1000 0` puts an armor st
 
 Tested on the dev server (size 24): an armor stand at cube y 500 fell through space, moved to the up face and landed. Stands at y 750 and 1000 floated with no pull. A stand at a corner (350, 380, 350) moved to space, fell toward the center, and landed on the up face. Not tested: a player, the client view from space, and Steadfast in space.
 
-Next: the sky fades to black above build height, and the client draws the planet from space. Then the planet-ahead view past the exosphere: the view turns slowly so that the planet is ahead, and the player swims with drag. Then Voxy, Iris and Xaero in space. Later, other dimensions can get space too.
+Past the exosphere, jump rises and sneak sinks along the cube up axis (untested by the user). Next: the sky fades to black above build height, and the client draws the planet from space. Then the planet-ahead view past the exosphere: the view turns slowly so that the planet is ahead, and the flight keys follow the view. Then Voxy, Iris and Xaero in space. Later, other dimensions can get space too.
 
 ## Phases
 
