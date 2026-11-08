@@ -192,12 +192,13 @@ public final class SeamFaces {
 				continue;
 			}
 			int[] m = layout.motion(f, primary);
-			if (m[4] == -1 && !SeamClient.seesOpposite(layout, camera.position())) {
+			if (m[4] == -1 && !SeamClient.seesOpposite(layout, camera.position()) || SeamClient.faceHidden(layout, camera.position(), f)) {
 				continue;
 			}
 			Vector3d p = foldedCamera(m, camera.position());
 			double reach = (f == SeamLayout.SPACE ? SeamLayout.SPACE_HALF : layout.spacing / 2.0) + renderDistance * 16.0;
-			if (Math.abs(p.x - layout.offsetX(f)) > reach || Math.abs(p.z) > reach) {
+			// Voxy loads the whole row of faces, so from space it draws the far levels of detail of a face that no chunk reaches.
+			if (!(SeamClient.VOXY && SeamClient.faceFarView(layout, camera.position())) && (Math.abs(p.x - layout.offsetX(f)) > reach || Math.abs(p.z) > reach)) {
 				continue;
 			}
 			working = f;

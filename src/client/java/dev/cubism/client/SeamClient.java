@@ -12,6 +12,7 @@ public final class SeamClient {
 	/** True when Sodium draws the terrain. Sodium replaces the vanilla section renderer that the seam renderer hooks. */
 	public static final boolean SODIUM = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium");
 	public static final boolean IRIS = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris");
+	public static final boolean VOXY = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("voxy");
 	public static final boolean ENTITY_CULLING = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("entityculling");
 	/** The seam layout of the level the client plays in, or null when the level has no seams. */
 	public static volatile @Nullable SeamLayout layout;
@@ -49,6 +50,22 @@ public final class SeamClient {
 	 */
 	public static boolean seesOpposite(SeamLayout layout, Vec3 camera) {
 		return layout.crossingFace(camera.x, camera.y, camera.z, 0.0) >= 0 || SeamInteraction.regionFace(layout, camera.x, camera.z) == SeamLayout.SPACE;
+	}
+
+	/** True when the camera is in space, where the faces are in view from further away than the chunks reach. */
+	public static boolean faceFarView(SeamLayout layout, Vec3 camera) {
+		return SeamInteraction.regionFace(layout, camera.x, camera.z) == SeamLayout.SPACE;
+	}
+
+	/**
+	 * True when the camera is in space and the planet hides the whole face, so nothing of it needs a draw or a trace. In
+	 * space every face is in the frustum of the camera, but the far side of the planet cannot be seen.
+	 */
+	public static boolean faceHidden(SeamLayout layout, Vec3 camera, int face) {
+		if (face == SeamLayout.SPACE || SeamInteraction.regionFace(layout, camera.x, camera.z) != SeamLayout.SPACE) {
+			return false;
+		}
+		return !layout.faceCanBeSeen(face, layout.cubeOffset(SeamLayout.SPACE, camera.x, camera.y, camera.z));
 	}
 
 	/**

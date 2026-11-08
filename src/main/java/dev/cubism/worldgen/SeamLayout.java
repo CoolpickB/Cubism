@@ -3,6 +3,7 @@ package dev.cubism.worldgen;
 import dev.cubism.CubismMod;
 import dev.cubism.math.CubePlanetMath;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import dev.cubism.seam.CubeTime;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -582,6 +583,51 @@ public final class SeamLayout {
 		Vec3 pull = this.spacePull(p.x, p.y, p.z);
 		Vec3 direction = pull == null || pull.lengthSqr() < 1.0E-6 ? p.reverse() : pull;
 		return direction.lengthSqr() < 1.0E-12 ? null : direction.normalize();
+	}
+
+	/** Blocks that the body of the horizon test is smaller than the ground, so hills and trees over the horizon stay in view. */
+	private static final double HORIZON_SLACK = 64.0;
+
+	/**
+	 * False when the planet hides a whole face from a camera at {@code c}, relative to the cube center in the cube frame.
+	 * The ground is a rounded cube, which is convex: a point of the ground can be seen when its normal {@code n} has
+	 * {@code n.c} over the support {@code h(n)} of the body. The normals of the ground of a face are the ones that
+	 * lean to the face axis at least as much as to any other axis, so it tests the corners and the edge centers of that
+	 * cone of normals, and the direction of the camera inside it.
+	 */
+	public boolean faceCanBeSeen(int face, Vec3 c) {
+		double reach = Math.max(Math.abs(c.x), Math.max(Math.abs(c.y), Math.abs(c.z)));
+		if (reach <= this.radius) {
+			return true;
+		}
+		Vec3 down = this.faceDown(face);
+		double[] axis = {-down.x, -down.y, -down.z};
+		double[] camera = {c.x, c.y, c.z};
+		int a = Math.abs(axis[0]) > 0.5 ? 0 : Math.abs(axis[1]) > 0.5 ? 1 : 2;
+		int b = (a + 1) % 3;
+		int d = (a + 2) % 3;
+		double sign = axis[a] > 0.0 ? 1.0 : -1.0;
+		double core = this.radius - CubeTime.EDGE_BLEND - HORIZON_SLACK;
+		double edge = CubeTime.EDGE_BLEND;
+		for (int i = 0; i < 10; i++) {
+			double[] n = new double[3];
+			n[a] = sign;
+			if (i < 9) {
+				n[b] = i % 3 - 1;
+				n[d] = i / 3 - 1;
+			} else {
+				// The direction of the camera, put inside the cone.
+				double along = Math.max(sign * camera[a], 1.0E-9);
+				n[b] = Math.clamp(camera[b] / along, -1.0, 1.0);
+				n[d] = Math.clamp(camera[d] / along, -1.0, 1.0);
+			}
+			double length = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+			double support = core * (Math.abs(n[0]) + Math.abs(n[1]) + Math.abs(n[2])) / length + edge;
+			if ((n[0] * camera[0] + n[1] * camera[1] + n[2] * camera[2]) / length > support) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The pull of a face, straight down in its frame, in the cube frame: where a Steadfast lock pulls in space. */

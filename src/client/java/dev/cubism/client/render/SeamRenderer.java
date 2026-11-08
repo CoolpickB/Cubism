@@ -510,7 +510,7 @@ public final class SeamRenderer {
 				// The opposite face shares no seam with the camera face. Its sections can be left over from a quick
 				// second crossing, and its motion would draw them in the sky. A locked camera past its wedge sees it.
 				int[] shown = layout.motion(face, cameraFace);
-				if (shown[4] == -1 && !SeamClient.seesOpposite(layout, cameraPos)) {
+				if (shown[4] == -1 && !SeamClient.seesOpposite(layout, cameraPos) || SeamClient.faceHidden(layout, cameraPos, face)) {
 					continue;
 				}
 				visible.clear();
@@ -654,7 +654,7 @@ public final class SeamRenderer {
 		}
 		for (Entity entity : level.entitiesForRendering()) {
 			int face = SeamInteraction.regionFace(layout, entity.getX(), entity.getZ());
-			if (face < 0 || face == cameraFace) {
+			if (face < 0 || face == cameraFace || SeamClient.faceHidden(layout, cameraPos, face)) {
 				continue;
 			}
 			// The renderer lerps from the old position. A new entity has it at the origin until it ticks, so vanilla sets
