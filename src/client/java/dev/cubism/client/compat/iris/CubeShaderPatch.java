@@ -180,6 +180,40 @@ public final class CubeShaderPatch {
 		        vec3 p = (cubism_cubeFromView * vec4(viewPos, 1.0)).xyz;
 		        return normalize(transpose(mat3(cubism_cubeFromView)) * cubismNormal(p));
 		    }
+		    // 0 where a ray of view space from the camera meets the sea surface of the planet, else 1. It steps by the height
+		    // over the sea, which is the distance to that rounded surface, so it never steps through it.
+		    float cubismPlanetMiss(vec3 viewDir) {
+		        if (cubism_active == 0) return 1.0;
+		        vec3 cam = cubism_cubeFromFeet[3].xyz;
+		        vec3 dir = normalize(mat3(cubism_cubeFromView) * viewDir);
+		        float t = 0.0;
+		        for (int j = 0; j < 48; j++) {
+		            float gap = cubismAlt(cam + t * dir) - 62.0;
+		            if (gap < 1.0) return 0.0;
+		            t += gap;
+		        }
+		        return 1.0;
+		    }
+		    // The blocks of a face all face its flat up, while the time of day turns with the rounded up over an edge. Seen
+		    // from the light, the top of a block next to an edge then took the full light of its own face, and the one across
+		    // the edge none, a hard line. The light is turned by the tilt of the rounded up from the flat one, so the direct
+		    // light turns over the same width as the time does, and both faces get the same light at the diagonal.
+		    vec3 cubismBendLight(vec3 lightView, vec3 viewPos) {
+		        if (cubism_active == 0) return lightView;
+		        vec3 p = (cubism_cubeFromView * vec4(viewPos, 1.0)).xyz;
+		        vec3 a = abs(p);
+		        vec3 flatUp = a.y >= a.x && a.y >= a.z ? vec3(0.0, sign(p.y), 0.0) : a.x >= a.z ? vec3(sign(p.x), 0.0, 0.0) : vec3(0.0, 0.0, sign(p.z));
+		        vec3 n = cubismNormal(p);
+		        vec3 axis = cross(n, flatUp);
+		        float s = length(axis);
+		        if (s < 0.0001) return lightView;
+		        axis /= s;
+		        float c = dot(n, flatUp);
+		        mat3 toCube = mat3(cubism_cubeFromView);
+		        vec3 l = toCube * lightView;
+		        l = l * c + cross(axis, l) * s + axis * dot(axis, l) * (1.0 - c);
+		        return transpose(toCube) * l;
+		    }
 		    // The programs that draw the ground take the up, and so the time of day, of each point they draw. Two faces
 		    // then meet at an edge with the same light, and the light turns smoothly around it.
 		    #if defined CUBEWORLD_POINT_UP && defined FRAGMENT_SHADER
@@ -221,13 +255,16 @@ public final class CubeShaderPatch {
 
 	/**
 	 * The aurora of the cube hangs over the rounded surface like the clouds, between two heights. A point of it shows only
-	 * where it is night under it, and only over the part of the cube around the camera, since the biome and moon that allow
-	 * it are those of the camera. The pattern of the pack lies on the three axis planes, blended by the normal so that it
-	 * bends over an edge. Over the middle of a face only one plane counts.
+	 * where it is night under it. It shows in a ring around each pole of the sky, the two corners of the cube on the axis
+	 * of the sun, as the auroras of a planet ring its poles. The conditions of the pack, the biome and the moon at the
+	 * camera, also let it show over the part of the cube around the camera, as on a flat world. From orbit only the rings
+	 * show, with the moon condition of the pack. The pattern of the pack lies on the three axis planes, blended by the
+	 * normal so that it bends over an edge. Over the middle of a face only one plane counts.
 	 */
 	private static final String CUBE_AURORA = """
 
 		#ifdef CUBEWORLD
+		#define CUBISM_CUBE_AURORA
 		const float cubismAuroraLow = 320.0;
 		const float cubismAuroraDepth = 240.0;
 
@@ -247,90 +284,115 @@ public final class CubeShaderPatch {
 		    return noise;
 		}
 
-		vec3 GetAuroraBorealisCube(vec3 viewPos, float VdotU, float dither) {
-		    // The flat aurora ends above the horizon. Over an edge the shell bends down, so it may show a bit below.
-		    float visibility = sqrt1(clamp01(VdotU * 1.5 + 0.3)) - rainFactor - maxBlindnessDarkness;
-		    visibility *= 1.0 - max0(VdotU) * 0.9;
+		// The ring around a pole, by the angle from the pole seen from the center of the cube.
+		float cubismAuroraOval(vec3 p, vec3 pole) {
+		    float x = abs(dot(normalize(p), pole));
+		    return smoothstep(0.80, 0.87, x) * (1.0 - smoothstep(0.94, 0.98, x));
+		}
+
+		// The ray ends at maxT, where it meets the ground.
+		vec3 GetAuroraBorealisCube(vec3 viewPos, float VdotU, float dither, float maxT) {
+		    float space = cubismSpace();
+		    float localVis = sqrt1(clamp01(VdotU * 1.5 + 0.3)) - rainFactor;
+		    float ovalVis = 1.0 - rainFactor * (1.0 - space);
 		    #if AURORA_CONDITION == 1 || AURORA_CONDITION == 3
-		        visibility -= moonPhase;
+		        localVis -= moonPhase;
+		        ovalVis -= moonPhase;
 		    #endif
 		    #if AURORA_CONDITION == 2 || AURORA_CONDITION == 3
-		        visibility *= inSnowy;
+		        localVis *= inSnowy;
 		    #endif
 		    #if AURORA_CONDITION == 4
-		        visibility = max(visibility * inSnowy, visibility - moonPhase);
+		        localVis = max(localVis * inSnowy, localVis - moonPhase);
 		    #endif
-		    if (visibility <= 0.0) return vec3(0.0);
+		    localVis = max0(localVis) * (1.0 - space);
+		    ovalVis = max0(ovalVis);
+		    if (max(localVis, ovalVis) <= 0.0 || maxBlindnessDarkness >= 1.0) return vec3(0.0);
 
 		    vec3 dir = normalize(mat3(cubism_cubeFromView) * viewPos);
 		    vec3 cam = cubism_cubeFromFeet[3].xyz;
 		    vec3 camUp = normalize(mat3(cubism_cubeFromView) * cubism_upPosition);
 		    vec3 sunDir = normalize(mat3(cubism_cubeFromView) * cubism_sunPosition);
+		    // The sun turns about this axis, see CubeTime.
+		    vec3 pole = vec3(0.57735027);
+		    float top = cubismAuroraLow + cubismAuroraDepth;
 
-		    // Step along the ray to the lower height of the aurora, by the gap to it, which never steps over it.
+		    // Step along the ray into the band of the aurora, from below or from above, by the gap to it.
 		    float t = 0.0;
 		    bool hit = false;
 		    for (int j = 0; j < 64; j++) {
-		        float gap = cubismAuroraLow - cubismAlt(cam + t * dir);
-		        if (gap < 1.0) { hit = gap > -cubismAuroraDepth; break; }
+		        float alt = cubismAlt(cam + t * dir);
+		        float gap = max(cubismAuroraLow - alt, alt - top);
+		        if (gap < 1.0) { hit = true; break; }
 		        t += max(gap, max(2.0, t * 0.01));
-		        if (t > 4000.0) break;
+		        if (t > min(maxT, 100000.0)) break;
 		    }
 		    if (!hit) return vec3(0.0);
 
 		    #ifdef DEFERRED1
 		        int sampleCount = 25;
-		        int sampleCountP = sampleCount + 5;
 		    #else
 		        int sampleCount = 10;
-		        int sampleCountP = sampleCount + 10;
 		    #endif
+		    float layer = cubismAuroraDepth / float(sampleCount);
 
-		    float ditherM = dither + 5.0;
 		    float auroraAnimate = frameTimeCounter * 0.001;
 		    vec2 wind = vec2(syncedTime * 0.04, 0.0);
 		    vec3 aurora = vec3(0.0);
-		    for (int i = 0; i < sampleCount; i++) {
-		        float current = pow2((i + ditherM) / sampleCountP);
-		        float targetAlt = cubismAuroraLow + cubismAuroraDepth * current;
+		    float path = 0.0;
+		    t += layer * dither;
+		    for (int i = 0; i < sampleCount * 2; i++) {
+		        if (t > maxT) break;
 		        vec3 p = cam + t * dir;
-		        for (int k = 0; k < 2; k++) {
-		            t += (targetAlt - cubismAlt(p)) / max(dot(dir, cubismNormal(p)), 0.15);
-		            p = cam + t * dir;
-		        }
+		        float alt = cubismAlt(p);
+		        // Out of the top into space, or out of the bottom toward the ground, which hides the far side of the band.
+		        if (alt < cubismAuroraLow - 1.0 || alt > top + 1.0) break;
 		        vec3 n = cubismNormal(p);
+		        // About one sample for each layer that a ray straight up crosses. A slanted ray takes longer steps, which
+		        // weigh more, as it sees more of the aurora.
+		        float stepLen = layer / max(abs(dot(dir, n)), 0.2);
+		        float weight = stepLen / cubismAuroraDepth;
+		        t += stepLen;
+		        path += weight;
+
 		        float night = 1.0 - clamp01((dot(sunDir, n) + 0.0625) / 0.125);
 		        float near = smoothstep(0.0, 0.6, dot(n, camUp));
-		        float weight = night * near;
-		        if (weight <= 0.0) continue;
+		        float where = night * max(near * localVis, cubismAuroraOval(p, pole) * ovalVis);
+		        if (where > 0.0) {
+		            vec3 w = pow2(pow2(n));
+		            w /= w.x + w.y + w.z;
+		            vec3 q = p * 0.037;
+		            float noise = 0.0;
+		            if (w.x > 0.01) noise += w.x * cubismAuroraNoise(q.zy + wind, auroraAnimate);
+		            if (w.y > 0.01) noise += w.y * cubismAuroraNoise(q.xz + wind, auroraAnimate);
+		            if (w.z > 0.01) noise += w.z * cubismAuroraNoise(q.xy + wind, auroraAnimate);
 
-		        vec3 w = pow2(pow2(n));
-		        w /= w.x + w.y + w.z;
-		        vec3 q = p * 0.037;
-		        float noise = 0.0;
-		        if (w.x > 0.01) noise += w.x * cubismAuroraNoise(q.zy + wind, auroraAnimate);
-		        if (w.y > 0.01) noise += w.y * cubismAuroraNoise(q.xz + wind, auroraAnimate);
-		        if (w.z > 0.01) noise += w.z * cubismAuroraNoise(q.xy + wind, auroraAnimate);
-
-		        float currentM = 1.0 - current;
-		        aurora += weight * noise * currentM * mix(vec3(7.0, 2.2, 12.0), vec3(6.0, 16.0, 12.0), pow2(pow2(currentM)));
+		            float current = clamp01((alt - cubismAuroraLow) / cubismAuroraDepth);
+		            float currentM = 1.0 - current;
+		            // The pack puts more of its samples near the bottom of the aurora, which weighs it there.
+		            float density = min(0.5 / sqrt(max(current, 0.01)), 3.0);
+		            aurora += where * weight * density * noise * currentM * mix(vec3(7.0, 2.2, 12.0), vec3(6.0, 16.0, 12.0), pow2(pow2(currentM)));
+		        }
+		        if (path > 3.0) break;
 		    }
 
+		    // The pack dims its flat aurora overhead, where the band is thin to the eye. Here the length of the ray in the band
+		    // does that, and this scale brings the band seen edge on to the brightness of the pack at the horizon.
 		    #if AURORA_STYLE == 1
-		        aurora *= 1.3;
+		        aurora *= 1.3 * 0.35;
 		    #else
-		        aurora *= 1.8;
+		        aurora *= 1.8 * 0.35;
 		    #endif
 		    #ifdef ATM_COLOR_MULTS
 		        aurora *= sqrtAtmColorMult;
 		    #endif
-		    return aurora * visibility / sampleCount;
+		    return aurora * (1.0 - maxBlindnessDarkness);
 		}
 		#endif
 
 		vec3 GetAuroraBorealis(vec3 viewPos, float VdotU, float dither) {
 		    #ifdef CUBEWORLD
-		        if (cubism_active != 0) return GetAuroraBorealisCube(viewPos, VdotU, dither);
+		        if (cubism_active != 0) return GetAuroraBorealisCube(viewPos, VdotU, dither, 1.0e9);
 		    #endif
 		    return GetAuroraBorealisFlat(viewPos, VdotU, dither);
 		}
@@ -396,7 +458,7 @@ public final class CubeShaderPatch {
 		}
 		if (name.endsWith("/lib/atmospherics/nightNebula.glsl")) {
 			source = source.replace("float nebulaFactor = pow2(max0(VdotU) * min1(nightFactor * 2.0))",
-				"float nebulaFactor = mix(pow2(max0(VdotU) * min1(nightFactor * 2.0)), 1.0, cubismSpace())");
+				"float nebulaFactor = mix(pow2(max0(VdotU) * min1(nightFactor * 2.0)), cubismSpace() > 0.0 ? cubismPlanetMiss(viewPos) : 1.0, cubismSpace())");
 		}
 		if (name.endsWith(STARS)) {
 			// In orbit the stars show by day and below the horizon of the ground under the camera. The planet hides them.
@@ -458,6 +520,14 @@ public final class CubeShaderPatch {
 			// There is one shadow map, cast from the sun or the moon after the time at the camera. A point lit by the
 			// other one would read the shadows of the wrong side, so it takes the light of the pack past the shadow
 			// distance. At the line where the light turns over, the shadows are faded out in any case.
+			source = source.replace("    float NdotL = dot(normalM, lightVec);\n", """
+				#ifdef CUBEWORLD
+				    vec3 cubismLightBent = cubismBendLight(lightVec, viewPos);
+				#else
+				    vec3 cubismLightBent = lightVec;
+				#endif
+				    float NdotL = dot(normalM, cubismLightBent);
+				""").replace("float geoNdotL = dot(geoNormal, lightVec);", "float geoNdotL = dot(geoNormal, cubismLightBent);");
 			return source.replace(
 				"float shadowLength = shadowDistance * 0.9166667 - lViewPos;",
 				"""
@@ -492,6 +562,20 @@ public final class CubeShaderPatch {
 			// cuts the sky along a plane that turns at each crossing.
 			source = source.replace("GetAtmFogAltitudeFactor(playerPos.y + cameraPosition.y)", "GetAtmFogAltitudeFactor(cubismFeetAlt(playerPos))")
 				.replace("GetAtmFogAltitudeFactor(cameraPosition.y + ", "GetAtmFogAltitudeFactor(cubismCameraAlt() + ");
+		}
+		if (name.endsWith("/program/deferred1.glsl")) {
+			// From orbit the aurora also shows over the ground of the planet, in front of the ground that the ray meets.
+			source = source.replace("DoFog(color, skyFade, lViewPos, playerPos, VdotU, VdotS, dither, false, 0.0);\n",
+				"""
+				DoFog(color, skyFade, lViewPos, playerPos, VdotU, VdotS, dither, false, 0.0);
+				        #if AURORA_STYLE > 0 && defined OVERWORLD && defined CUBISM_CUBE_AURORA
+				            if (cubismSpace() > 0.0) color.rgb += GetAuroraBorealisCube(viewPos.xyz, VdotU, dither, lViewPos) * cubismSpace();
+				        #endif
+				""");
+		}
+		if (name.endsWith("/lib/lighting/cloudShadows.glsl")) {
+			source = source.replace("    float GetCloudShadow(vec3 playerPos) {\n", CLOUD_SHADOW_LAYER + "    float GetCloudShadow(vec3 playerPos) {\n")
+				.replace("        vec3 worldPos = playerPos + cameraPosition;\n", "        vec3 worldPos = playerPos + cameraPosition;\n" + CLOUD_SHADOW_CUBE);
 		}
 		if (name.endsWith(MAIN_CLOUDS)) {
 			return patchMainClouds(source);
@@ -617,6 +701,57 @@ public final class CubeShaderPatch {
 	}
 
 	/**
+	 * The shadow of a layer of the reimagined clouds: where the ray from a point to the light crosses the height of the
+	 * layer, the map of the clouds there, on the plane of the face under it as the clouds of the cube read it.
+	 */
+	private static final String CLOUD_SHADOW_LAYER = """
+		    #if defined CUBEWORLD && defined CLOUDS_REIMAGINED
+		        float cubismCloudShadowLayer(vec3 p, float pAlt, vec3 l, float s, int cloudAltitude) {
+		            float dist = float(cloudAltitude) - pAlt;
+		            vec3 q = p + l * dist / max(s, 0.1);
+		            vec3 a = abs(q);
+		            vec3 planar = a.y >= a.x && a.y >= a.z ? q : a.x >= a.z ? q.zxy : q.xzy;
+		            vec2 coord = GetRoundedCloudCoord(ModifyTracePos(vec3(planar.x, float(cloudAltitude), planar.z), cloudAltitude).xz, 0.35);
+		            #ifndef COMPOSITE
+		                float value = texture2D(gaux4, coord).b;
+		            #else
+		                float value = texture2D(cloudWaterTex, coord).b;
+		            #endif
+		            return value * clamp(dist * 0.1, 0.0, 1.0);
+		        }
+		    #endif
+		""";
+
+	/**
+	 * The shadows of the clouds of the pack lie on the flat world, with the height and the light of the camera face. On
+	 * the cube they take the height over the rounded cube, the light at the point, and the plane of the face under it.
+	 */
+	private static final String CLOUD_SHADOW_CUBE = """
+		        #ifdef CUBEWORLD
+		        if (cubism_active != 0) {
+		            vec3 cubismP = (cubism_cubeFromView * vec4(mat3(gbufferModelView) * playerPos, 1.0)).xyz;
+		            float cubismPAlt = cubismAlt(cubismP);
+		            #ifdef CLOUDS_REIMAGINED
+		                vec3 cubismL = normalize(mat3(cubism_cubeFromView) * lightVec);
+		                float cubismS = clamp(dot(cubismL, cubismNormal(cubismP)), 0.0, 1.0);
+		                float cubismShade = cubismCloudShadowLayer(cubismP, cubismPAlt, cubismL, cubismS, cloudAlt1i);
+		                #ifdef DOUBLE_REIM_CLOUDS
+		                    float cubismShade2 = cubismCloudShadowLayer(cubismP, cubismPAlt, cubismL, cubismS, cloudAlt2i);
+		                    cubismShade = 1.0 - (1.0 - cubismShade) * (1.0 - cubismShade2);
+		                #endif
+		                // The pack fades the shadows as the light goes down to the horizon.
+		                cubismShade *= sqrt3(1.0 - sqrt(1.0 - cubismS * cubismS));
+		                return 1.0 - 0.85 * cubismShade;
+		            #else
+		                vec3 cubismA = abs(cubismP);
+		                vec3 cubismFlat = cubismA.y >= cubismA.x && cubismA.y >= cubismA.z ? cubismP : cubismA.x >= cubismA.z ? cubismP.zxy : cubismP.xzy;
+		                worldPos = vec3(cubismFlat.x, cubismPAlt, cubismFlat.z);
+		            #endif
+		        }
+		        #endif
+		""";
+
+	/**
 	 * The clouds that read a flat map take it on the plane of the face that a point of the cube is over: the axis of the
 	 * point that is largest in size becomes y, the up of that face. The map then lies flat over each face, and changes
 	 * plane at the diagonal over an edge.
@@ -629,6 +764,47 @@ public final class CubeShaderPatch {
 		    if (cubism_active == 0) return v;
 		    vec3 a = abs(p);
 		    return a.y >= a.x && a.y >= a.z ? v : a.x >= a.z ? v.zxy : v.xzy;
+		}
+
+		// The distance along the ray from t on to where it comes into the band of the clouds, or -1. It steps by the gap to
+		// the band. A ray that skims the shell closes the gap slowly, and a floor on the step keeps it from running out of
+		// steps. The floor is held to what crosses less than the depth of the band, so it never steps over the band.
+		// Below the floor height the ray is in the planet, and the clouds past it are hidden.
+		float cubismBandEntry(vec3 origin, vec3 dir, float t, float cloudAlt, float floorAlt, float maxT, int steps) {
+		    float tOut = t;
+		    bool hit = false;
+		    for (int j = 0; j < steps; j++) {
+		        vec3 p = origin + t * dir;
+		        float alt = cubismAlt(p);
+		        float gap = abs(alt - cloudAlt) - cloudStretch;
+		        if (gap <= 0.0) { hit = true; break; }
+		        if (alt < floorAlt) return -1.0;
+		        tOut = t;
+		        t += max(gap, min(max(2.0, t * 0.01), 1.8 * cloudStretch / max(abs(dot(dir, cubismNormal(p))), 0.01)));
+		        if (t > maxT) return -1.0;
+		    }
+		    if (!hit) return -1.0;
+		    // The step lands up to a step deep in the band, by a depth that changes with the distance. The clouds start
+		    // their march there, which drew dark rings about the camera. Find the edge of the band.
+		    for (int j = 0; j < 8; j++) {
+		        float mid = 0.5 * (tOut + t);
+		        if (abs(cubismAlt(origin + mid * dir) - cloudAlt) <= cloudStretch) t = mid;
+		        else tOut = mid;
+		    }
+		    return t;
+		}
+
+		// The colors of the clouds follow the time at the camera. A cloud over a part of the cube with another time, and
+		// every cloud seen from orbit, takes the light of the sun at its own place, as the planet mesh does.
+		vec3 cubismCloudColor(vec3 colorSample, vec3 tracePos, float cloudShading) {
+		    if (cubism_active == 0) return colorSample;
+		    vec3 sunCube = normalize(mat3(cubism_cubeFromView) * cubism_sunPosition);
+		    vec3 upCube = normalize(mat3(cubism_cubeFromView) * cubism_upPosition);
+		    float sunHere = dot(cubismNormal(tracePos), sunCube);
+		    float local = max(cubismSpace(), smoothstep(0.05, 0.3, abs(sunHere - dot(upCube, sunCube))));
+		    if (local <= 0.0) return colorSample;
+		    vec3 lit = (0.35 + 0.65 * cloudShading) * mix(vec3(0.03, 0.035, 0.05), vec3(1.1, 1.05, 1.0), smoothstep(-0.15, 0.35, sunHere));
+		    return mix(colorSample, lit, local);
 		}
 		#endif
 		""";
@@ -646,6 +822,30 @@ public final class CubeShaderPatch {
 		// length that a ray at its angle to the shell stays in the band, so a ray along the shell does not take thousands.
 		source = patchCloudShell(source,
 			"min(max(distanceThreshold - cubismT, 0.0), cloudTallness / max(abs(dot(nPlayerPos, cubismNormal(cameraPos + cubismT * nPlayerPos))), 0.02))");
+		// The march has a fixed number of steps over that length, and the shell curves away under it. A step out of the band
+		// read the map anyway, and above the band it lit the cloud by more than full light, the bright spots along the rim of
+		// the planet. A ray that leaves the band looks for the next entry, past an edge or on the far side of the planet,
+		// and marches the band again from there.
+		source = source.replace("    for (int i = 0; i < sampleCount; i++) {\n        tracePos += traceAdd;\n\n        vec3 cloudPlayerPos = tracePos - cameraPos;\n", """
+			    int cubismCount = cubism_active != 0 ? sampleCount * 3 : sampleCount;
+			    for (int i = 0; i < cubismCount; i++) {
+			        tracePos += traceAdd;
+
+			        if (cubism_active != 0 && abs(cubismAlt(tracePos) - cloudAltitude) > cloudStretch) {
+			            float cubismT2 = cubismBandEntry(cameraPos, nPlayerPos, length(tracePos - cameraPos), float(cloudAltitude), cubismFloor, distanceThreshold, 64);
+			            if (cubismT2 < 0.0) break;
+			            float cubismLength = min(max(distanceThreshold - cubismT2, 0.0), cloudTallness / max(abs(dot(nPlayerPos, cubismNormal(cameraPos + cubismT2 * nPlayerPos))), 0.02));
+			            traceAdd = nPlayerPos * (cubismLength / float(sampleCount));
+			            tracePos = cameraPos + cubismT2 * nPlayerPos + traceAdd * dither;
+			        }
+
+			        vec3 cloudPlayerPos = tracePos - cameraPos;
+			""");
+		source = source.replace(
+			"            vec3 colorSample = cloudAmbientColor * 0.95 * (1.0 - 0.35 * cloudShading) + cloudLightColor * 0.9 * (0.1 + cloudShading);\n",
+			"            vec3 colorSample = cubismCloudColor(cloudAmbientColor * 0.95 * (1.0 - 0.35 * cloudShading) + cloudLightColor * 0.9 * (0.1 + cloudShading), tracePos, cloudShading);\n")
+			.replace("            colorSample = mix(cloudSkyColor, colorSample, cloudFogFactor * 0.707);\n",
+				"            colorSample = mix(cloudSkyColor, colorSample, mix(cloudFogFactor * 0.707, 1.0, cubismSpace()));\n");
 		return source;
 	}
 
@@ -662,31 +862,12 @@ public final class CubeShaderPatch {
 			original -> """
 				    float minPlaneDistance;
 				    float planeDistanceDif;
+				    // Under the sea the ray is in the planet. A band set lower than the sea, or a camera under it, moves that down.
+				    float cubismFloor = min(min(oceanAltitude, float(cloudAltitude) - cloudStretch), cubismAlt(cameraPos));
 				    if (cubism_active != 0) {
 				        nPlayerPos = normalize(mat3(cubism_cubeFromFeet) * nPlayerPos);
-				        float cubismT = 0.0;
-				        float cubismOut = 0.0;
-				        bool cubismHit = false;
-				        for (int j = 0; j < 160; j++) {
-				            float cubismRayAlt = cubismAlt(cameraPos + cubismT * nPlayerPos);
-				            float gap = abs(cubismRayAlt - cloudAltitude) - cloudStretch;
-				            if (gap <= 0.0) { cubismHit = true; break; }
-				            // A ray that goes down under the sea is in the planet, and the clouds past it are hidden.
-				            if (cubismRayAlt < min(oceanAltitude, cubismAlt(cameraPos))) break;
-				            // A ray that skims the shell closes the gap slowly. The floor on the step keeps it from running
-				            // out of steps, at the cost of missing the thin tip of a skimming hit.
-				            cubismOut = cubismT;
-				            cubismT += max(gap, max(2.0, cubismT * 0.01));
-				            if (cubismT > distanceThreshold) break;
-				        }
-				        if (!cubismHit) return vec4(0.0);
-				        // The floor on the step lands up to a step deep in the band, by a depth that changes with the distance.
-				        // The clouds start their march there, which drew dark rings about the camera. Find the edge of the band.
-				        for (int j = 0; j < 8; j++) {
-				            float mid = 0.5 * (cubismOut + cubismT);
-				            if (abs(cubismAlt(cameraPos + mid * nPlayerPos) - cloudAltitude) <= cloudStretch) cubismT = mid;
-				            else cubismOut = mid;
-				        }
+				        float cubismT = cubismBandEntry(cameraPos, nPlayerPos, 0.0, float(cloudAltitude), cubismFloor, distanceThreshold, 160);
+				        if (cubismT < 0.0) return vec4(0.0);
 				        minPlaneDistance = cubismT;
 				        planeDistanceDif = LENGTH;
 				    } else {
@@ -719,20 +900,11 @@ public final class CubeShaderPatch {
 			"float aboveClouds = clamp01((cubismAlt(cameraPos) - lowerPlaneAltitude) * 0.01);");
 		source = source.replace(
 			"if (abs(tracePos.y - cloudAltitude) > cloudStretch) break;",
-			"if (abs(cubismAlt(tracePos) - cloudAltitude) > cloudStretch) {\n    if (cubism_active == 0) break;\n    // Over the edge of the cube the ray can come back into the shell farther on, so look for the next entry.\n    float cubismT2 = length(tracePos - cameraPos);\n    bool cubismBack = false;\n    for (int j = 0; j < 64; j++) {\n        float cubismRayAlt2 = cubismAlt(cameraPos + cubismT2 * nPlayerPos);\n        float gap2 = abs(cubismRayAlt2 - cloudAltitude) - cloudStretch;\n        if (gap2 <= 0.0) { cubismBack = true; break; }\n        if (cubismRayAlt2 < min(oceanAltitude, cubismAlt(cameraPos))) break;\n        cubismT2 += max(gap2, max(2.0, cubismT2 * 0.01));\n        if (cubismT2 > distanceThreshold) break;\n    }\n    if (!cubismBack) break;\n    // The offset by the dither of each pixel keeps the slices of neighbouring pixels apart, as at the first entry.\n    tracePos = cameraPos + (cubismT2 + stepMult * (dither - 1.0)) * nPlayerPos;\n}\n");
-		// The colors of the clouds come from the time at the camera. From orbit a cloud takes the light of the sun at its
-		// own place on the cube, as the planet mesh does, and no fade toward the sky, which is black there.
+			"if (abs(cubismAlt(tracePos) - cloudAltitude) > cloudStretch) {\n    if (cubism_active == 0) break;\n    // Over the edge of the cube the ray can come back into the shell farther on, so look for the next entry.\n    float cubismT2 = cubismBandEntry(cameraPos, nPlayerPos, length(tracePos - cameraPos), float(cloudAltitude), cubismFloor, distanceThreshold, 64);\n    if (cubismT2 < 0.0) break;\n    // The offset by the dither of each pixel keeps the slices of neighbouring pixels apart, as at the first entry.\n    tracePos = cameraPos + (cubismT2 + stepMult * (dither - 1.0)) * nPlayerPos;\n}\n");
+		// The light at the place of each cloud, and in orbit no fade toward the sky, which is black there.
 		source = source.replace(
 			"            vec3 colorSample = cloudAmbientColor * (0.4 + 0.6 * cloudShading) + cloudLightColor * cloudShading;\n",
-			"""
-			            vec3 colorSample = cloudAmbientColor * (0.4 + 0.6 * cloudShading) + cloudLightColor * cloudShading;
-			            if (cubismSpace() > 0.0) {
-			                vec3 cubismSunCube = normalize(mat3(cubism_cubeFromView) * cubism_sunPosition);
-			                float cubismDay = smoothstep(-0.15, 0.35, dot(cubismNormal(tracePos), cubismSunCube));
-			                vec3 cubismLit = (0.35 + 0.65 * cloudShading) * mix(vec3(0.03, 0.035, 0.05), vec3(1.1, 1.05, 1.0), cubismDay);
-			                colorSample = mix(colorSample, cubismLit, cubismSpace());
-			            }
-			""")
+			"            vec3 colorSample = cubismCloudColor(cloudAmbientColor * (0.4 + 0.6 * cloudShading) + cloudLightColor * cloudShading, tracePos, cloudShading);\n")
 			.replace("            colorSample = mix(cloudSkyColor, colorSample, cloudFogFactor * 0.69);\n",
 				"            colorSample = mix(cloudSkyColor, colorSample, mix(cloudFogFactor * 0.69, 1.0, cubismSpace()));\n");
 		source = source.replace(
