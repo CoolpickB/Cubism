@@ -50,6 +50,39 @@ public final class CubeFlight {
 
 	private CubeFlight() {}
 
+	/**
+	 * The height that the view frame of the player is taken at. The turn over an edge depends on the height, so a step
+	 * of a stair or a slab tilted the view by a few degrees in one tick, and a jump bobbed it. On foot this height eases
+	 * after the ground, and a jump does not raise it. In flight, in a vehicle and after a crossing it is the height of
+	 * the player.
+	 */
+	private static double viewY;
+	private static double viewYO;
+	private static double groundY;
+	private static int viewFace = -1;
+	private static final double VIEW_Y_EASE = 0.35;
+	/** A larger change of the height than this is a fall or a teleport, which the view follows at once. */
+	private static final double VIEW_Y_MAX_EASE = 2.0;
+
+	private static void tickViewY(LocalPlayer player, boolean flies) {
+		SeamLayout layout = SeamLayout.of(player.level());
+		int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
+		double y = player.getY();
+		if (player.onGround()) {
+			groundY = y;
+		}
+		double target = player.onGround() ? y : Math.min(y, groundY);
+		viewYO = viewY;
+		if (flies || player.isPassenger() || face != viewFace || Math.abs(target - viewY) > VIEW_Y_MAX_EASE) {
+			viewY = target;
+			viewYO = target;
+			groundY = y;
+		} else {
+			viewY += (target - viewY) * VIEW_Y_EASE;
+		}
+		viewFace = face;
+	}
+
 	/** Eases the frame in or out, then makes a crossing of a diagonal when the player flew past it. */
 	public static void tick(LocalPlayer player) {
 		weightO = weight;
@@ -62,6 +95,7 @@ public final class CubeFlight {
 		}
 		float crossYRot = player.getYRot();
 		float crossXRot = player.getXRot();
+		tickViewY(player, flies);
 		carryLook(player);
 		traceTick(player);
 		traceLook(player);
@@ -327,7 +361,7 @@ public final class CubeFlight {
 			return;
 		}
 		Quaternionf view = viewFrame(player, 1.0F);
-		if (!isIdentity(view) || BarrelRoll.rolling(player)) {
+		if (!isIdentity(view) || BarrelRoll.rolling(player) || player.hasEffect(GravityLock.STEADFAST)) {
 			lookTicksLeft = 20;
 		} else if (lookTicksLeft > 0) {
 			lookTicksLeft--;
@@ -343,9 +377,11 @@ public final class CubeFlight {
 			int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
 			float[] angles = anglesIn(view, player.getYRot(), player.getXRot());
 			Vec3 delta = player.getDeltaMovement();
-			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f roll=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b",
+			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f roll=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b viewY=%.2f lock=%s fly=%b glide=%b sneak=%b",
 				player.tickCount, face, player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), BarrelRoll.roll(player), angles[0], angles[1], moveYaw(player),
-				Math.toDegrees(view.angle()), delta.x, delta.y, delta.z, player.input.getMoveVector(), player.onGround()));
+				Math.toDegrees(view.angle()), delta.x, delta.y, delta.z, player.input.getMoveVector(), player.onGround(), viewY,
+				player.hasEffect(GravityLock.STEADFAST) ? player.getEffect(GravityLock.STEADFAST).getAmplifier() + (GravityLock.holdsFace(player) ? "held" : "free") : "none",
+				player.getAbilities().flying, player.isFallFlying(), player.isShiftKeyDown()));
 		} catch (java.io.IOException e) {
 			lookLog = null;
 		}
@@ -430,7 +466,9 @@ public final class CubeFlight {
 		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity) || GravityLock.locked(entity)) {
 			return new Quaternionf();
 		}
-		Vec3 center = entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0);
+		Vec3 position = entity.getPosition(partialTicks);
+		double y = entity instanceof LocalPlayer ? Mth.lerp(partialTicks, viewYO, viewY) : position.y;
+		Vec3 center = new Vec3(position.x, y + entity.getBbHeight() / 2.0, position.z);
 		if (ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer)) {
 			return frameAt(layout, center, 1.0F, layout.turnRadius());
 		}

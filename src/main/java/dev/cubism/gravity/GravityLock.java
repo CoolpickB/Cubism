@@ -28,7 +28,9 @@ import net.minecraft.world.item.equipment.ArmorMaterial;
 import net.minecraft.world.item.equipment.ArmorType;
 import net.minecraft.world.item.equipment.EquipmentAssets;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Steadfast keeps an entity in the region of the face it stands on: it does not cross a diagonal, so its down stays
@@ -89,10 +91,23 @@ public final class GravityLock {
 
 	/**
 	 * True when a locked entity must not cross a diagonal now. A player that sneaks on the ground crosses, unless a
-	 * level of the effect forces the face.
+	 * level of the effect forces the face. The sneak must start on the ground: in creative flight sneak flies down, and
+	 * a landing with it held crossed to the face the player was over.
 	 */
 	public static boolean holdsFace(Entity entity) {
-		return locked(entity) && (forcedFace(entity) >= 0 || !(entity instanceof Player player && player.isShiftKeyDown() && player.onGround()));
+		return locked(entity) && (forcedFace(entity) >= 0 || !(entity instanceof Player player && player.onGround()
+			&& SNEAK_FROM_GROUND.getOrDefault(player, false)));
+	}
+
+	/** For each sneaking player, whether the sneak started on the ground. Players of the client and the server thread. */
+	private static final Map<Player, Boolean> SNEAK_FROM_GROUND = Collections.synchronizedMap(new WeakHashMap<>());
+
+	public static void tickSneak(Player player) {
+		if (!player.isShiftKeyDown()) {
+			SNEAK_FROM_GROUND.remove(player);
+		} else {
+			SNEAK_FROM_GROUND.putIfAbsent(player, player.onGround() && !player.getAbilities().flying);
+		}
 	}
 
 	/**

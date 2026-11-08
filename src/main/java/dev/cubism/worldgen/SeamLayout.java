@@ -411,8 +411,11 @@ public final class SeamLayout {
 	 * seam it is half way between the two faces, over a corner it points to the corner.
 	 *
 	 * <p>Every level has the same rounding, the given radius, so the turn over an edge is equally wide at every height:
-	 * in the sky, at the surface and underground. A level smaller than the radius is a sphere, so near the center of the
+	 * in the sky, at the surface and underground. A level smaller than the radius is round, so near the center of the
 	 * cube the turn narrows down to the center, where the pull points to the center from every side.
+	 *
+	 * <p>The rounding is a curve of the cubic norm, not a circle. A circle starts the turn at its full rate, so the view
+	 * snapped from level into a turn. This curve starts the turn at a rate of 0 and is fastest on the diagonal.
 	 */
 	public @Nullable Vec3 airGravity(double x, double y, double z, double radius) {
 		int bx = Mth.floor(x);
@@ -430,13 +433,17 @@ public final class SeamLayout {
 		if (dy > 0.0 && dx * dx + dz * dz < 1.0E-6 * dy * dy) {
 			return null;
 		}
-		double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-		return length < 1.0E-9 ? null : new Vec3(-dx / length, -dy / length, -dz / length);
+		// The normal of the level, the gradient of the cubic norm of the offset from the box.
+		double nx = dx * Math.abs(dx);
+		double ny = dy * Math.abs(dy);
+		double nz = dz * Math.abs(dz);
+		double length = Math.sqrt(nx * nx + ny * ny + nz * nz);
+		return length < 1.0E-12 ? null : new Vec3(-nx / length, -ny / length, -nz / length);
 	}
 
 	/**
 	 * The half size of the box that the level through a point of the positive octant is rounded about: the box at the
-	 * distance of the radius from the point. Without a radius the levels are plain cubes, and a box a hair smaller
+	 * cubic norm distance of the radius from the point. Without a radius the levels are plain cubes, and a box a hair smaller
 	 * gives the direction of the largest axis.
 	 */
 	private static double levelCore(double ax, double ay, double az, double radius) {
@@ -449,7 +456,7 @@ public final class SeamLayout {
 		if (mid <= max - radius) {
 			return max - radius;
 		}
-		if (ax * ax + ay * ay + az * az <= radius * radius) {
+		if (ax * ax * ax + ay * ay * ay + az * az * az <= radius * radius * radius) {
 			return 0.0;
 		}
 		// The distance to the box falls as the box grows: it is at least the radius at the low end, 0 at the high end.
@@ -457,7 +464,7 @@ public final class SeamLayout {
 		double high = max;
 		for (int i = 0; i < 40; i++) {
 			double half = (low + high) * 0.5;
-			if (boxDistance(ax, ay, az, half) > radius) {
+			if (cubicBoxDistance(ax, ay, az, half) > radius) {
 				low = half;
 			} else {
 				high = half;
@@ -466,11 +473,11 @@ public final class SeamLayout {
 		return (low + high) * 0.5;
 	}
 
-	private static double boxDistance(double ax, double ay, double az, double half) {
+	private static double cubicBoxDistance(double ax, double ay, double az, double half) {
 		double dx = Math.max(ax - half, 0.0);
 		double dy = Math.max(ay - half, 0.0);
 		double dz = Math.max(az - half, 0.0);
-		return Math.sqrt(dx * dx + dy * dy + dz * dz);
+		return Math.cbrt(dx * dx * dx + dy * dy * dy + dz * dz * dz);
 	}
 
 	public static int indexOf(Direction face) {

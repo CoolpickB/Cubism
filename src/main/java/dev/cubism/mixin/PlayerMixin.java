@@ -32,6 +32,7 @@ public abstract class PlayerMixin extends LivingEntity {
 
 	@Inject(method = "tick", at = @At("TAIL"))
 	private void cubism$treadsTick(CallbackInfo ci) {
+		GravityLock.tickSneak((Player) (Object) this);
 		GravityLock.tickTreads((Player) (Object) this);
 	}
 
