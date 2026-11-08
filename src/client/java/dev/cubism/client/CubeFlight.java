@@ -32,6 +32,8 @@ import java.util.function.Consumer;
  */
 public final class CubeFlight {
 	private static final float EASE_TICKS = 8.0F;
+	/** The radius of the view turn over an edge with the Edge Camera Tilt option off. */
+	private static final double TILT_OFF_RADIUS = 2.0;
 	/** The pitch in the air frame stays this far from straight up or down, where it gives no yaw. */
 	private static final float MAX_PITCH = 89.9F;
 
@@ -377,12 +379,12 @@ public final class CubeFlight {
 		if (layout == null || !(entity instanceof LocalPlayer) || t <= 0.0F || GravityLock.locked(entity)) {
 			return new Quaternionf();
 		}
-		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), t);
+		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), t, layout.turnRadius());
 	}
 
-	/** The air frame at a body center, eased in by a weight. */
-	private static Quaternionf frameAt(SeamLayout layout, Vec3 center, float t) {
-		Vec3 gravity = layout.airGravity(center.x, center.y, center.z);
+	/** The air frame at a body center for a radius of the turn over an edge, eased in by a weight. */
+	private static Quaternionf frameAt(SeamLayout layout, Vec3 center, float t, double radius) {
+		Vec3 gravity = layout.airGravity(center.x, center.y, center.z, radius);
 		if (gravity == null || t <= 0.0F) {
 			return new Quaternionf();
 		}
@@ -428,9 +430,13 @@ public final class CubeFlight {
 		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity) || GravityLock.locked(entity)) {
 			return new Quaternionf();
 		}
-		// With the tilt off the view tilts only in flight, as the flight frame does, and on the ground it turns at the seam.
-		float weight = ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer) ? 1.0F : flightWeight(partialTicks);
-		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), weight);
+		Vec3 center = entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0);
+		if (ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer)) {
+			return frameAt(layout, center, 1.0F, layout.turnRadius());
+		}
+		// With the tilt off the view on the ground turns only over the last blocks before the diagonal, so it does not
+		// snap at the crossing. In flight it eases to the frame of the flight.
+		return frameAt(layout, center, 1.0F, TILT_OFF_RADIUS).slerp(frameAt(layout, center, 1.0F, layout.turnRadius()), flightWeight(partialTicks));
 	}
 
 	/** How far the body is in flight, from 0 on the ground to 1 in flight. */

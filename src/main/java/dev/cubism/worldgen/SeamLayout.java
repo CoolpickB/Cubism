@@ -391,23 +391,30 @@ public final class SeamLayout {
 		return owner == face ? -1 : owner;
 	}
 
+	/** The smallest radius of the turn over an edge, so that a sharp edge still turns the pull and the view smoothly. */
+	public static final int MIN_TURN_RADIUS = 8;
+
+	/** The radius of the turn of the pull over an edge, at every height: the edge rounding, but at least {@link #MIN_TURN_RADIUS}. */
+	public int turnRadius() {
+		return Math.max(MIN_TURN_RADIUS, this.edgeRounding());
+	}
+
+	/** {@link #airGravity(double, double, double, double)} with the turn of the pull, {@link #turnRadius}. */
+	public @Nullable Vec3 airGravity(double x, double y, double z) {
+		return this.airGravity(x, y, z, this.turnRadius());
+	}
+
 	/**
 	 * The direction of gravity in the air at a continuous storage position, or null where it is straight down. It is
-	 * the inward normal of the level through the position, one of a nested family of rounded cubes, so the field is
-	 * continuous everywhere, also across the diagonals, and a jump off an edge arcs onto the next face. On a seam it
-	 * is half way between the two faces, over a corner it points to the corner.
+	 * the inward normal of the level through the position, one of a nested family of boxes with rounded edges, so the
+	 * field is continuous everywhere, also across the diagonals, and a jump off an edge arcs onto the next face. On a
+	 * seam it is half way between the two faces, over a corner it points to the corner.
 	 *
-	 * <p>The surface is the level with the edge rounding. Above it each level lies a fixed distance out, so the
-	 * rounding grows with the height and far out the pull is close to round. Below it each level is the surface
-	 * scaled toward the center, so the rounding shrinks with the depth in proportion and is gone only at the center.
-	 * The turn over an edge is then as wide as the rounding at the surface and narrows smoothly with depth, at any
-	 * size of cube. A fixed distance in for the levels below the surface too would leave no rounding at all one
-	 * rounding deep, where the pull flipped from one face to the next at once.
-	 *
-	 * <p>In the Nether, the surface of the field is the roof. With the floor as the surface, the whole cave lay above
-	 * it, and the turn was as wide as the height over the floor: tens of blocks for an edge rounding of 2.
+	 * <p>Every level has the same rounding, the given radius, so the turn over an edge is equally wide at every height:
+	 * in the sky, at the surface and underground. A level smaller than the radius is a sphere, so near the center of the
+	 * cube the turn narrows down to the center, where the pull points to the center from every side.
 	 */
-	public @Nullable Vec3 airGravity(double x, double y, double z) {
+	public @Nullable Vec3 airGravity(double x, double y, double z, double radius) {
 		int bx = Mth.floor(x);
 		if (!this.inRegion(bx, Mth.floor(z))) {
 			return null;
@@ -415,9 +422,7 @@ public final class SeamLayout {
 		double cx = x - this.offsetX(this.faceIndexAt(bx)) - 0.5;
 		double cy = y - this.centerY - 0.5;
 		double cz = z - 0.5;
-		double core = levelCore(
-			Math.abs(cx), Math.abs(cy), Math.abs(cz), this.nether ? this.radius + this.openHeight : this.radius, this.edgeRounding()
-		);
+		double core = levelCore(Math.abs(cx), Math.abs(cy), Math.abs(cz), radius);
 		double dx = cx - Math.clamp(cx, -core, core);
 		double dy = cy - Math.clamp(cy, -core, core);
 		double dz = cz - Math.clamp(cz, -core, core);
@@ -430,31 +435,35 @@ public final class SeamLayout {
 	}
 
 	/**
-	 * The half size of the box that the level through a point of the positive octant is rounded about. Without
-	 * rounding the levels are plain cubes, and a box a hair smaller gives the direction of the largest axis.
+	 * The half size of the box that the level through a point of the positive octant is rounded about: the box at the
+	 * distance of the radius from the point. Without a radius the levels are plain cubes, and a box a hair smaller
+	 * gives the direction of the largest axis.
 	 */
-	private static double levelCore(double ax, double ay, double az, double radius, double rounding) {
-		if (rounding <= 0.0) {
-			return Math.max(ax, Math.max(ay, az)) - 1.0E-6;
+	private static double levelCore(double ax, double ay, double az, double radius) {
+		double max = Math.max(ax, Math.max(ay, az));
+		if (radius <= 0.0) {
+			return max - 1.0E-6;
 		}
-		double surfaceCore = radius - rounding;
-		if (boxDistance(ax, ay, az, surfaceCore) >= rounding) {
-			return surfaceCore;
+		double mid = Math.max(Math.min(ax, ay), Math.min(Math.max(ax, ay), az));
+		// Over the flat part of a level the box is the radius below the point.
+		if (mid <= max - radius) {
+			return max - radius;
 		}
-		// The level of scale s has the core (1 - k) s and the rounding k s. The distance to its core less its rounding
-		// falls as s grows, so halving finds the level through the point.
-		double k = rounding / radius;
-		double low = 0.0;
-		double high = radius;
-		for (int i = 0; i < 48; i++) {
-			double mid = (low + high) * 0.5;
-			if (boxDistance(ax, ay, az, (1.0 - k) * mid) > k * mid) {
-				low = mid;
+		if (ax * ax + ay * ay + az * az <= radius * radius) {
+			return 0.0;
+		}
+		// The distance to the box falls as the box grows: it is at least the radius at the low end, 0 at the high end.
+		double low = Math.max(0.0, max - radius);
+		double high = max;
+		for (int i = 0; i < 40; i++) {
+			double half = (low + high) * 0.5;
+			if (boxDistance(ax, ay, az, half) > radius) {
+				low = half;
 			} else {
-				high = mid;
+				high = half;
 			}
 		}
-		return (1.0 - k) * (low + high) * 0.5;
+		return (low + high) * 0.5;
 	}
 
 	private static double boxDistance(double ax, double ay, double az, double half) {

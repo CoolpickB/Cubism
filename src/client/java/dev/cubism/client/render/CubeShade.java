@@ -26,7 +26,8 @@ public final class CubeShade {
 	/** The shade table for the faces of the block at a position. */
 	public static CardinalLighting at(CardinalLighting lighting, BlockPos pos) {
 		SeamLayout layout = SeamClient.layout;
-		Vec3 gravity = layout == null ? null : layout.airGravity(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+		// The blocks turn with the rounding of the terrain, which is tighter than the turn of the pull.
+		Vec3 gravity = layout == null ? null : layout.airGravity(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, layout.edgeRounding());
 		if (gravity == null) {
 			return lighting;
 		}
