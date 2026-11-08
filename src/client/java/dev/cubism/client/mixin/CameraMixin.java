@@ -147,19 +147,34 @@ public abstract class CameraMixin {
 			return new Quaternionf().rotationAxis(glideRoll, CubeFlight.look(yRot, xRot));
 		}
 		if (this.entity instanceof LocalPlayer player) {
+			// Vanilla blends the yaw and the pitch of the face frame between two ticks. Over an edge the look in that frame
+			// turns fast and passes near straight up or down, where the yaw swings, and the blended look left the straight
+			// turn within each tick: a wobble that grew with the speed. The look is blended in the view frame instead and
+			// turned with the frame at this moment. The turn from the look of vanilla to it goes before the roll.
+			Vector3f vanillaLook = CubeFlight.look(yRot, xRot);
+			Vector3f look = this.cubism$lookInFrame(player, partialTicks);
+			Quaternionf toLook = new Quaternionf().rotationTo(vanillaLook, look);
 			// The roll that turns the up of vanilla to the kept up of the screen, about the look.
-			Vector3f look = CubeFlight.look(yRot, xRot);
-			Vector3f shown = CubeFlight.vanillaScreenUp(yRot, xRot);
+			Vector3f shown = toLook.transform(CubeFlight.vanillaScreenUp(yRot, xRot));
 			Vector3f wanted = CubeFlight.screenUp(player, partialTicks);
 			wanted.fma(-wanted.dot(look), look);
 			if (wanted.lengthSquared() < 1.0E-8F) {
-				return new Quaternionf();
+				return toLook;
 			}
 			float angle = (float) Math.atan2(new Vector3f(shown).cross(wanted).dot(look), shown.dot(wanted.normalize()));
-			return new Quaternionf().rotationAxis(angle + glideRoll, look);
+			return new Quaternionf().rotationAxis(angle + glideRoll, look).mul(toLook);
 		}
 		float[] angles = CubeFlight.anglesIn(air, yRot, xRot);
 		return new Quaternionf(air).mul(cubism$view(angles[0], angles[1])).mul(cubism$view(yRot, xRot).conjugate());
+	}
+
+	/** The look of the last two ticks, each in the view frame of its tick, blended, and turned by the view frame now. */
+	@Unique
+	private Vector3f cubism$lookInFrame(LocalPlayer player, float partialTicks) {
+		Vector3f before = CubeFlight.viewFrame(player, 0.0F).conjugate().transform(CubeFlight.look(player.yRotO, player.xRotO));
+		Vector3f after = CubeFlight.viewFrame(player, 1.0F).conjugate().transform(CubeFlight.look(player.getYRot(), player.getXRot()));
+		Quaternionf turn = new Quaternionf().slerp(new Quaternionf().rotationTo(before, after), partialTicks);
+		return this.cubism$view.transform(turn.transform(before)).normalize();
 	}
 
 	/**
@@ -272,20 +287,21 @@ public abstract class CameraMixin {
 			Vec3 vanillaEye = position.add(0.0, eyeHeight, 0.0);
 			Vec3 wantedEye = position.add(eye.x, halfHeight + eye.y, eye.z);
 			float now = this.entity.tickCount + partialTicks;
+			Vec3 clear = wantedEye;
+			double reach = clear.distanceTo(vanillaEye);
 			if (this.entity.isSpectator()) {
 				this.cubism$eyeReach = Double.MAX_VALUE;
-				this.setPosition(wantedEye.x, wantedEye.y, wantedEye.z);
-				return;
+			} else {
+				clear = SeamCrossing.clearEye(this.entity, vanillaEye, wantedEye);
+				reach = clear.distanceTo(vanillaEye);
+				double eased = this.cubism$eyeReach + EYE_EASE_OUT * Math.max(0.0F, now - this.cubism$eyeReachTime);
+				this.cubism$eyeReachTime = now;
+				if (eased < reach) {
+					clear = vanillaEye.add(clear.subtract(vanillaEye).scale(eased / reach));
+					reach = eased;
+				}
+				this.cubism$eyeReach = reach;
 			}
-			Vec3 clear = SeamCrossing.clearEye(this.entity, vanillaEye, wantedEye);
-			double reach = clear.distanceTo(vanillaEye);
-			double eased = this.cubism$eyeReach + EYE_EASE_OUT * Math.max(0.0F, now - this.cubism$eyeReachTime);
-			this.cubism$eyeReachTime = now;
-			if (eased < reach) {
-				clear = vanillaEye.add(clear.subtract(vanillaEye).scale(eased / reach));
-				reach = eased;
-			}
-			this.cubism$eyeReach = reach;
 			this.setPosition(clear.x, clear.y, clear.z);
 			Vec3 wanted = position.add(eye.x, halfHeight + eye.y, eye.z);
 			CubeFlight.traceLine(String.format(java.util.Locale.ROOT,
