@@ -30,5 +30,5 @@ void main() {
     // A thin haze of air over the disc, thicker toward the rim, only on the day side.
     float rim = pow(1.0 - clamp(dot(normal, -view), 0.0, 1.0), 3.0);
     color = mix(color, vec3(0.45, 0.65, 1.0) * mix(0.15, 1.0, day), rim * 0.6);
-    fragColor = vec4(color, smoothstep(0.25, 0.6, ColorModulator.z));
+    fragColor = vec4(color, smoothstep(0.0, 0.25, ColorModulator.z));
 }

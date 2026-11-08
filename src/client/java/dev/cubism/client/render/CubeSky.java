@@ -85,6 +85,9 @@ public final class CubeSky {
 	private static float orbit;
 	/** The sky fog distance read at the middle of a face, the same wherever the camera is. */
 	private static float planetSkyEnd = 1.0F;
+	/** 0 below the top of the stratosphere, 1 {@link #FOG_CLEAR_SPAN} blocks above it: how far the fog of the weather is cleared. */
+	private static float fogClear;
+	private static final double FOG_CLEAR_SPAN = 48.0;
 	private static double sq(double v) {
 		return v * v;
 	}
@@ -237,6 +240,10 @@ public final class CubeSky {
 		return orbit;
 	}
 
+	public static float fogClear() {
+		return fogClear;
+	}
+
 	public static float starMax() {
 		return starMax;
 	}
@@ -320,6 +327,8 @@ public final class CubeSky {
 		double over = Math.sqrt(sq(cubeX - Math.clamp(cubeX, -core, core)) + sq(cubeY - Math.clamp(cubeY, -core, core))
 			+ sq(cubeZ - Math.clamp(cubeZ, -core, core))) - CubeTime.EDGE_BLEND - ORBIT_START;
 		orbit = Mth.smoothstep(Mth.clamp((float) (over / ORBIT_SPAN), 0.0F, 1.0F));
+		double aboveAir = over + ORBIT_START - (layout.stratosphereTop() - layout.radius);
+		fogClear = Mth.smoothstep(Mth.clamp((float) (aboveAir / FOG_CLEAR_SPAN), 0.0F, 1.0F));
 		CUBE_FROM_FEET.set(FRAME).m33(1.0F);
 		double[] sun = CubeTime.sunDirection(ticks);
 		SUN.set(sun[0], sun[1], sun[2]);
@@ -343,7 +352,7 @@ public final class CubeSky {
 
 	/** Draws the coarse planet over the stars, when the camera is in orbit. */
 	public static void renderPlanet(RenderPass renderPass) {
-		GpuBuffer vertices = orbit > 0.25F ? PlanetView.mesh() : null;
+		GpuBuffer vertices = orbit > 0.0F ? PlanetView.mesh() : null;
 		if (vertices == null) {
 			return;
 		}

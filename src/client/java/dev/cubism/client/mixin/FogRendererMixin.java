@@ -33,10 +33,12 @@ public abstract class FogRendererMixin {
 	@Inject(method = "setupFog", at = @At("RETURN"))
 	private void cubism$noFogInOrbit(Camera camera, int renderDistance, DeltaTracker tracker, float darkness, ClientLevel level, CallbackInfoReturnable<FogData> cir) {
 		float orbit = CubeSky.orbit();
-		if (orbit > 0.0F && CubeSky.active()) {
+		// Rain and other weather thicken the fog over the whole cube, so it clears from the top of the stratosphere, faster than the sky turns.
+		float clear = Math.max(Math.min(2.0F * orbit, 1.0F), CubeSky.fogClear());
+		if (clear > 0.0F && CubeSky.active()) {
 			FogData fog = cir.getReturnValue();
 			// The distances grow without bound as the orbit weight goes to 1, so the fog thins out evenly. It is gone halfway into orbit: its distances are those of the biome under the camera.
-			float reach = 1.0F / Math.max(1.0F - Math.min(2.0F * orbit, 1.0F), 1.0E-5F);
+			float reach = 1.0F / Math.max(1.0F - clear, 1.0E-5F);
 			fog.environmentalStart = Math.min(fog.environmentalStart * reach, FAR_FOG);
 			fog.environmentalEnd = Math.min(fog.environmentalEnd * reach, FAR_FOG * 2.0F);
 		}
