@@ -77,6 +77,14 @@ public final class CubeSky {
 	private static final Matrix4f FRAME = new Matrix4f();
 	private static final Vector3f SUN = new Vector3f();
 	private static float radius;
+	/** The air turns from the one of the face under the camera to the one of the whole planet over this height range. */
+	private static final double ORBIT_START = 64.0;
+	private static final double ORBIT_SPAN = 400.0;
+	/** 0 on the ground, 1 well above the air: how much the sky is that of the planet seen from afar. */
+	private static float orbit;
+	private static double sq(double v) {
+		return v * v;
+	}
 	private static float starMax;
 	private static float moonBrightness;
 
@@ -283,19 +291,22 @@ public final class CubeSky {
 		double z = camera.z - 0.5;
 		// The fog of vanilla at the camera follows the local time there, which the shader needs to match the horizon.
 		long cameraTicks = Math.floorMod((long) ticks + CubeTime.offsetTicks(layout, body.x, body.y, body.z), CubeTime.DAY_TICKS);
-		FRAME.setColumn(3, new Vector4f(
-			(float) (m[0] * x + m[1] * y + m[2] * z),
-			(float) (m[3] * x + m[4] * y + m[5] * z),
-			(float) (m[6] * x + m[7] * y + m[8] * z),
-			cameraTicks
-		));
+		double cubeX = m[0] * x + m[1] * y + m[2] * z;
+		double cubeY = m[3] * x + m[4] * y + m[5] * z;
+		double cubeZ = m[6] * x + m[7] * y + m[8] * z;
+		FRAME.setColumn(3, new Vector4f((float) cubeX, (float) cubeY, (float) cubeZ, cameraTicks));
+		// How high the camera is over the rounded cube, from cloud height to well past the top of the air.
+		double over = Math.sqrt(sq(cubeX - Math.clamp(cubeX, -core, core)) + sq(cubeY - Math.clamp(cubeY, -core, core))
+			+ sq(cubeZ - Math.clamp(cubeZ, -core, core))) - CubeTime.EDGE_BLEND - ORBIT_START;
+		orbit = Mth.smoothstep(Mth.clamp((float) (over / ORBIT_SPAN), 0.0F, 1.0F));
 		CUBE_FROM_FEET.set(FRAME).m33(1.0F);
 		double[] sun = CubeTime.sunDirection(ticks);
 		SUN.set(sun[0], sun[1], sun[2]);
 
 		Vector3fc cameraSky = level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, sample, null);
 		float daylight = Math.max(cameraSky.x(), Math.max(cameraSky.y(), cameraSky.z())) / maxSky;
-		moonBrightness = 1.0F - 0.85F * Mth.clamp(daylight, 0.0F, 1.0F);
+		// From orbit the moon is lit by the sun whatever the local time under the camera is.
+		moonBrightness = Mth.lerp(orbit, 1.0F - 0.85F * Mth.clamp(daylight, 0.0F, 1.0F), 1.0F);
 	}
 
 	/** Draws black space, for the stars that the caller draws next. */
@@ -319,7 +330,7 @@ public final class CubeSky {
 			box = vertices;
 		}
 		var transforms = RenderSystem.getDynamicUniforms().writeTransform(
-			RenderSystem.getModelViewMatrixCopy(), new Vector4f(radius, starMax, 0.0F, 0.0F), SUN, FRAME
+			RenderSystem.getModelViewMatrixCopy(), new Vector4f(radius, starMax, orbit, 0.0F), SUN, FRAME
 		);
 		renderPass.pushDebugGroup(() -> label);
 		renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));

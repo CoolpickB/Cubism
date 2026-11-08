@@ -7,7 +7,7 @@
 // Inputs, packed into the transform uniforms by CubeSky:
 //   TextureMat: columns 0-2 turn the camera face frame into the cube frame. Column 3 is the camera position in the
 //               cube frame, and in w the local time at the camera.
-//   ColorModulator: x the cube radius, y the brightest stars of the day.
+//   ColorModulator: x the cube radius, y the brightest stars of the day, z how far the camera is into orbit, 0 to 1.
 //   ModelOffset: the direction toward the sun in the cube frame.
 // Sampler0 holds the vanilla colors over one day: row 0 the sky color with the star brightness in alpha, row 1 the
 // fog color, row 2 the sunrise and sunset glow with its strength in alpha.
@@ -44,7 +44,8 @@ void main() {
 
     // The fog color of vanilla at the camera has extra tints, such as the blend toward the sky at a short render
     // distance, which also go onto the fog of the other times.
-    vec3 fogTint = FogColor.rgb - texture(Sampler0, vec2(TextureMat[3].w / DAY, 0.5)).rgb;
+    // From orbit it goes away: the fog of vanilla then belongs to one face and would tint the whole planet with it.
+    vec3 fogTint = (FogColor.rgb - texture(Sampler0, vec2(TextureMat[3].w / DAY, 0.5)).rgb) * (1.0 - ColorModulator.z);
 
     vec3 q0 = camera - clamp(camera, -inner, inner);
     float ground = min(-48.0, length(q0) - EDGE - 16.0);

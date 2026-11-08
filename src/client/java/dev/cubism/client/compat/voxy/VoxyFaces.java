@@ -10,6 +10,7 @@ import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
 import me.cortex.voxy.common.voxelization.VoxelizedSection;
 import me.cortex.voxy.common.world.other.Mapper;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Mth;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
@@ -220,8 +221,9 @@ public final class VoxyFaces {
 	/**
 	 * From space the faces overlap in the view. Each face draws its levels of detail without the depth of the faces
 	 * before it, so the face that draws last shows on top, and a far face drawn after the near one showed through it.
-	 * The faces draw from the farthest to the nearest: the faces that turn away from the camera first. On a face the
-	 * camera face keeps drawing first.
+	 * The faces draw from the farthest to the nearest: the faces that turn away from the camera first, the camera
+	 * face last. Each face draws without the depth of the others, so a face that drew after the camera face covered the
+	 * ground of its levels of detail where they meet the loaded chunks.
 	 */
 	private static void sortFarToNear() {
 		SeamLayout layout = SeamClient.layout;
@@ -229,10 +231,7 @@ public final class VoxyFaces {
 			return;
 		}
 		Vec3 camera = Minecraft.getInstance().gameRenderer.mainCamera().position();
-		if (!SeamClient.faceFarView(layout, camera)) {
-			return;
-		}
-		Vec3 c = layout.cubeOffset(SeamLayout.SPACE, camera.x, camera.y, camera.z);
+		Vec3 c = layout.cubeOffset(layout.regionAt(Mth.floor(camera.x), Mth.floor(camera.z)), camera.x, camera.y, camera.z);
 		DEFERRED.sort(java.util.Comparator.comparingDouble(draw -> {
 			if (draw.face >= SeamLayout.FACES.length) {
 				return Double.NEGATIVE_INFINITY;

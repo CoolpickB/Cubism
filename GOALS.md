@@ -181,3 +181,5 @@ Next, in this order:
 
 - Terrain: run the dev server, load the cube chunks, and make images from the region files.
 - Movement and block behavior: play-test in the Prism instance `cubeworld`.
+
+Fixes after the next test (untested by the user): the Voxy faces now draw far to near also on the ground (camera face last), the guess for faces showing through the ground where the levels of detail meet the loaded chunks. The air shader turns from the local atmosphere to a planet-wide one with height (`orbit` in `CubeSky`, 64 to 464 blocks over the surface): the fog tint of vanilla, which is read at one face and did not match the local time of the shader, fades out, and the moon is lit. The sunrise glow and sky colors already come from per-sample local time.
