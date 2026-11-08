@@ -252,6 +252,7 @@ public final class CubeSky {
 			return;
 		}
 		Vec3 sample = layout.ownerStorage(camera);
+		Vec3 planet = new Vec3(layout.offsetX(0) + 0.5, layout.centerY + layout.radius, 0.5);
 		DynamicTexture texture = table;
 		if (texture == null) {
 			texture = new DynamicTexture(() -> "Cube sky colors", TABLE_SIZE, 3, false);
@@ -265,6 +266,18 @@ public final class CubeSky {
 			Vector3fc fog = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, sample, null));
 			float stars = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.STAR_BRIGHTNESS, sample, null));
 			Vector4fc glow = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, sample, null));
+			if (orbit > 0.0F) {
+				// The colors of a biome belong to the ground under the camera. The planet seen from afar has one set, read
+				// at the same place whatever the camera is over, or the whole sky changes where the camera crosses a biome.
+				Vector3fc planetSky = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, planet, null));
+				Vector3fc planetFog = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, planet, null));
+				float planetStars = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.STAR_BRIGHTNESS, planet, null));
+				Vector4fc planetGlow = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, planet, null));
+				sky = new Vector3f(sky).lerp(planetSky, orbit);
+				fog = new Vector3f(fog).lerp(planetFog, orbit);
+				stars = Mth.lerp(orbit, stars, planetStars);
+				glow = new org.joml.Vector4f(glow).lerp(planetGlow, orbit);
+			}
 			texture.getPixels().setPixel(i, 0, ARGB.colorFromFloat(stars, sky.x(), sky.y(), sky.z()));
 			texture.getPixels().setPixel(i, 1, ARGB.colorFromFloat(1.0F, fog.x(), fog.y(), fog.z()));
 			texture.getPixels().setPixel(i, 2, ARGB.colorFromFloat(glow.w(), glow.x(), glow.y(), glow.z()));

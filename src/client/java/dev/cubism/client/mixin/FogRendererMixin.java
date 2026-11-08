@@ -35,8 +35,8 @@ public abstract class FogRendererMixin {
 		float orbit = CubeSky.orbit();
 		if (orbit > 0.0F && CubeSky.active()) {
 			FogData fog = cir.getReturnValue();
-			// The distances grow without bound as the orbit weight goes to 1, so the fog thins out evenly.
-			float reach = 1.0F / Math.max(1.0F - orbit, 1.0E-5F);
+			// The distances grow without bound as the orbit weight goes to 1, so the fog thins out evenly. It is gone halfway into orbit: its distances are those of the biome under the camera.
+			float reach = 1.0F / Math.max(1.0F - Math.min(2.0F * orbit, 1.0F), 1.0E-5F);
 			fog.environmentalStart = Math.min(fog.environmentalStart * reach, FAR_FOG);
 			fog.environmentalEnd = Math.min(fog.environmentalEnd * reach, FAR_FOG * 2.0F);
 		}

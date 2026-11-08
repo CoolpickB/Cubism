@@ -191,3 +191,5 @@ Localized light in orbit (untested by the user): `FaceLightmaps` keeps a lightma
 Cloud layers take the color of their own face from orbit (`FaceLightmaps.cloudColor`, untested by the user). Open: a smooth change of light across an edge needs the lightmap read per vertex (Sodium vertex shader and Voxy) from the local time of the vertex, as the air shader does; the per-face lightmap steps at each edge.
 
 The air shader takes the sky fog distance and the fog alpha from the planet, not the camera probe, as the orbit weight grows (`ColorModulator.w` from `CubeSky.planetSkyEnd`). Untested by the user.
+
+The sky color table (sky, fog, stars, glow) turns from the biome under the camera to one read at the middle of a face as the orbit weight grows, and the environmental fog is gone at half the orbit weight. Reason (from screenshots 12.17.49 and 12.17.52, two spots 16 blocks apart): the table is read at the point where the camera maps onto the owner face, so a biome border under that point changed the whole sky and fog. Untested by the user.
