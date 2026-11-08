@@ -14,6 +14,10 @@ import dev.cubism.client.SeamClient;
 import dev.cubism.worldgen.PlanetMap;
 import dev.cubism.worldgen.SeamLayout;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
@@ -37,8 +41,6 @@ public final class PlanetView {
 			.build()
 	);
 
-	/** A column on the edge of a face has a wall this deep, so the next face shows no gap if its ground is lower. */
-	private static final int EDGE_DEPTH = 128;
 	private static byte @Nullable [] data;
 	private static @Nullable GpuBuffer mesh;
 	private static int vertices;
@@ -122,6 +124,27 @@ public final class PlanetView {
 			}
 		}
 		Corners corners = new Corners(layout);
+		// The columns on the two sides of a diagonal share the two nodes of their common edge. Their tops differ, and the
+		// higher one gets a wall down to the lower, found by the position of that edge.
+		Map<EdgeKey, List<int[]>> edges = new HashMap<>();
+		for (int face = 0; face < faces; face++) {
+			for (int i = 0; i < cells; i++) {
+				for (int j = 0; j < cells; j++) {
+					if (i + 1 == cells) {
+						edges.computeIfAbsent(edge(corners, face, i + 1, j, i + 1, j + 1), k -> new ArrayList<>()).add(new int[] {face, top[face][i * cells + j]});
+					}
+					if (i == 0) {
+						edges.computeIfAbsent(edge(corners, face, i, j, i, j + 1), k -> new ArrayList<>()).add(new int[] {face, top[face][i * cells + j]});
+					}
+					if (j + 1 == cells) {
+						edges.computeIfAbsent(edge(corners, face, i, j + 1, i + 1, j + 1), k -> new ArrayList<>()).add(new int[] {face, top[face][i * cells + j]});
+					}
+					if (j == 0) {
+						edges.computeIfAbsent(edge(corners, face, i, j, i + 1, j), k -> new ArrayList<>()).add(new int[] {face, top[face][i * cells + j]});
+					}
+				}
+			}
+		}
 		try (ByteBufferBuilder buffer = new ByteBufferBuilder(1 << 20)) {
 			BufferBuilder builder = new BufferBuilder(buffer, PrimitiveTopology.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 			int total = 0;
@@ -138,19 +161,19 @@ public final class PlanetView {
 						// Counterclockwise seen from outside: u runs along X of the face, v along Z, and the outside is +Y.
 						total += emit(builder, color, t00, t01, t10);
 						total += emit(builder, color, t10, t01, t11);
-						int low0 = i + 1 < cells ? top[face][(i + 1) * cells + j] : height - EDGE_DEPTH;
+						int low0 = i + 1 < cells ? top[face][(i + 1) * cells + j] : across(edges, edge(corners, face, i + 1, j, i + 1, j + 1), face, height);
 						if (low0 < height) {
 							total += wall(builder, color, t10, t11, corners.at(face, i + 1, j, low0), corners.at(face, i + 1, j + 1, low0), true);
 						}
-						int low1 = i > 0 ? top[face][(i - 1) * cells + j] : height - EDGE_DEPTH;
+						int low1 = i > 0 ? top[face][(i - 1) * cells + j] : across(edges, edge(corners, face, i, j, i, j + 1), face, height);
 						if (low1 < height) {
 							total += wall(builder, color, t00, t01, corners.at(face, i, j, low1), corners.at(face, i, j + 1, low1), false);
 						}
-						int low2 = j + 1 < cells ? top[face][i * cells + j + 1] : height - EDGE_DEPTH;
+						int low2 = j + 1 < cells ? top[face][i * cells + j + 1] : across(edges, edge(corners, face, i, j + 1, i + 1, j + 1), face, height);
 						if (low2 < height) {
 							total += wall(builder, color, t01, t11, corners.at(face, i, j + 1, low2), corners.at(face, i + 1, j + 1, low2), false);
 						}
-						int low3 = j > 0 ? top[face][i * cells + j - 1] : height - EDGE_DEPTH;
+						int low3 = j > 0 ? top[face][i * cells + j - 1] : across(edges, edge(corners, face, i, j, i + 1, j), face, height);
 						if (low3 < height) {
 							total += wall(builder, color, t00, t10, corners.at(face, i, j, low3), corners.at(face, i + 1, j, low3), true);
 						}
@@ -163,6 +186,30 @@ public final class PlanetView {
 				vertices = total;
 			}
 		}
+	}
+
+	private record EdgeKey(int ax, int ay, int az, int bx, int by, int bz) {}
+
+	/** The edge between two nodes of a face, by the positions of its ends on the ground of height 0, in half blocks. */
+	private static EdgeKey edge(Corners corners, int face, int i0, int j0, int i1, int j1) {
+		float[] a = corners.at(face, i0, j0, 0);
+		float[] b = corners.at(face, i1, j1, 0);
+		int[] ka = {Math.round(a[0] * 2), Math.round(a[1] * 2), Math.round(a[2] * 2)};
+		int[] kb = {Math.round(b[0] * 2), Math.round(b[1] * 2), Math.round(b[2] * 2)};
+		boolean swap = ka[0] != kb[0] ? ka[0] > kb[0] : ka[1] != kb[1] ? ka[1] > kb[1] : ka[2] > kb[2];
+		int[] first = swap ? kb : ka;
+		int[] second = swap ? ka : kb;
+		return new EdgeKey(first[0], first[1], first[2], second[0], second[1], second[2]);
+	}
+
+	/** The top of the column of the other face on an edge. Without one, no wall. */
+	private static int across(Map<EdgeKey, List<int[]>> edges, EdgeKey key, int face, int height) {
+		for (int[] other : edges.getOrDefault(key, List.of())) {
+			if (other[0] != face) {
+				return other[1];
+			}
+		}
+		return height;
 	}
 
 	private static int emit(BufferBuilder builder, int color, float[] a, float[] b, float[] c) {
