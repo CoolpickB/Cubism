@@ -45,6 +45,10 @@ public class CubismClient implements ClientModInitializer {
 				ClientCommands.argument("mode", IntegerArgumentType.integer(0, 2)).executes(context -> {
 					ClientConfig.voxyHide = IntegerArgumentType.getInteger(context, "mode");
 					return 1;
+				}))).then(ClientCommands.literal("only").then(
+				ClientCommands.argument("face", IntegerArgumentType.integer(-1, 6)).executes(context -> {
+					ClientConfig.voxyOnly = IntegerArgumentType.getInteger(context, "face");
+					return 1;
 				})))));
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.SeamPayload.TYPE, (payload, context) -> {

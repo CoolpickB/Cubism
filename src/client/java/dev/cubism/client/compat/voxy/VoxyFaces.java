@@ -297,6 +297,8 @@ public final class VoxyFaces {
 		sortFarToNear();
 		try {
 			laterFace = false;
+			int only = dev.cubism.client.ClientConfig.voxyOnly;
+			DEFERRED.removeIf(draw -> only >= 0 && draw.face != only);
 			for (Deferred draw : DEFERRED) {
 				SeamFaces.setWorking(draw.face);
 				system.renderOpaque(draw.viewport, draw.depth, draw.color);

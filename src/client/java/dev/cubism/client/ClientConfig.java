@@ -28,6 +28,9 @@ public final class ClientConfig {
 	 */
 	public static int voxyHide = 2;
 
+	/** Debug, set with {@code /cubevoxy only}: the one face that Voxy draws, or -1 for all faces. */
+	public static int voxyOnly = -1;
+
 	/** Whether F3 shows the line with the storage position, which is only of use when debugging the mod. */
 	public static final boolean showStorageLine = Boolean.parseBoolean(PROPERTIES.getProperty(SHOW_STORAGE_LINE, "false"));
 
