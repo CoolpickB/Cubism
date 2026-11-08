@@ -77,7 +77,10 @@ public final class CubeFlight {
 			int[] m = layout.motion(viewFace, face);
 			viewOffset = SeamInteraction.rotate(m, viewOffset);
 			viewOffsetO = SeamInteraction.rotate(m, viewOffsetO);
-			groundY = y;
+			// A fall over the edge moves up in the frame of the new face. Held as a jump from the crossing, the view
+			// fell a third of a block behind and the turn slowed to half for two ticks. Until the next landing there is
+			// no ground to hold to.
+			groundY = Double.POSITIVE_INFINITY;
 		}
 		if (player.onGround()) {
 			groundY = y;
