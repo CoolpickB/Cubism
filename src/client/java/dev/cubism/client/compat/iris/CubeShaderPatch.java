@@ -394,6 +394,10 @@ public final class CubeShaderPatch {
 			// Above the air the sky is black. The fog toward the sky and the sky in reflections take this color too.
 			source = source.replace("        return finalSky;\n", "        finalSky *= 1.0 - cubismSpace();\n        return finalSky;\n");
 		}
+		if (name.endsWith("/lib/atmospherics/nightNebula.glsl")) {
+			source = source.replace("float nebulaFactor = pow2(max0(VdotU) * min1(nightFactor * 2.0))",
+				"float nebulaFactor = mix(pow2(max0(VdotU) * min1(nightFactor * 2.0)), 1.0, cubismSpace())");
+		}
 		if (name.endsWith(STARS)) {
 			// In orbit the stars show by day and below the horizon of the ground under the camera. The planet hides them.
 			source = source.replace("    if (VdotU < 0.0) return vec3(0.0);\n", "    if (VdotU < 0.0 && cubismSpace() == 0.0) return vec3(0.0);\n")
@@ -716,6 +720,21 @@ public final class CubeShaderPatch {
 		source = source.replace(
 			"if (abs(tracePos.y - cloudAltitude) > cloudStretch) break;",
 			"if (abs(cubismAlt(tracePos) - cloudAltitude) > cloudStretch) {\n    if (cubism_active == 0) break;\n    // Over the edge of the cube the ray can come back into the shell farther on, so look for the next entry.\n    float cubismT2 = length(tracePos - cameraPos);\n    bool cubismBack = false;\n    for (int j = 0; j < 64; j++) {\n        float cubismRayAlt2 = cubismAlt(cameraPos + cubismT2 * nPlayerPos);\n        float gap2 = abs(cubismRayAlt2 - cloudAltitude) - cloudStretch;\n        if (gap2 <= 0.0) { cubismBack = true; break; }\n        if (cubismRayAlt2 < min(oceanAltitude, cubismAlt(cameraPos))) break;\n        cubismT2 += max(gap2, max(2.0, cubismT2 * 0.01));\n        if (cubismT2 > distanceThreshold) break;\n    }\n    if (!cubismBack) break;\n    // The offset by the dither of each pixel keeps the slices of neighbouring pixels apart, as at the first entry.\n    tracePos = cameraPos + (cubismT2 + stepMult * (dither - 1.0)) * nPlayerPos;\n}\n");
+		// The colors of the clouds come from the time at the camera. From orbit a cloud takes the light of the sun at its
+		// own place on the cube, as the planet mesh does, and no fade toward the sky, which is black there.
+		source = source.replace(
+			"            vec3 colorSample = cloudAmbientColor * (0.4 + 0.6 * cloudShading) + cloudLightColor * cloudShading;\n",
+			"""
+			            vec3 colorSample = cloudAmbientColor * (0.4 + 0.6 * cloudShading) + cloudLightColor * cloudShading;
+			            if (cubismSpace() > 0.0) {
+			                vec3 cubismSunCube = normalize(mat3(cubism_cubeFromView) * cubism_sunPosition);
+			                float cubismDay = smoothstep(-0.15, 0.35, dot(cubismNormal(tracePos), cubismSunCube));
+			                vec3 cubismLit = (0.35 + 0.65 * cloudShading) * mix(vec3(0.03, 0.035, 0.05), vec3(1.1, 1.05, 1.0), cubismDay);
+			                colorSample = mix(colorSample, cubismLit, cubismSpace());
+			            }
+			""")
+			.replace("            colorSample = mix(cloudSkyColor, colorSample, cloudFogFactor * 0.69);\n",
+				"            colorSample = mix(cloudSkyColor, colorSample, mix(cloudFogFactor * 0.69, 1.0, cubismSpace()));\n");
 		source = source.replace(
 			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cloudPlayerPos.y)",
 			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cubismAlt(tracePos) - cubismAlt(cameraPos))");
