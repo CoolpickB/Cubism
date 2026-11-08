@@ -47,7 +47,7 @@ public abstract class SoundEngineMixin {
 	@Inject(method = "updateSource", at = @At("TAIL"))
 	private void cubism$replaceOnCrossing(Camera camera, CallbackInfo ci) {
 		SeamLayout layout = SeamClient.layout;
-		int face = layout == null || !camera.isInitialized() ? -1 : layout.faceIndexAt(Mth.floor(camera.position().x));
+		int face = layout == null || !camera.isInitialized() ? -1 : layout.regionOfX(Mth.floor(camera.position().x));
 		if (face == this.cubism$cameraFace) {
 			return;
 		}

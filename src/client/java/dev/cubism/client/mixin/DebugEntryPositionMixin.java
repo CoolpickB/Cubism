@@ -83,7 +83,7 @@ public abstract class DebugEntryPositionMixin {
 		// Past the diagonal of its region, as under Steadfast, the camera is over the face that owns its position.
 		int owner = face < 0 ? -1 : layout.crossingFace(camera.getX(), camera.getY(), camera.getZ(), 0.0);
 		face = owner < 0 ? face : owner;
-		displayer.addToGroup(DebugEntryPosition.GROUP, "Cube face: " + (face < 0 ? "none" : SeamLayout.FACES[face].name()));
+		displayer.addToGroup(DebugEntryPosition.GROUP, "Cube face: " + (face < 0 ? "none" : face == SeamLayout.SPACE ? "space" : SeamLayout.FACES[face].name()));
 		// In single player the level here is the one of the server, which holds other chunks than the client.
 		if (ClientConfig.showStorageLine && Minecraft.getInstance().level instanceof net.minecraft.client.multiplayer.ClientLevel clientLevel) {
 			displayer.addToGroup(DebugEntryPosition.GROUP, cubism$holes(layout, clientLevel, camera));
@@ -128,17 +128,17 @@ public abstract class DebugEntryPositionMixin {
 		it.unimi.dsi.fastutil.longs.LongOpenHashSet chunks = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
 		// The server sends one chunk past the view distance, see ChunkMapMixin.
 		layout.collectNeighborChunks(camera.getBlockX(), camera.getBlockY(), camera.getBlockZ(), SeamClient.serverViewRadius + 1, chunks);
-		int cameraFace = layout.faceIndexAt(camera.getBlockX());
-		int[] missing = new int[SeamLayout.FACES.length];
-		int[] waiting = new int[SeamLayout.FACES.length];
-		int[] far = new int[SeamLayout.FACES.length];
+		int cameraFace = layout.regionOfX(camera.getBlockX());
+		int[] missing = new int[SeamLayout.SPACE + 1];
+		int[] waiting = new int[SeamLayout.SPACE + 1];
+		int[] far = new int[SeamLayout.SPACE + 1];
 		int[] cube = new int[3];
 		int[] seen = new int[3];
 		layout.toCube(cameraFace, camera.getBlockX(), camera.getBlockY(), camera.getBlockZ(), cube);
 		for (long packed : chunks) {
 			int x = net.minecraft.world.level.ChunkPos.getX(packed);
 			int z = net.minecraft.world.level.ChunkPos.getZ(packed);
-			int face = layout.faceIndexAt(x * 16 + 8);
+			int face = layout.regionOfX(x * 16 + 8);
 			if (face == cameraFace) {
 				continue;
 			}
@@ -152,9 +152,9 @@ public abstract class DebugEntryPositionMixin {
 			}
 		}
 		StringBuilder line = new StringBuilder("Seam chunks ").append(chunks.size()).append(':');
-		for (int face = 0; face < SeamLayout.FACES.length; face++) {
+		for (int face = 0; face <= SeamLayout.SPACE; face++) {
 			if (missing[face] + waiting[face] > 0) {
-				line.append(' ').append(SeamLayout.FACES[face].name()).append(" missing ").append(missing[face])
+				line.append(' ').append(face == SeamLayout.SPACE ? "SPACE" : SeamLayout.FACES[face].name()).append(" missing ").append(missing[face])
 					.append(" not drawn ").append(waiting[face]).append(" (to ").append(far[face]).append(')');
 			}
 		}

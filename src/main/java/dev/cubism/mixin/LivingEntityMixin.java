@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubism.gravity.GravityLock;
+import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.world.damagesource.DamageSource;
@@ -83,6 +84,16 @@ public abstract class LivingEntityMixin extends Entity {
 	private void cubism$edgeGravity(Vec3 input, CallbackInfo ci) {
 		SeamLayout layout = SeamLayout.of(this.level());
 		if (layout == null) {
+			return;
+		}
+		// In space the frame of the region is the cube frame, and the vanilla pull goes to the bottom of the UP face.
+		// It is replaced with the pull of space, which is zero past the exosphere, so a body floats there.
+		Vec3 space = SeamCrossing.spacePull(layout, this);
+		if (space != null) {
+			if (!this.isNoGravity() && !((LivingEntity) (Object) this).hasEffect(MobEffects.LEVITATION) && !((Object) this instanceof Player player && player.getAbilities().flying)) {
+				double gravity = this.getEffectiveGravity();
+				this.setDeltaMovement(this.getDeltaMovement().add(gravity * space.x * 0.91, gravity * (space.y + 1.0) * 0.98, gravity * space.z * 0.91));
+			}
 			return;
 		}
 		int face = SeamInteraction.regionFace(layout, this.getX(), this.getZ());

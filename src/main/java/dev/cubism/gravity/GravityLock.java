@@ -27,6 +27,7 @@ import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.equipment.ArmorMaterial;
 import net.minecraft.world.item.equipment.ArmorType;
 import net.minecraft.world.item.equipment.EquipmentAssets;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.Collections;
 import java.util.Map;
@@ -87,6 +88,31 @@ public final class GravityLock {
 		}
 		int amplifier = ((LivingEntity) entity).getEffect(STEADFAST).getAmplifier();
 		return amplifier < 1 || amplifier > 6 ? -1 : SeamLayout.indexOf(Direction.from3DDataValue(amplifier - 1));
+	}
+
+	/**
+	 * The face whose down a locked entity keeps, or -1 without a lock: the forced face, else the face region it is in.
+	 * In space it is the face that the entity left for space, or for a lock that started in space, the face under it.
+	 */
+	public static int lockFace(SeamLayout layout, Entity entity) {
+		if (!locked(entity)) {
+			return -1;
+		}
+		int forced = forcedFace(entity);
+		if (forced >= 0) {
+			return forced;
+		}
+		int region = layout.regionAt(Mth.floor(entity.getX()), Mth.floor(entity.getZ()));
+		if (region != SeamLayout.SPACE) {
+			return region;
+		}
+		int left = ((GravityEntityAccess) entity).cubism$spaceFace();
+		if (left < 0) {
+			Vec3 p = layout.cubeOffset(region, entity.getX(), entity.getY(), entity.getZ());
+			left = layout.ownerFace(Mth.floor(p.x), Mth.floor(p.y) + layout.centerY, Mth.floor(p.z));
+			((GravityEntityAccess) entity).cubism$setSpaceFace(left);
+		}
+		return left;
 	}
 
 	/**

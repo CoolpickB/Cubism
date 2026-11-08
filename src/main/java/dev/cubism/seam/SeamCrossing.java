@@ -1,6 +1,7 @@
 package dev.cubism.seam;
 
 import net.minecraft.world.phys.shapes.VoxelShape;
+import dev.cubism.gravity.GravityEntityAccess;
 import dev.cubism.gravity.GravityLock;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
@@ -47,6 +48,8 @@ public final class SeamCrossing {
 	 * back a client that crossed already. The same goes for a vehicle that a player steers.
 	 */
 	private static final double PLAYER_BACKUP_MARGIN = 4.0;
+	/** The client moves its player into and out of space, and the server does it only this many blocks later. */
+	private static final double PLAYER_SPACE_SLACK = 4.0;
 	/** How far below the feet the ground must be in the new frame, in blocks. */
 	private static final double GROUND_DEPTH = 0.5;
 
@@ -68,6 +71,18 @@ public final class SeamCrossing {
 			if (entity.isPassenger() || entity instanceof Player player && flies(player)) {
 				continue;
 			}
+			Vec3 middle = entity.getBoundingBox().getCenter();
+			int region = SeamInteraction.regionFace(layout, middle.x, middle.z);
+			int toSpace = spaceTarget(layout, entity, region, entity instanceof ServerPlayer || ridden(entity) != null ? PLAYER_SPACE_SLACK : 0.0);
+			if (toSpace >= 0) {
+				crossing.add(entity);
+				transitions.add(transition(level, layout, entity, toSpace));
+				continue;
+			}
+			// In space no diagonal is near, and a lock pulls along the down of its face (see GravityLock.lockFace).
+			if (region == SeamLayout.SPACE) {
+				continue;
+			}
 			// A forced face moves the entity there at once. A player moves on its own client, as for a crossing.
 			int forced = GravityLock.forcedFace(entity);
 			if (forced >= 0 && !(entity instanceof Player) && forced != SeamInteraction.regionFace(layout, entity.getX(), entity.getZ())) {
@@ -87,15 +102,20 @@ public final class SeamCrossing {
 			if (face < 0) {
 				continue;
 			}
+			face = layout.crossingTarget(region, face, center.x, center.y, center.z);
 			TeleportTransition transition = transition(level, layout, entity, face);
-			if (spectator || layout.crossingFace(center.x, center.y, center.z, FORCED_MARGIN) >= 0 || landsOn(level, entity, transition.position())) {
+			if (spectator || face == SeamLayout.SPACE || layout.crossingFace(center.x, center.y, center.z, FORCED_MARGIN) >= 0 || landsOn(level, entity, transition.position())) {
 				crossing.add(entity);
 				transitions.add(transition);
 			}
 		}
 		for (int i = 0; i < crossing.size(); i++) {
 			Entity entity = crossing.get(i);
-			int toFace = layout.faceIndexAt(Mth.floor(transitions.get(i).position().x));
+			Vec3 to = transitions.get(i).position();
+			int toFace = SeamInteraction.regionFace(layout, to.x, to.z);
+			if (toFace == SeamLayout.SPACE) {
+				((GravityEntityAccess) entity).cubism$setSpaceFace(SeamInteraction.regionFace(layout, entity.getX(), entity.getZ()));
+			}
 			// Vanilla moves the passengers by their unturned offset and turns only their yaw. Each passenger gets its
 			// own turned transition after the vehicle, so that a rider keeps its view.
 			List<Entity> passengers = new ArrayList<>();
@@ -115,6 +135,34 @@ public final class SeamCrossing {
 				}
 			}
 		}
+	}
+
+	/**
+	 * The region that an entity in {@code region} moves to for space, see {@link SeamLayout#spaceHandoff}, or -1. A
+	 * Steadfast lock brings it back only to the face of the lock.
+	 */
+	public static int spaceTarget(SeamLayout layout, Entity entity, int region, double slack) {
+		Vec3 center = entity.getBoundingBox().getCenter();
+		return layout.spaceHandoff(region, center.x, center.y, center.z, GravityLock.lockFace(layout, entity), slack);
+	}
+
+	/**
+	 * The pull on an entity in space, in the frame of the space region, or null when the entity is not in space. A
+	 * Steadfast lock pulls along the down of its face at full strength, without end. Else the pull is
+	 * {@link SeamLayout#spacePull}, which is zero past the exosphere.
+	 */
+	public static @Nullable Vec3 spacePull(SeamLayout layout, Entity entity) {
+		if (layout.regionAt(Mth.floor(entity.getX()), Mth.floor(entity.getZ())) != SeamLayout.SPACE) {
+			return null;
+		}
+		int lock = GravityLock.lockFace(layout, entity);
+		if (lock >= 0) {
+			return layout.faceDown(lock);
+		}
+		Vec3 center = entity.getBoundingBox().getCenter();
+		Vec3 p = layout.cubeOffset(SeamLayout.SPACE, center.x, center.y, center.z);
+		Vec3 pull = layout.spacePull(p.x, p.y, p.z);
+		return pull == null ? Vec3.ZERO : pull;
 	}
 
 	/** False on the server while a chunk under the box is not loaded, where a block read would wait for it. */
@@ -259,7 +307,7 @@ public final class SeamCrossing {
 	}
 
 	public static Turned turned(SeamLayout layout, Entity entity, int toFace) {
-		int[] m = layout.motion(layout.faceIndexAt(Mth.floor(entity.getX())), toFace);
+		int[] m = layout.motion(SeamInteraction.regionFace(layout, entity.getX(), entity.getZ()), toFace);
 		// The body turns about its center, so the entity stands upright in the new frame at the same place.
 		double halfHeight = entity.getBbHeight() / 2.0;
 		Vec3 center = SeamInteraction.rotate(m, entity.position().add(0.0, halfHeight, 0.0)).add(m[9], m[10], m[11]);

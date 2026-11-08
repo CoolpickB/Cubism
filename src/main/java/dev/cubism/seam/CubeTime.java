@@ -47,7 +47,7 @@ public final class CubeTime {
 	 * cube surface under the position, which is the face normal except near the edges.
 	 */
 	public static int offsetTicks(SeamLayout layout, double x, double y, double z) {
-		int face = layout.faceIndexAt(Mth.floor(x));
+		int face = layout.regionOfX(Mth.floor(x));
 		double[] e = surfaceNormal(layout, x, y, z);
 		double ex = e[0], ey = e[1], ez = e[2];
 		int[] m = layout.rotation(face);
@@ -63,7 +63,7 @@ public final class CubeTime {
 	 * normalized. The sun is above the horizon of a position exactly when it is on this side of the plane normal to it.
 	 */
 	public static double[] surfaceNormal(SeamLayout layout, double x, double y, double z) {
-		int face = layout.faceIndexAt(Mth.floor(x));
+		int face = layout.regionOfX(Mth.floor(x));
 		double inner = layout.radius - EDGE_BLEND;
 		// The center of the cube is the center of a block, as in SeamLayout.crossingFace. From the block corner, the two
 		// faces of an edge would put it half a block apart, a step of about 25 ticks at each crossing.

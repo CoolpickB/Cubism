@@ -124,7 +124,7 @@ public final class CubeClouds {
 		double drift = (Math.floorMod(gameTime, loopTicks) + partialTicks) * SPEED;
 		float layerY = (float) (layout.centerY + CENTER + height);
 
-		int cameraFace = layout.faceIndexAt(Mth.floor(cameraPos.x));
+		int cameraFace = layout.regionOfX(Mth.floor(cameraPos.x));
 		for (int face = 0; face < LAYERS.length; face++) {
 			int[] toCamera = layout.motion(face, cameraFace);
 			PLACEMENTS[face] = null;

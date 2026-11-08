@@ -29,6 +29,26 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 public final class SeamLayout {
 	/** Faces in storage order. UP and EAST are next to each other so that their shared edge is the one seam. */
 	public static final Direction[] FACES = {Direction.UP, Direction.EAST, Direction.DOWN, Direction.WEST, Direction.SOUTH, Direction.NORTH};
+	/**
+	 * The region of outer space, after the faces. It stores plain cube positions, in the frame of the UP face moved along
+	 * X to {@link #SPACE_X}, so an entity there never crosses a diagonal. It holds what no face can store: the air above
+	 * the top of the storage and the air past the strip of a face, near an edge. Only the overworld has it.
+	 */
+	public static final int SPACE = FACES.length;
+	/** The storage X of the cube center in the space region, far from the face strips, which start near 0. */
+	public static final int SPACE_X = -10_000_000;
+	/** Half the width of the space region along X and Z: millions of blocks around the planet. */
+	public static final int SPACE_HALF = 8_000_000;
+	/** Blocks above the top of the storage where an entity moves into space, and where it comes back. */
+	private static final double SPACE_LEAVE_HEIGHT = 24.0;
+	private static final double SPACE_RETURN_HEIGHT = 8.0;
+	/** Blocks inside the strip edge of a face where an entity moves into space, and where it comes back. */
+	private static final double STRIP_LEAVE_MARGIN = 8.0;
+	private static final double STRIP_RETURN_MARGIN = 16.0;
+	/** Blocks between the box corners of the storage top and the exosphere, so the sphere holds the whole box. */
+	private static final double EXOSPHERE_CORNER_GAP = 20.0;
+	/** Blocks past the exosphere over which the pull fades out. */
+	private static final double EXOSPHERE_FADE = 16.0;
 
 	private static volatile @Nullable SeamLayout clientOverworld;
 	private static volatile @Nullable SeamLayout clientNether;
@@ -60,7 +80,7 @@ public final class SeamLayout {
 	public final int innerBedrockRadius;
 	/** Distance between region centers. A wedge is 2(R + open height) + 1 blocks wide at the top, and region edges are chunk-aligned. */
 	public final int spacing;
-	private final int[][] rotations = new int[FACES.length][];
+	private final int[][] rotations = new int[FACES.length + 1][];
 
 	public SeamLayout(int diameterChunks) {
 		this(
@@ -80,6 +100,7 @@ public final class SeamLayout {
 		for (int i = 0; i < FACES.length; i++) {
 			this.rotations[i] = rotation(FACES[i]);
 		}
+		this.rotations[SPACE] = rotation(Direction.UP);
 		this.fold = new SeamFold(this);
 	}
 
@@ -216,7 +237,26 @@ public final class SeamLayout {
 	}
 
 	public int offsetX(int faceIndex) {
-		return faceIndex * this.spacing;
+		return faceIndex == SPACE ? SPACE_X : faceIndex * this.spacing;
+	}
+
+	/** True when this cube has a space region: the overworld. The Nether has a roof. */
+	public boolean hasSpace() {
+		return !this.nether;
+	}
+
+	public boolean inSpace(int storageX, int storageZ) {
+		return this.hasSpace() && Math.abs(storageX - SPACE_X) < SPACE_HALF && Math.abs(storageZ) < SPACE_HALF;
+	}
+
+	/** The region of a storage X: {@link #SPACE}, else the face strip, clamped to a valid face as {@link #faceIndexAt}. */
+	public int regionOfX(int storageX) {
+		return this.hasSpace() && Math.abs(storageX - SPACE_X) < SPACE_HALF ? SPACE : this.faceIndexAt(storageX);
+	}
+
+	/** The region of a storage column: a face index, {@link #SPACE}, or -1 for none. */
+	public int regionAt(int storageX, int storageZ) {
+		return this.inRegion(storageX, storageZ) ? this.faceIndexAt(storageX) : this.inSpace(storageX, storageZ) ? SPACE : -1;
 	}
 
 	/** Face region that contains storage X. The result is clamped to a valid face. */
@@ -283,18 +323,23 @@ public final class SeamLayout {
 
 	/** The cube position of a continuous storage position, or null when it lies in no region. */
 	public @Nullable Vec3 storageToCube(Vec3 storage) {
-		if (!this.inRegion(Mth.floor(storage.x), Mth.floor(storage.z))) {
-			return null;
-		}
-		return this.storageToCube(this.faceIndexAt(Mth.floor(storage.x)), storage.x, storage.y, storage.z);
+		int region = this.regionAt(Mth.floor(storage.x), Mth.floor(storage.z));
+		return region < 0 ? null : this.storageToCube(region, storage.x, storage.y, storage.z);
 	}
 
-	/** The storage position, in the region of the face that owns it, of a cube position in the convention of {@link #storageToCube}. */
+	/**
+	 * The storage position of a cube position in the convention of {@link #storageToCube}: in the region of the face
+	 * that owns it, or in space where an entity there would move to space (see {@link #spaceHandoff}).
+	 */
 	public Vec3 cubeToStorage(double cx, double cy, double cz) {
 		double x = cx - 0.5;
 		double y = cy - 0.5;
 		double z = cz - 0.5;
 		int face = dominantFace(x, y, z);
+		if (this.hasSpace() && (Math.max(Math.abs(x), Math.max(Math.abs(y), Math.abs(z))) > this.stratosphereTop() + SPACE_LEAVE_HEIGHT
+			|| !this.storable(face, new Vec3(x, y, z), STRIP_LEAVE_MARGIN))) {
+			face = SPACE;
+		}
 		int[] m = this.rotations[face];
 		return new Vec3(
 			m[0] * x + m[3] * y + m[6] * z + this.offsetX(face) + 0.5,
@@ -435,12 +480,127 @@ public final class SeamLayout {
 		if (dy > 0.0 && dx * dx + dz * dz < 1.0E-6 * dy * dy) {
 			return null;
 		}
-		// The normal of the level, the gradient of the norm of the offset from the box.
+		return levelNormal(dx, dy, dz);
+	}
+
+	/** The inward normal of the level through an offset {@code d} from its box: the gradient of the norm of the offset. */
+	private static @Nullable Vec3 levelNormal(double dx, double dy, double dz) {
 		double nx = dx * Math.sqrt(Math.abs(dx));
 		double ny = dy * Math.sqrt(Math.abs(dy));
 		double nz = dz * Math.sqrt(Math.abs(dz));
 		double length = Math.sqrt(nx * nx + ny * ny + nz * nz);
 		return length < 1.0E-12 ? null : new Vec3(-nx / length, -ny / length, -nz / length);
+	}
+
+	/** The pull of the box levels at a position relative to the cube center (see {@link #cubeOffset}), in the cube frame. */
+	private @Nullable Vec3 boxPull(double cx, double cy, double cz) {
+		double core = levelCore(Math.abs(cx), Math.abs(cy), Math.abs(cz), this.turnRadius());
+		return levelNormal(cx - Math.clamp(cx, -core, core), cy - Math.clamp(cy, -core, core), cz - Math.clamp(cz, -core, core));
+	}
+
+	/**
+	 * The position of a continuous storage position of a region relative to the cube center, in the cube frame. The
+	 * center of the cube is the center of a block, as in {@link #crossingFace}.
+	 */
+	public Vec3 cubeOffset(int region, double x, double y, double z) {
+		int[] m = this.rotations[region];
+		double lx = x - this.offsetX(region) - 0.5;
+		double ly = y - this.centerY - 0.5;
+		double lz = z - 0.5;
+		return new Vec3(m[0] * lx + m[1] * ly + m[2] * lz, m[3] * lx + m[4] * ly + m[5] * lz, m[6] * lx + m[7] * ly + m[8] * lz);
+	}
+
+	/** The box level of the top of the storage, relative to the cube center: the top of the stratosphere. */
+	public double stratosphereTop() {
+		return CubePlanetMath.BUILD_TOP_Y - this.centerY - 0.5;
+	}
+
+	/** The radius of the exosphere: the sphere around the box of the storage top, {@link #EXOSPHERE_CORNER_GAP} past its corners. */
+	public double exosphereRadius() {
+		return Math.sqrt(3.0) * this.stratosphereTop() + EXOSPHERE_CORNER_GAP;
+	}
+
+	/**
+	 * The pull in space at a position relative to the cube center, in the cube frame, which is also the frame of the
+	 * space region. Its length is the share of the full pull, from 1 down to 0, or null for no pull at all. Up to the
+	 * top of the stratosphere it is the pull of the box levels, as over the faces. Above it the direction turns from
+	 * the box normal to the center of the cube on the way out to the exosphere, so the levels round into a sphere, and
+	 * past the exosphere the pull fades out.
+	 */
+	public @Nullable Vec3 spacePull(double cx, double cy, double cz) {
+		double level = Math.max(Math.abs(cx), Math.max(Math.abs(cy), Math.abs(cz)));
+		double top = this.stratosphereTop();
+		Vec3 box = this.boxPull(cx, cy, cz);
+		if (level <= top) {
+			return box;
+		}
+		double distance = Math.sqrt(cx * cx + cy * cy + cz * cz);
+		Vec3 radial = new Vec3(-cx / distance, -cy / distance, -cz / distance);
+		double exosphere = this.exosphereRadius();
+		if (distance >= exosphere) {
+			double share = 1.0 - (distance - exosphere) / EXOSPHERE_FADE;
+			return share <= 0.0 ? null : radial.scale(share);
+		}
+		// The share of the way from the box of the top to the sphere, along the ray from the center.
+		double t = (level - top) / (exosphere * level / distance - top);
+		return box == null ? radial : box.scale(1.0 - t).add(radial.scale(t)).normalize();
+	}
+
+	/**
+	 * The direction of the pull at a continuous storage position of a face or of space, in the frame of its region,
+	 * or null where it is straight down. On a face it is {@link #airGravity}. In space it is {@link #spacePull}, and
+	 * past the exosphere, where the pull is gone, the direction to the cube center.
+	 */
+	public @Nullable Vec3 pullAt(double x, double y, double z, double radius) {
+		if (!this.inSpace(Mth.floor(x), Mth.floor(z))) {
+			return this.airGravity(x, y, z, radius);
+		}
+		Vec3 p = this.cubeOffset(SPACE, x, y, z);
+		Vec3 pull = this.spacePull(p.x, p.y, p.z);
+		Vec3 direction = pull == null || pull.lengthSqr() < 1.0E-6 ? p.reverse() : pull;
+		return direction.lengthSqr() < 1.0E-12 ? null : direction.normalize();
+	}
+
+	/** The pull of a face, straight down in its frame, in the cube frame: where a Steadfast lock pulls in space. */
+	public Vec3 faceDown(int face) {
+		int[] m = this.rotations[face];
+		return new Vec3(-m[1], -m[4], -m[7]);
+	}
+
+	/**
+	 * Where an entity whose center is at a storage position of a region moves for space, or -1 when it stays. Above
+	 * the top of the storage, or near the edge of its strip, an entity on a face moves into space. In space it comes
+	 * back once it is low enough and the face can store it well inside the strip: the face that owns its position, or
+	 * {@code lockedFace} for a Steadfast lock. The gaps between the two limits keep it from moving back and forth.
+	 * {@code slack} widens the limits to leave, for the server, which only follows a player that its client moved.
+	 */
+	public int spaceHandoff(int region, double x, double y, double z, int lockedFace, double slack) {
+		if (region < 0 || !this.hasSpace()) {
+			return -1;
+		}
+		Vec3 p = this.cubeOffset(region, x, y, z);
+		double level = Math.max(Math.abs(p.x), Math.max(Math.abs(p.y), Math.abs(p.z)));
+		if (region != SPACE) {
+			return level > this.stratosphereTop() + SPACE_LEAVE_HEIGHT + slack || !this.storable(region, p, STRIP_LEAVE_MARGIN - slack) ? SPACE : -1;
+		}
+		if (level >= this.stratosphereTop() + SPACE_RETURN_HEIGHT) {
+			return -1;
+		}
+		int face = lockedFace >= 0 ? lockedFace : dominantFace(p.x, p.y, p.z);
+		return this.storable(face, p, STRIP_RETURN_MARGIN) ? face : -1;
+	}
+
+	/** The region that a crossing to {@code face} moves an entity at a storage position to: the face, or space when the face cannot store it. */
+	public int crossingTarget(int region, int face, double x, double y, double z) {
+		return this.hasSpace() && !this.storable(face, this.cubeOffset(region, x, y, z), STRIP_LEAVE_MARGIN) ? SPACE : face;
+	}
+
+	/** True when a face stores a position relative to the cube center more than {@code margin} blocks inside its strip. */
+	private boolean storable(int face, Vec3 p, double margin) {
+		int[] m = this.rotations[face];
+		double u = m[0] * p.x + m[3] * p.y + m[6] * p.z;
+		double w = m[2] * p.x + m[5] * p.y + m[8] * p.z;
+		return Math.max(Math.abs(u), Math.abs(w)) < this.spacing / 2.0 - margin;
 	}
 
 	/**
@@ -612,10 +772,17 @@ public final class SeamLayout {
 	 * in the frame of the neighbor face, where the viewer stands outside the wedge, next to the shared edge.
 	 */
 	public void collectNeighborChunks(int sx, int sy, int sz, int viewDistance, LongSet out) {
-		int face = this.faceIndexAt(sx);
+		int region = this.regionAt(sx, sz);
+		int face = region < 0 ? this.faceIndexAt(sx) : region;
 		int[] cube = new int[3];
 		this.toCube(face, sx, sy, sz, cube);
 		this.collectAround(face, cube, viewDistance, out);
+		if (face == SPACE) {
+			return;
+		}
+		if (this.hasSpace()) {
+			this.collectSpace(face, cube, Math.min(viewDistance, SPACE_VIEW_CHUNKS), out);
+		}
 		// A face is the opposite of the viewer face only until the viewer crosses an edge. The faces behind the neighbor
 		// that the viewer is about to cross to join early, so that a crossing does not send a whole face at once.
 		for (int g = 0; g < FACES.length; g++) {
@@ -631,14 +798,42 @@ public final class SeamLayout {
 		return this.radius - (side.getStepX() * cube[0] + side.getStepY() * (cube[1] - this.centerY) + side.getStepZ() * cube[2]);
 	}
 
-	/** The neighbor chunks of a viewer, as if the viewer stood on the given face at the cube position. */
+	/**
+	 * Chunks of space that a viewer on a face sees within this many chunks. Space shows only near its lower edge, and
+	 * a face viewer loads its chunks only there, as each chunk costs the same as a chunk of ground to send. They let a
+	 * viewer see the entities in space, and they are there when the viewer moves into space.
+	 */
+	private static final int SPACE_VIEW_CHUNKS = 6;
+
+	/** Adds the chunks of space around the cube position of a viewer on a face, when space is within the distance. */
+	private void collectSpace(int face, int[] cube, int viewDistance, LongSet out) {
+		int reach = viewDistance * 16;
+		Vec3 p = new Vec3(cube[0], cube[1] - this.centerY, cube[2]);
+		double level = Math.max(Math.abs(p.x), Math.max(Math.abs(p.y), Math.abs(p.z)));
+		if (level + reach < this.stratosphereTop() && this.storable(face, p, reach + STRIP_LEAVE_MARGIN)) {
+			return;
+		}
+		int x = cube[0] + SPACE_X;
+		int z = cube[2];
+		for (int chunkX = Math.floorDiv(x - reach, 16); chunkX <= Math.floorDiv(x + reach, 16); chunkX++) {
+			for (int chunkZ = Math.floorDiv(z - reach, 16); chunkZ <= Math.floorDiv(z + reach, 16); chunkZ++) {
+				long dx = Math.max(0, Math.abs(x - (chunkX * 16 + 8)) - 8);
+				long dz = Math.max(0, Math.abs(z - (chunkZ * 16 + 8)) - 8);
+				if (dx * dx + dz * dz <= (long) reach * reach) {
+					out.add(ChunkPos.pack(chunkX, chunkZ));
+				}
+			}
+		}
+	}
+
+	/** The neighbor chunks of a viewer, as if the viewer stood on the given face at the cube position. In space every face counts. */
 	private void collectAround(int face, int[] cube, int viewDistance, LongSet out) {
 		int[] viewer = new int[3];
 		int reach = viewDistance * 16;
 		int top = this.surfaceY + this.openHeight;
 		int half = this.spacing / 2;
 		for (int g = 0; g < FACES.length; g++) {
-			if (g == face || FACES[g] == FACES[face].getOpposite()) {
+			if (face != SPACE && (g == face || FACES[g] == FACES[face].getOpposite())) {
 				continue;
 			}
 			this.toStorage(g, cube[0], cube[1], cube[2], viewer);

@@ -283,19 +283,20 @@ public final class SeamInteraction {
 			return found;
 		}
 		List<T> all = new ArrayList<>(found);
-		for (int other = 0; other < SeamLayout.FACES.length; other++) {
+		int regions = layout.hasSpace() ? SeamLayout.SPACE + 1 : SeamLayout.FACES.length;
+		for (int other = 0; other < regions; other++) {
 			int[] m = layout.motion(face, other);
-			// The opposite face shares no seam.
-			if (other != face && m[4] != -1) {
+			// The opposite face shares no seam. Space shares the air with every face.
+			if (other != face && (m[4] != -1 || face == SeamLayout.SPACE || other == SeamLayout.SPACE)) {
 				all.addAll(search.apply(new AABB(move(m, box.getMinPosition()), move(m, box.getMaxPosition()))));
 			}
 		}
 		return all;
 	}
 
+	/** The region of a position: a face index, {@link SeamLayout#SPACE}, or -1 for none. */
 	public static int regionFace(SeamLayout layout, double x, double z) {
-		int bx = Mth.floor(x);
-		return layout.inRegion(bx, Mth.floor(z)) ? layout.faceIndexAt(bx) : -1;
+		return layout.regionAt(Mth.floor(x), Mth.floor(z));
 	}
 
 	public static Vec3 rotate(int[] m, Vec3 v) {

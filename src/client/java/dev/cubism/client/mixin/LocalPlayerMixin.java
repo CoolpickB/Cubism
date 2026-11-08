@@ -92,10 +92,11 @@ public abstract class LocalPlayerMixin extends LivingEntity {
 			return nearest;
 		}
 		double nearestSq = nearest == null ? maxDistanceSq : nearest.getLocation().distanceToSqr(from);
-		for (int other = 0; other < SeamLayout.FACES.length; other++) {
+		int regions = layout.hasSpace() ? SeamLayout.SPACE + 1 : SeamLayout.FACES.length;
+		for (int other = 0; other < regions; other++) {
 			int[] there = layout.motion(face, other);
-			// The opposite face shares no seam.
-			if (other == face || there[4] == -1) {
+			// The opposite face shares no seam. Space shares the air with every face.
+			if (other == face || there[4] == -1 && face != SeamLayout.SPACE && other != SeamLayout.SPACE) {
 				continue;
 			}
 			Vec3 movedFrom = SeamInteraction.move(there, from);

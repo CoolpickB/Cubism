@@ -44,10 +44,11 @@ public final class SeamClient {
 
 	/**
 	 * True when the camera is past the wedge of its region, so the opposite face of the region is in view. Only a
-	 * Steadfast lock keeps a camera there: without it the camera crosses to the face whose air it is in.
+	 * Steadfast lock keeps a camera there: without it the camera crosses to the face whose air it is in. From space
+	 * every face can be in view.
 	 */
 	public static boolean seesOpposite(SeamLayout layout, Vec3 camera) {
-		return layout.crossingFace(camera.x, camera.y, camera.z, 0.0) >= 0;
+		return layout.crossingFace(camera.x, camera.y, camera.z, 0.0) >= 0 || SeamInteraction.regionFace(layout, camera.x, camera.z) == SeamLayout.SPACE;
 	}
 
 	/**
@@ -58,6 +59,13 @@ public final class SeamClient {
 	public static boolean isSeamChunk(int chunkX, int chunkZ, int centerX, int centerZ, int radius) {
 		SeamLayout layout = SeamClient.layout;
 		return layout != null && (Math.abs(chunkX - centerX) > radius || Math.abs(chunkZ - centerZ) > radius
-			|| layout.faceIndexAt(SectionPos.sectionToBlockCoord(chunkX, 8)) != layout.faceIndexAt(SectionPos.sectionToBlockCoord(centerX, 8)));
+			|| region(layout, chunkX, chunkZ) != region(layout, centerX, centerZ));
+	}
+
+	/** The region of the middle of a chunk; a column in no region counts with the face strip nearest to it. */
+	private static int region(SeamLayout layout, int chunkX, int chunkZ) {
+		int x = SectionPos.sectionToBlockCoord(chunkX, 8);
+		int region = layout.regionAt(x, SectionPos.sectionToBlockCoord(chunkZ, 8));
+		return region < 0 ? layout.faceIndexAt(x) : region;
 	}
 }

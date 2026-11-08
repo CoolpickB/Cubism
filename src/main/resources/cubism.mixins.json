@@ -28,6 +28,7 @@
 		"MapItemSavedDataMixin",
 		"NetherPortalBlockMixin",
 		"NoiseBasedChunkGeneratorMixin",
+		"SpaceChunksMixin",
 		"PortalForcerMixin",
 		"CollectingNeighborUpdaterMixin",
 		"CollectingShapeUpdateMixin",

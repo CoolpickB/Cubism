@@ -6,6 +6,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.cubism.gravity.GravityEntityAccess;
 import dev.cubism.gravity.GravityLock;
+import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.util.Mth;
@@ -60,6 +61,17 @@ public abstract class EntityMixin implements GravityEntityAccess {
 	@Unique private boolean cubism$wasOnGround;
 	/** Face region where the last fall started, as {@code LivingEntityMixin} keeps it for living entities. */
 	@Unique private int cubism$airStartFace = -1;
+	@Unique private int cubism$spaceFace = -1;
+
+	@Override
+	public int cubism$spaceFace() {
+		return this.cubism$spaceFace;
+	}
+
+	@Override
+	public void cubism$setSpaceFace(int face) {
+		this.cubism$spaceFace = face;
+	}
 
 	/**
 	 * Items, projectiles, falling blocks and other entities without a living body take their pull from here. Over an
@@ -69,6 +81,13 @@ public abstract class EntityMixin implements GravityEntityAccess {
 	 */
 	@Inject(method = "applyGravity", at = @At("HEAD"), cancellable = true)
 	private void cubism$edgeGravity(CallbackInfo ci) {
+		SeamLayout layout = SeamLayout.of(this.level);
+		Vec3 space = layout == null ? null : SeamCrossing.spacePull(layout, (Entity) (Object) this);
+		if (space != null) {
+			this.setDeltaMovement(this.getDeltaMovement().add(space.scale(this.getGravity())));
+			ci.cancel();
+			return;
+		}
 		Vec3 pull = this.cubism$edgePull();
 		double gravity = this.getGravity();
 		if (pull != null && gravity != 0.0) {
@@ -79,7 +98,10 @@ public abstract class EntityMixin implements GravityEntityAccess {
 
 	@Inject(method = "checkBelowWorld", at = @At("HEAD"), cancellable = true)
 	private void cubism$lockedFallGoesOn(CallbackInfo ci) {
-		if (GravityLock.fallsOn((Entity) (Object) this)) {
+		SeamLayout layout = SeamLayout.of(this.level);
+		// Space has no bottom: its storage Y is the cube Y, which goes far below the bottom of the world.
+		if (GravityLock.fallsOn((Entity) (Object) this)
+			|| layout != null && layout.regionAt(Mth.floor(this.position.x), Mth.floor(this.position.z)) == SeamLayout.SPACE) {
 			ci.cancel();
 		}
 	}
@@ -185,9 +207,9 @@ public abstract class EntityMixin implements GravityEntityAccess {
 	}
 
 	/**
-	 * Above the atmosphere the wedge of a face is wider than its storage strip, and a point past the strip is in the
-	 * wedge of no strip. So the strip edges are walls, as the world border is. Below the atmosphere top an entity
-	 * crosses a diagonal long before it gets to a strip edge.
+	 * Above the atmosphere the wedge of a face is wider than its storage strip. An entity moves into space before it
+	 * gets to the strip edge (see SeamLayout.spaceHandoff), so the strip edges are walls, as the world border is, only
+	 * for an entity faster than that margin per tick. The space region has walls at its own edges.
 	 */
 	@ModifyReturnValue(
 		method = "collectCollidersIgnoringWorldBorder(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/level/Level;Ljava/util/List;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;",
@@ -200,7 +222,7 @@ public abstract class EntityMixin implements GravityEntityAccess {
 		if (face < 0) {
 			return colliders;
 		}
-		double half = layout.spacing / 2.0;
+		double half = face == SeamLayout.SPACE ? SeamLayout.SPACE_HALF : layout.spacing / 2.0;
 		double minX = layout.offsetX(face) - half;
 		double maxX = layout.offsetX(face) + half;
 		double reach = Math.max(Math.max(box.getXsize(), box.getZsize()), 1.0) * 2.0;

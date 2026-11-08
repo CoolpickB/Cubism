@@ -5,6 +5,8 @@ public final class CubePlanetMath {
 	public static final int MAX_DIAMETER_CHUNKS = 128;
 	public static final int TOP_SURFACE_Y = 64;
 	public static final int CRUST_THICKNESS = 191;
+	/** The storage Y above the top block of the cube dimension (min_y -128, height 384). Space starts above it. */
+	public static final int BUILD_TOP_Y = 256;
 
 	private CubePlanetMath() {}
 

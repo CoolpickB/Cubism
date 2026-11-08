@@ -130,12 +130,29 @@ The Steadfast effect keeps an entity on the face where it stands. Mining near a 
 - **Shulker Treads.** Boots made of 4 shulker shells and a heavy core (`S S`, `SCS`). They have 3 armor, 2 toughness, 0.1 knockback resistance and the durability of diamond boots (429). They are repaired with shulker shells. While you wear them, you have Steadfast, as the turtle shell gives water breathing. The effect has the normal icon frame, and it ends on the tick that you take them off. A potion that runs at the same time continues.
 - **Potion of Steadfastness.** An awkward potion and a shulker shell make it (3:00). Redstone makes it last 8:00. Gunpowder and dragon breath make the splash and lingering potions, and tipped arrows come from the lingering potion.
 - **Lore.** The core of the overworld is intact inside the inner bedrock, and heavy cores break off it. The cores of the End collapsed into voids. Shulkers grip surfaces against the pull of these voids.
+- **In space.** A locked entity in space falls toward the down of the face that it left, or of the forced face. The fall has no end.
 
 Placeholders: the treads use the diamond boots model and worn texture. The effect icon is a plain purple ring.
 
 Tested on the dev server: the items, the potion and the effect load, and the recipes parse. A pig with Steadfast past a diagonal stayed in its region and fell straight down in the frame of its face. A pig without the effect crossed. A locked pig past a diagonal fell to y -1300 and more, and it did not die or cross. A pig with level 1 moved to the down face and lived. Not tested by me: a player with the treads, sneaking to change face, the camera, the roll, forced faces on a player, the opposite face view, and brewing in a stand.
 
 Next: heavy core deposits above the inner bedrock, more of them near the corners of the core. Then the End: voids with a pull, shulkers on the rims of the voids, and a pull on elytra flight that Steadfast ignores. Later, some of these voids can also float far out past the cube, where a long locked fall finds them.
+
+### Outer space
+
+The overworld has space around the cube. Space has three layers:
+
+- **Stratosphere.** From the surface to build height. Gravity is the pull of the box, as on the ground.
+- **Empty air.** From build height to the exosphere. Gravity still pulls toward the planet. The pull changes from the box to a sphere as the height increases.
+- **Open space.** Past the exosphere, gravity is zero. The exosphere is a sphere 20 blocks larger than the distance to a corner of the build-height box (about 684 blocks from the center on size 24).
+
+Storage: space is a 7th region in the same world, at x = -10,000,000. It stores plain cube positions. An entity moves to space when its face cannot store its position. This occurs 24 blocks above build height, and near the corners, where the position goes out of the strip of the face. An entity moves back to a face 8 blocks above build height, when the strip of that face can store it. Space chunks are empty air with the void biome. Mobs do not spawn there.
+
+Commands take cube positions, so `/summon armor_stand 0 1000 0` puts an armor stand in space. Relative positions stay in storage: `execute positioned 0 1000 0 run forceload add ~-32 ~-32 ~32 ~32` loads space chunks.
+
+Tested on the dev server (size 24): an armor stand at cube y 500 fell through space, moved to the up face and landed. Stands at y 750 and 1000 floated with no pull. A stand at a corner (350, 380, 350) moved to space, fell toward the center, and landed on the up face. Not tested: a player, the client view from space, and Steadfast in space.
+
+Next: the sky fades to black above build height, and the client draws the planet from space. Then the planet-ahead view past the exosphere: the view turns slowly so that the planet is ahead, and the player swims with drag. Then Voxy, Iris and Xaero in space. Later, other dimensions can get space too.
 
 ## Phases
 

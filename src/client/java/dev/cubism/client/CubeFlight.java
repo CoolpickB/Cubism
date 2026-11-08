@@ -1,5 +1,6 @@
 package dev.cubism.client;
 
+import dev.cubism.gravity.GravityEntityAccess;
 import dev.cubism.gravity.GravityLock;
 import dev.cubism.debug.LoadTrace;
 import dev.cubism.seam.SeamCrossing;
@@ -68,7 +69,7 @@ public final class CubeFlight {
 
 	private static void tickViewY(LocalPlayer player, boolean flies) {
 		SeamLayout layout = SeamLayout.of(player.level());
-		int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
+		int face = layout == null ? -1 : SeamInteraction.regionFace(layout, player.getX(), player.getZ());
 		double y = player.getY();
 		viewOffsetO = viewOffset;
 		if (face != viewFace && face >= 0 && viewFace >= 0) {
@@ -142,7 +143,7 @@ public final class CubeFlight {
 		Vec3 last = lastPosition;
 		if (face != lastFace) {
 			int[] m = layout.motion(lastFace, face);
-			if (m[4] == -1) {
+			if (m[4] == -1 && lastFace != SeamLayout.SPACE && face != SeamLayout.SPACE) {
 				return true;
 			}
 			last = new Vec3(
@@ -157,8 +158,7 @@ public final class CubeFlight {
 		glideRollO = glideRoll;
 		glideRoll *= GLIDE_ROLL_KEEP;
 		SeamLayout layout = SeamLayout.of(player.level());
-		int blockX = Mth.floor(player.getX());
-		int face = layout != null && layout.inRegion(blockX, Mth.floor(player.getZ())) ? layout.faceIndexAt(blockX) : -1;
+		int face = layout == null ? -1 : SeamInteraction.regionFace(layout, player.getX(), player.getZ());
 		Quaternionf view = viewFrame(player, 1.0F);
 		Vector3f up = view.transform(new Vector3f(0.0F, 1.0F, 0.0F));
 		Vector3f last = new Vector3f(lastUp);
@@ -389,7 +389,7 @@ public final class CubeFlight {
 				lookLog = new java.io.PrintWriter(java.nio.file.Files.newBufferedWriter(file), true);
 			}
 			SeamLayout layout = SeamLayout.of(player.level());
-			int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
+			int face = layout == null ? -1 : SeamInteraction.regionFace(layout, player.getX(), player.getZ());
 			float[] angles = anglesIn(view, player.getYRot(), player.getXRot());
 			Vec3 delta = player.getDeltaMovement();
 			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f roll=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b viewY=%.2f lag=%.2f %.2f %.2f groundY=%.2f lock=%s fly=%b glide=%b sneak=%b",
@@ -427,15 +427,18 @@ public final class CubeFlight {
 	public static Quaternionf frame(Entity entity, float partialTicks) {
 		SeamLayout layout = SeamLayout.of(entity.level());
 		float t = Mth.lerp(partialTicks, weightO, weight);
-		if (layout == null || !(entity instanceof LocalPlayer) || t <= 0.0F || GravityLock.locked(entity)) {
+		if (layout == null || !(entity instanceof LocalPlayer) || t <= 0.0F) {
 			return new Quaternionf();
+		}
+		if (GravityLock.locked(entity)) {
+			return lockedFrame(layout, entity);
 		}
 		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), t, layout.turnRadius());
 	}
 
 	/** The air frame at a body center for a radius of the turn over an edge, eased in by a weight. */
 	private static Quaternionf frameAt(SeamLayout layout, Vec3 center, float t, double radius) {
-		Vec3 gravity = layout.airGravity(center.x, center.y, center.z, radius);
+		Vec3 gravity = layout.pullAt(center.x, center.y, center.z, radius);
 		if (gravity == null || t <= 0.0F) {
 			return new Quaternionf();
 		}
@@ -478,8 +481,11 @@ public final class CubeFlight {
 	public static Quaternionf viewFrame(Entity entity, float partialTicks) {
 		SeamLayout layout = SeamLayout.of(entity.level());
 		// Under Steadfast the pull stays straight down in the face frame, so the view does too.
-		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity) || GravityLock.locked(entity)) {
+		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity)) {
 			return new Quaternionf();
+		}
+		if (GravityLock.locked(entity)) {
+			return lockedFrame(layout, entity);
 		}
 		Vec3 position = entity.getPosition(partialTicks);
 		Vec3 offset = entity instanceof LocalPlayer ? viewOffsetO.lerp(viewOffset, partialTicks) : Vec3.ZERO;
@@ -490,6 +496,18 @@ public final class CubeFlight {
 		// With the tilt off the view on the ground turns only over the last blocks before the diagonal, so it does not
 		// snap at the crossing. In flight it eases to the frame of the flight.
 		return frameAt(layout, center, 1.0F, TILT_OFF_RADIUS).slerp(frameAt(layout, center, 1.0F, layout.turnRadius()), flightWeight(partialTicks));
+	}
+
+	/**
+	 * The frame of a Steadfast lock: the face frame, which is the storage frame on a face. In space, whose storage is in
+	 * the frame of the UP face, it is the frame of the face of the lock.
+	 */
+	private static Quaternionf lockedFrame(SeamLayout layout, Entity entity) {
+		if (SeamInteraction.regionFace(layout, entity.getX(), entity.getZ()) != SeamLayout.SPACE) {
+			return new Quaternionf();
+		}
+		Vec3 down = layout.faceDown(GravityLock.lockFace(layout, entity));
+		return new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F, (float) -down.x, (float) -down.y, (float) -down.z);
 	}
 
 	/** How far the body is in flight, from 0 on the ground to 1 in flight. */
@@ -653,18 +671,31 @@ public final class CubeFlight {
 		// A ridden vehicle carries the player over, as the player alone would cross.
 		Entity body = player.isPassenger() ? player.getRootVehicle() : player;
 		Vec3 center = body.getBoundingBox().getCenter();
+		int region = SeamInteraction.regionFace(layout, center.x, center.z);
 		int forced = GravityLock.forcedFace(player);
-		int toFace = forced >= 0 ? (forced == layout.faceIndexAt(Mth.floor(body.getX())) ? -1 : forced)
-			: GravityLock.holdsFace(player) ? -1 : layout.crossingFace(center.x, center.y, center.z, SeamCrossing.MARGIN);
+		int toFace = layout.spaceHandoff(region, center.x, center.y, center.z, GravityLock.lockFace(layout, player), 0.0);
 		if (toFace < 0) {
-			return;
+			if (region == SeamLayout.SPACE) {
+				return;
+			}
+			toFace = forced >= 0 ? (forced == region ? -1 : forced)
+				: GravityLock.holdsFace(player) ? -1 : layout.crossingFace(center.x, center.y, center.z, SeamCrossing.MARGIN);
+			if (toFace < 0) {
+				return;
+			}
+			toFace = layout.crossingTarget(region, toFace, center.x, center.y, center.z);
 		}
 		// A walker crosses by the rule of the server: far enough past the diagonal, or with ground under it in the new frame.
-		if (forced < 0 && !flies && layout.crossingFace(center.x, center.y, center.z, SeamCrossing.FORCED_MARGIN) < 0
+		if (forced < 0 && !flies && toFace != SeamLayout.SPACE && region != SeamLayout.SPACE
+			&& layout.crossingFace(center.x, center.y, center.z, SeamCrossing.FORCED_MARGIN) < 0
 			&& !SeamCrossing.landsOn(player.level(), body, SeamCrossing.turned(layout, body, toFace).position())) {
 			return;
 		}
-		int[] m = layout.motion(layout.faceIndexAt(Mth.floor(body.getX())), toFace);
+		if (toFace == SeamLayout.SPACE) {
+			((GravityEntityAccess) player).cubism$setSpaceFace(region);
+			((GravityEntityAccess) body).cubism$setSpaceFace(region);
+		}
+		int[] m = layout.motion(region, toFace);
 		Vector3f oldLook = turnLook(m, look(player.yRotO, player.xRotO));
 		SeamCrossing.Turned turned = SeamCrossing.turned(layout, player, toFace);
 		if (body != player) {

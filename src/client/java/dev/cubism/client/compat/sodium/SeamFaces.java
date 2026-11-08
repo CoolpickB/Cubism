@@ -46,7 +46,8 @@ import org.jspecify.annotations.Nullable;
  * from the position that the camera would have in its face, with the fold that turns its face to the camera face.
  */
 public final class SeamFaces {
-	private static final int FACES = SeamLayout.FACES.length;
+	/** The faces and space, whose chunks are empty but hold the entities and blocks around a camera there. */
+	private static final int FACES = SeamLayout.SPACE + 1;
 	private static final RenderSectionManager[] managers = new RenderSectionManager[FACES];
 	private static final UniformBufferManager[] uniforms = new UniformBufferManager[FACES];
 	private static final Vector3d[] position = new Vector3d[FACES];
@@ -98,12 +99,12 @@ public final class SeamFaces {
 
 	public static int faceOfChunk(int chunkX) {
 		SeamLayout layout = SeamClient.layout;
-		return layout == null ? 0 : layout.faceIndexAt((chunkX << 4) + 8);
+		return layout == null ? 0 : layout.regionOfX((chunkX << 4) + 8);
 	}
 
 	public static int faceOfCamera(Camera camera) {
 		SeamLayout layout = SeamClient.layout;
-		return layout == null ? 0 : layout.faceIndexAt((int) Math.floor(camera.position().x));
+		return layout == null ? 0 : layout.regionOfX((int) Math.floor(camera.position().x));
 	}
 
 	public static RenderSectionManager manager(int face) {
@@ -195,7 +196,7 @@ public final class SeamFaces {
 				continue;
 			}
 			Vector3d p = foldedCamera(m, camera.position());
-			double reach = layout.spacing / 2.0 + renderDistance * 16.0;
+			double reach = (f == SeamLayout.SPACE ? SeamLayout.SPACE_HALF : layout.spacing / 2.0) + renderDistance * 16.0;
 			if (Math.abs(p.x - layout.offsetX(f)) > reach || Math.abs(p.z) > reach) {
 				continue;
 			}

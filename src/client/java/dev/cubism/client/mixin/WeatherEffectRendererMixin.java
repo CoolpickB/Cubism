@@ -38,7 +38,7 @@ public abstract class WeatherEffectRendererMixin {
 		if (this.cubism$gathering) {
 			return;
 		}
-		int cameraFace = layout.faceIndexAt(Mth.floor(cameraPos.x));
+		int cameraFace = layout.regionOfX(Mth.floor(cameraPos.x));
 		WeatherRenderState neighbor = new WeatherRenderState();
 		this.cubism$gathering = true;
 		try {

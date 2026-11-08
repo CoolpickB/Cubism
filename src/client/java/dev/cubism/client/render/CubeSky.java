@@ -268,7 +268,7 @@ public final class CubeSky {
 		core = layout.radius - CubeTime.EDGE_BLEND;
 		centerY = layout.centerY;
 
-		int face = layout.faceIndexAt(Mth.floor(camera.x));
+		int face = layout.regionOfX(Mth.floor(camera.x));
 		int[] m = layout.rotation(face);
 		FRAME.identity();
 		for (int row = 0; row < 3; row++) {

@@ -30,7 +30,7 @@ public final class FrameCrossing {
 			motion = null;
 			return;
 		}
-		int now = layout.faceIndexAt(Mth.floor(client.gameRenderer.mainCamera().position().x));
+		int now = layout.regionOfX(Mth.floor(client.gameRenderer.mainCamera().position().x));
 		int[] m = face >= 0 && face != now ? layout.motion(face, now) : null;
 		motion = m != null && m[4] != -1 ? m : null;
 		face = now;

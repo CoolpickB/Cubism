@@ -36,10 +36,18 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import net.minecraft.server.level.WorldGenRegion;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.jspecify.annotations.Nullable;
 
 import java.util.EnumSet;
+import java.util.Set;
+import net.minecraft.core.Holder;
+import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeManager;
+import net.minecraft.world.level.levelgen.blending.Blender;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -247,6 +255,26 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 			}
 		}
 		return original.call(heights, randomState, x, z, column, tester);
+	}
+
+	/** Space has no terrain, see {@code SpaceChunksMixin}. */
+	@Inject(method = "buildTerrain", at = @At("HEAD"), cancellable = true)
+	private void cubism$noTerrainInSpace(
+		ChunkAccess chunk, Blender blender, RandomState randomState, StructureManager structureManager, BiomeManager biomeManager,
+		@Nullable WorldGenRegion carverRegion, Set<Holder<Biome>> possibleBiomes, CallbackInfoReturnable<CompletableFuture<ChunkAccess>> cir
+	) {
+		SeamLayout layout = SeamLayout.of((NoiseBasedChunkGenerator) (Object) this);
+		if (layout != null && layout.inSpace(chunk.getPos().getMiddleBlockX(), chunk.getPos().getMiddleBlockZ())) {
+			cir.setReturnValue(CompletableFuture.completedFuture(chunk));
+		}
+	}
+
+	@Inject(method = "spawnOriginalMobs", at = @At("HEAD"), cancellable = true)
+	private void cubism$noMobsInSpace(WorldGenRegion region, CallbackInfo ci) {
+		SeamLayout layout = SeamLayout.of((NoiseBasedChunkGenerator) (Object) this);
+		if (layout != null && layout.inSpace(region.getCenter().getMiddleBlockX(), region.getCenter().getMiddleBlockZ())) {
+			ci.cancel();
+		}
 	}
 
 	@ModifyReturnValue(method = "buildTerrain", at = @At("RETURN"))

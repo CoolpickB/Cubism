@@ -2,6 +2,7 @@ package dev.cubism.mixin;
 
 import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamInteraction;
+import dev.cubism.gravity.GravityEntityAccess;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -57,6 +58,9 @@ public abstract class ServerGamePacketListenerImplMixin {
 		if (turned.position().distanceToSqr(requestedX, requestedY, requestedZ) > MAX_CROSSING_MOVE * MAX_CROSSING_MOVE) {
 			return;
 		}
+		if (toFace == SeamLayout.SPACE) {
+			((GravityEntityAccess) this.player).cubism$setSpaceFace(face);
+		}
 		Vec3 position = turned.position();
 		this.player.absSnapTo(position.x, position.y, position.z, turned.yRot(), turned.xRot());
 		this.player.setDeltaMovement(turned.velocity());
@@ -89,6 +93,9 @@ public abstract class ServerGamePacketListenerImplMixin {
 		SeamCrossing.Turned turned = SeamCrossing.turned(layout, vehicle, toFace);
 		if (turned.position().distanceToSqr(requested) > MAX_CROSSING_MOVE * MAX_CROSSING_MOVE) {
 			return;
+		}
+		if (toFace == SeamLayout.SPACE) {
+			((GravityEntityAccess) vehicle).cubism$setSpaceFace(face);
 		}
 		Vec3 position = turned.position();
 		vehicle.absSnapTo(position.x, position.y, position.z, turned.yRot(), turned.xRot());

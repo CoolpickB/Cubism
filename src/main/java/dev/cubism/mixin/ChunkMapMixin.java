@@ -96,11 +96,13 @@ public abstract class ChunkMapMixin {
 		LongOpenHashSet simulatedSeamChunks = new LongOpenHashSet();
 		int simulationDistance = Math.min(viewDistance, this.level.getServer().getPlayerList().getSimulationDistance());
 		layout.collectNeighborChunks(player.getBlockX(), player.getBlockY(), player.getBlockZ(), simulationDistance, simulatedSeamChunks);
-		int regionMinX = SectionPos.blockToSectionCoord(layout.offsetX(layout.faceIndexAt(player.getBlockX())) - layout.spacing / 2);
-		int regionChunks = SectionPos.blockToSectionCoord(layout.spacing);
+		int region = layout.regionAt(player.getBlockX(), player.getBlockZ());
+		int regionX = layout.offsetX(region < 0 ? layout.faceIndexAt(player.getBlockX()) : region);
+		int half = region == SeamLayout.SPACE ? SeamLayout.SPACE_HALF : layout.spacing / 2;
 		SeamTrackingView next = new SeamTrackingView(
 			new ChunkTrackingView.Positioned(player.chunkPosition(), viewDistance),
-			regionMinX, regionMinX + regionChunks, -regionChunks / 2, regionChunks / 2,
+			SectionPos.blockToSectionCoord(regionX - half), SectionPos.blockToSectionCoord(regionX + half),
+			SectionPos.blockToSectionCoord(-half), SectionPos.blockToSectionCoord(half),
 			seamChunks, nearSeamChunks, simulatedSeamChunks
 		);
 		if (!next.equals(player.getChunkTrackingView())) {

@@ -46,7 +46,7 @@ public final class CubeWeather {
 	 * neighbor face and go. A leaning column runs from the top of vanilla down its path, to the first block.
 	 */
 	public static void fitColumns(ClientLevel level, SeamLayout layout, List<WeatherEffectRenderer.ColumnInstance> columns, Vec3 camera, int radius) {
-		int face = layout.faceIndexAt(Mth.floor(camera.x));
+		int face = layout.regionOfX(Mth.floor(camera.x));
 		int anchorY = Mth.floor(camera.y);
 		ListIterator<WeatherEffectRenderer.ColumnInstance> iterator = columns.listIterator();
 		while (iterator.hasNext()) {
@@ -109,7 +109,7 @@ public final class CubeWeather {
 		VertexConsumer builder, SeamLayout layout, List<WeatherEffectRenderer.ColumnInstance> columns, Vec3 cameraPos, float maxAlpha, int radius,
 		float intensity
 	) {
-		int cameraFace = layout.faceIndexAt(Mth.floor(cameraPos.x));
+		int cameraFace = layout.regionOfX(Mth.floor(cameraPos.x));
 		float radiusSq = radius * radius;
 		int lastFace = -1;
 		int[] toCamera = null;

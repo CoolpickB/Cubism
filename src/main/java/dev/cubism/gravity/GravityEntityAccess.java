@@ -9,4 +9,9 @@ public interface GravityEntityAccess {
 	 * per tick: it also notes the face where a fall starts.
 	 */
 	@Nullable Vec3 cubism$edgePull();
+
+	/** The face that the entity left for space, or -1. A Steadfast lock in space keeps the down of that face. */
+	int cubism$spaceFace();
+
+	void cubism$setSpaceFace(int face);
 }

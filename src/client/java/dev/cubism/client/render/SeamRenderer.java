@@ -120,7 +120,7 @@ public final class SeamRenderer {
 		if (layout == null || level == null || !layout.inRegion(pos.getMiddleBlockX(), pos.getMiddleBlockZ())) {
 			return;
 		}
-		int offset = layout.offsetX(layout.faceIndexAt(pos.getMiddleBlockX()));
+		int offset = layout.offsetX(layout.regionOfX(pos.getMiddleBlockX()));
 		int[] owner = new int[3];
 		LongOpenHashSet targets = new LongOpenHashSet();
 		for (int x = pos.getMinBlockX(); x <= pos.getMaxBlockX(); x++) {
@@ -208,7 +208,7 @@ public final class SeamRenderer {
 					if (!outside(layout, minX + dx, minY + dy, minZ + dz, owner)) {
 						continue;
 					}
-					int face = layout.faceIndexAt(owner[0]);
+					int face = layout.regionOfX(owner[0]);
 					int[] range = ranges[face];
 					if (range == null) {
 						range = ranges[face] = new int[] {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
@@ -328,7 +328,7 @@ public final class SeamRenderer {
 		SectionPos center = viewArea.getCameraSectionPos();
 		int radius = viewArea.getViewDistance();
 		for (int x = center.x() - radius; x <= center.x() + radius; x++) {
-			if (layout.faceIndexAt(SectionPos.sectionToBlockCoord(x)) == cameraFace) {
+			if (layout.regionOfX(SectionPos.sectionToBlockCoord(x)) == cameraFace) {
 				continue;
 			}
 			for (int z = center.z() - radius; z <= center.z() + radius; z++) {
@@ -349,9 +349,9 @@ public final class SeamRenderer {
 			return;
 		}
 		long oldNode = section.getSectionNode();
-		int oldFace = layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(oldNode)));
-		if (oldFace == layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(newNode)))
-			&& oldFace == layout.faceIndexAt(Minecraft.getInstance().gameRenderer.mainCamera().blockPosition().getX())) {
+		int oldFace = layout.regionOfX(SectionPos.sectionToBlockCoord(SectionPos.x(oldNode)));
+		if (oldFace == layout.regionOfX(SectionPos.sectionToBlockCoord(SectionPos.x(newNode)))
+			&& oldFace == layout.regionOfX(Minecraft.getInstance().gameRenderer.mainCamera().blockPosition().getX())) {
 			return;
 		}
 		SeamSection seam = sections.get(oldNode);
@@ -484,7 +484,7 @@ public final class SeamRenderer {
 		releaseKept(false);
 		createPendingSections(level, current);
 		compileDirtySections(level);
-		int cameraFace = layout.faceIndexAt(cameraBlock.getX());
+		int cameraFace = layout.regionOfX(cameraBlock.getX());
 		if (cameraFace != lastCameraFace) {
 			lastCameraFace = cameraFace;
 			adoptOtherFaceSections(levelRenderer.viewArea(), layout, cameraFace);
@@ -501,7 +501,7 @@ public final class SeamRenderer {
 			}
 			// A crossing back to another face leaves sections that only draw right on the face they were bridged on.
 			bridging.entrySet().removeIf(entry -> frame - entry.getValue() > KEEP_FRAMES
-				|| layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(entry.getKey().getSectionNode()))) != cameraFace);
+				|| layout.regionOfX(SectionPos.sectionToBlockCoord(SectionPos.x(entry.getKey().getSectionNode()))) != cameraFace);
 		}
 		try {
 			// Sections of the camera face show here only for the few frames after a crossing, before the chunks of the
@@ -521,7 +521,7 @@ public final class SeamRenderer {
 				}
 				for (Long2ObjectMap<SeamSection> store : List.of(sections, adopted)) {
 					for (SeamSection section : store.values()) {
-						if (layout.faceIndexAt(section.storageOrigin.getX()) != face) {
+						if (layout.regionOfX(section.storageOrigin.getX()) != face) {
 							continue;
 						}
 						AABB box = shownBox(shown, section.storageOrigin);
@@ -549,9 +549,9 @@ public final class SeamRenderer {
 	public static void hideOtherFacesFromVanilla(LevelRenderer levelRenderer, Vec3 cameraPos) {
 		SeamLayout layout = SeamClient.layout;
 		if (layout != null) {
-			int cameraFace = layout.faceIndexAt(Mth.floor(cameraPos.x));
+			int cameraFace = layout.regionOfX(Mth.floor(cameraPos.x));
 			levelRenderer.visibleSections().removeIf(
-				section -> layout.faceIndexAt(SectionPos.sectionToBlockCoord(SectionPos.x(section.getSectionNode()))) != cameraFace
+				section -> layout.regionOfX(SectionPos.sectionToBlockCoord(SectionPos.x(section.getSectionNode()))) != cameraFace
 			);
 		}
 	}
@@ -570,7 +570,7 @@ public final class SeamRenderer {
 		int minZ = SectionPos.blockToSectionCoord(Mth.floor(box.minZ + 0.5));
 		int maxZ = SectionPos.blockToSectionCoord(Mth.floor(box.maxZ - 0.5));
 		for (int x = minX; x <= maxX; x++) {
-			if (layout.faceIndexAt(SectionPos.sectionToBlockCoord(x, 8)) != cameraFace) {
+			if (layout.regionOfX(SectionPos.sectionToBlockCoord(x, 8)) != cameraFace) {
 				continue;
 			}
 			for (int z = minZ; z <= maxZ; z++) {
@@ -604,7 +604,7 @@ public final class SeamRenderer {
 		if (layout == null || sections.isEmpty() && adopted.isEmpty() && bridging.isEmpty()) {
 			return;
 		}
-		int cameraFace = layout.faceIndexAt(Mth.floor(cameraPos.x));
+		int cameraFace = layout.regionOfX(Mth.floor(cameraPos.x));
 		for (SectionRenderDispatcher.RenderSection section : bridging.keySet()) {
 			for (BlockEntity blockEntity : section.getSectionMesh().getRenderableBlockEntities()) {
 				BlockEntityRenderState state = dispatcher.tryExtractRenderState(blockEntity, partialTicks, null, false);
@@ -622,7 +622,7 @@ public final class SeamRenderer {
 				dispatcher.prepare(SeamInteraction.move(layout.motion(cameraFace, face), cameraPos));
 				for (Long2ObjectMap<SeamSection> store : List.of(sections, adopted)) {
 					for (SeamSection section : store.values()) {
-						if (layout.faceIndexAt(section.storageOrigin.getX()) != face) {
+						if (layout.regionOfX(section.storageOrigin.getX()) != face) {
 							continue;
 						}
 						for (BlockEntity blockEntity : section.getSectionMesh().getRenderableBlockEntities()) {

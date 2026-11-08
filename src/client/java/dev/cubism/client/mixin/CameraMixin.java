@@ -5,6 +5,7 @@ import dev.cubism.client.CubeFlight;
 import dev.cubism.seam.SeamCrossing;
 import dev.cubism.debug.LoadTrace;
 import dev.cubism.client.SeamClient;
+import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -185,7 +186,7 @@ public abstract class CameraMixin {
 	private void cubism$turnAcrossSeam(float partialTicks, float now, Quaternionf airTurn) {
 		SeamLayout layout = SeamLayout.of(this.entity.level());
 		Vec3 position = this.entity.getPosition(partialTicks);
-		int face = layout != null && layout.inRegion(Mth.floor(position.x), Mth.floor(position.z)) ? layout.faceIndexAt(Mth.floor(position.x)) : -1;
+		int face = layout == null ? -1 : SeamInteraction.regionFace(layout, position.x, position.z);
 		if (face >= 0 && this.cubism$lastFace >= 0 && face != this.cubism$lastFace && this.entity instanceof LocalPlayer player
 			&& player.level() instanceof ClientLevel level) {
 			// The chunks of the old face stay in the vanilla store until the server moves the chunk center, a few ticks

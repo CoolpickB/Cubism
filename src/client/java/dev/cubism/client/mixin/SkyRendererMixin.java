@@ -51,7 +51,7 @@ public abstract class SkyRendererMixin {
 		level.dimensionType().defaultClock().ifPresent(clock -> {
 			ClockInstance instance = level.clockManager().getInstance(clock);
 			double ticks = instance.totalTicks() + (instance.isPaused() ? 0.0F : partialTicks * instance.rate());
-			cubism$celestial = CubeTime.celestial(layout, layout.faceIndexAt(Mth.floor(camera.position().x)), ticks);
+			cubism$celestial = CubeTime.celestial(layout, layout.regionOfX(Mth.floor(camera.position().x)), ticks);
 			CubeSky.setCelestial(cubism$celestial);
 			net.minecraft.world.entity.Entity body = camera.entity();
 			CubeSky.extract(level, camera.position(), body == null ? camera.position() : dev.cubism.client.CubeFlight.timeFocus(body, partialTicks), ticks);
