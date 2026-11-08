@@ -25,8 +25,10 @@ public abstract class DefaultChunkRendererMixin {
 		RenderPass pass, String name, GpuTextureView view, GpuSampler sampler, Operation<Void> original, @Local(argsOnly = true) CameraTransform camera
 	) {
 		original.call(pass, name, view, sampler);
-		if ("u_LightTex".equals(name) && !(SeamClient.IRIS && CubeShaderPatch.packInUse())) {
-			FaceLightBlend.bind(pass, view, sampler, camera.x, camera.y, camera.z);
+		// The light group always holds the extra slots, so they must be bound even when a shader pack draws, which does
+		// its own light. Then they hold neutral values.
+		if ("u_LightTex".equals(name)) {
+			FaceLightBlend.bind(pass, view, sampler, camera.x, camera.y, camera.z, !(SeamClient.IRIS && CubeShaderPatch.packInUse()));
 		}
 	}
 }

@@ -21,10 +21,10 @@ public final class FaceLightBlend {
 
 	private FaceLightBlend() {}
 
-	public static void bind(RenderPass pass, GpuTextureView own, GpuSampler sampler, double cameraX, double cameraY, double cameraZ) {
+	public static void bind(RenderPass pass, GpuTextureView own, GpuSampler sampler, double cameraX, double cameraY, double cameraZ, boolean blend) {
 		SeamLayout layout = SeamClient.layout;
 		int face = SeamFaces.currentFace();
-		boolean on = layout != null && FaceLightmaps.ready() && face >= 0 && face < SeamLayout.FACES.length;
+		boolean on = blend && layout != null && FaceLightmaps.ready() && face >= 0 && face < SeamLayout.FACES.length;
 		GpuTextureView[] others = on ? FaceLightmaps.neighbors(face, own) : new GpuTextureView[] {own, own, own, own};
 		for (int side = 0; side < 4; side++) {
 			pass.setUniform("u_LightTex" + (side + 1), others[side], sampler);
