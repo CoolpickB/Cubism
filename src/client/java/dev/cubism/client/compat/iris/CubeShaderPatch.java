@@ -469,6 +469,11 @@ public final class CubeShaderPatch {
 				.replace("GetHorizonFactor(-SdotU)", "mix(GetHorizonFactor(-SdotU), 1.0, cubismSpace())")
 				.replace("GetHorizonFactor(VdotU)", "mix(GetHorizonFactor(VdotU), 1.0, cubismSpace())");
 		}
+		if (name.endsWith("/lib/atmospherics/volumetricLight/volumetricLight.glsl")) {
+			// The light shafts are traced from the camera through the air around it, and past the shadow map they count all
+			// of it as lit. In orbit there is no air around the camera, and the planet counts as sky to them.
+			source = source.replace("    if (vlMult < 0.0001) return vec4(0.0);\n", "    vlMult *= 1.0 - cubismSpace();\n    if (vlMult < 0.0001) return vec4(0.0);\n");
+		}
 		if (name.endsWith(MAIN_FOG)) {
 			// From orbit the planet is seen through little air, and the far ground ends at the edge of the planet, not in
 			// the sky. Without this the haze and the fog at the end of the view cover the whole planet.
@@ -659,8 +664,11 @@ public final class CubeShaderPatch {
 				        float cubismOut = 0.0;
 				        bool cubismHit = false;
 				        for (int j = 0; j < 160; j++) {
-				            float gap = abs(cubismAlt(cameraPos + cubismT * nPlayerPos) - cloudAltitude) - cloudStretch;
+				            float cubismRayAlt = cubismAlt(cameraPos + cubismT * nPlayerPos);
+				            float gap = abs(cubismRayAlt - cloudAltitude) - cloudStretch;
 				            if (gap <= 0.0) { cubismHit = true; break; }
+				            // A ray that goes down under the sea is in the planet, and the clouds past it are hidden.
+				            if (cubismRayAlt < min(oceanAltitude, cubismAlt(cameraPos))) break;
 				            // A ray that skims the shell closes the gap slowly. The floor on the step keeps it from running
 				            // out of steps, at the cost of missing the thin tip of a skimming hit.
 				            cubismOut = cubismT;
@@ -707,7 +715,7 @@ public final class CubeShaderPatch {
 			"float aboveClouds = clamp01((cubismAlt(cameraPos) - lowerPlaneAltitude) * 0.01);");
 		source = source.replace(
 			"if (abs(tracePos.y - cloudAltitude) > cloudStretch) break;",
-			"if (abs(cubismAlt(tracePos) - cloudAltitude) > cloudStretch) {\n    if (cubism_active == 0) break;\n    // Over the edge of the cube the ray can come back into the shell farther on, so look for the next entry.\n    float cubismT2 = length(tracePos - cameraPos);\n    bool cubismBack = false;\n    for (int j = 0; j < 64; j++) {\n        float gap2 = abs(cubismAlt(cameraPos + cubismT2 * nPlayerPos) - cloudAltitude) - cloudStretch;\n        if (gap2 <= 0.0) { cubismBack = true; break; }\n        cubismT2 += max(gap2, max(2.0, cubismT2 * 0.01));\n        if (cubismT2 > distanceThreshold) break;\n    }\n    if (!cubismBack) break;\n    // The offset by the dither of each pixel keeps the slices of neighbouring pixels apart, as at the first entry.\n    tracePos = cameraPos + (cubismT2 + stepMult * (dither - 1.0)) * nPlayerPos;\n}\n");
+			"if (abs(cubismAlt(tracePos) - cloudAltitude) > cloudStretch) {\n    if (cubism_active == 0) break;\n    // Over the edge of the cube the ray can come back into the shell farther on, so look for the next entry.\n    float cubismT2 = length(tracePos - cameraPos);\n    bool cubismBack = false;\n    for (int j = 0; j < 64; j++) {\n        float cubismRayAlt2 = cubismAlt(cameraPos + cubismT2 * nPlayerPos);\n        float gap2 = abs(cubismRayAlt2 - cloudAltitude) - cloudStretch;\n        if (gap2 <= 0.0) { cubismBack = true; break; }\n        if (cubismRayAlt2 < min(oceanAltitude, cubismAlt(cameraPos))) break;\n        cubismT2 += max(gap2, max(2.0, cubismT2 * 0.01));\n        if (cubismT2 > distanceThreshold) break;\n    }\n    if (!cubismBack) break;\n    // The offset by the dither of each pixel keeps the slices of neighbouring pixels apart, as at the first entry.\n    tracePos = cameraPos + (cubismT2 + stepMult * (dither - 1.0)) * nPlayerPos;\n}\n");
 		source = source.replace(
 			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cloudPlayerPos.y)",
 			"GetCloudNoise(tracePos, cloudAltitude, lTracePosXZ, cubismAlt(tracePos) - cubismAlt(cameraPos))");
