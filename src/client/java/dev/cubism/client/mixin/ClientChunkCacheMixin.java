@@ -2,7 +2,6 @@ package dev.cubism.client.mixin;
 
 import dev.cubism.client.LoadTraceClient;
 import dev.cubism.client.SeamChunkStorageAccess;
-import dev.cubism.client.CubeFlight;
 import dev.cubism.client.SeamClient;
 import dev.cubism.client.render.SeamRenderer;
 import net.minecraft.client.multiplayer.ClientChunkCache;
@@ -63,7 +62,6 @@ public abstract class ClientChunkCacheMixin {
 		if (SeamClient.layout == null) {
 			return;
 		}
-		long start = System.nanoTime();
 		SeamChunkStorageAccess access = this.cubism$storage();
 		for (int index = 0; index < access.cubism$slotCount(); index++) {
 			LevelChunk chunk = access.cubism$detachIfSeam(index, x, z, this.storageRadius);
@@ -86,7 +84,6 @@ public abstract class ClientChunkCacheMixin {
 				this.level.onChunkLoaded(pos);
 			}
 		}
-		CubeFlight.traceRecenterNanos += System.nanoTime() - start;
 	}
 
 	/**

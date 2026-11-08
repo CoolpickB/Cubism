@@ -364,24 +364,6 @@ public final class CubeFlight {
 
 	/** Writes one line per tick while the view frame is tilted and for 20 ticks after: for finding where the look and the keys disagree. */
 	/** Writes a line to the look log when {@link ClientConfig#traceLook} is on. */
-	/** Wall time spent since the last frame line, for the look trace: terrain setup (all faces), the folded faces alone, and chunk moves on a recenter. */
-	public static long traceTerrainNanos;
-	public static long traceFoldedNanos;
-	public static long traceRecenterNanos;
-	private static long traceLastFrame;
-
-	/** The frame time and the work measured since the last call, and starts the next count. */
-	public static String traceFrameTimes() {
-		long now = System.nanoTime();
-		String times = String.format(Locale.ROOT, " ms=%.1f terrain=%.1f folded=%.1f recenter=%.1f",
-			traceLastFrame == 0 ? 0.0 : (now - traceLastFrame) / 1.0E6, traceTerrainNanos / 1.0E6, traceFoldedNanos / 1.0E6, traceRecenterNanos / 1.0E6);
-		traceLastFrame = now;
-		traceTerrainNanos = 0;
-		traceFoldedNanos = 0;
-		traceRecenterNanos = 0;
-		return times;
-	}
-
 	public static void traceLine(String line) {
 		if (!ClientConfig.traceLook || lookLog == null || lookTicksLeft <= 0) {
 			return;
