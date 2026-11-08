@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.cubism.client.SeamClient;
+import dev.cubism.client.render.CubeSky;
 import dev.cubism.seam.SeamInteraction;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.client.Minecraft;
@@ -36,6 +37,12 @@ public abstract class ClientLevelMixin {
 			return original.call(pos, owner[0], owner[1], owner[2]);
 		}
 		return original.call(pos, x, y, z);
+	}
+
+	/** Lightning lights the sky under the weather. Over the air it fades with the rain, see {@link LevelRainMixin}. */
+	@ModifyReturnValue(method = "getSkyFlashTime", at = @At("RETURN"))
+	private int cubism$flashUnderAir(int time) {
+		return time <= 0 || !CubeSky.active() ? time : Math.round(time * (1.0F - CubeSky.fogClear()));
 	}
 
 	@Shadow private int serverSimulationDistance;

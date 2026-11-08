@@ -85,7 +85,7 @@ public final class CubeSky {
 	private static float orbit;
 	/** The sky fog distance read at the middle of a face, the same wherever the camera is. */
 	private static float planetSkyEnd = 1.0F;
-	/** 0 below the top of the stratosphere, 1 {@link #FOG_CLEAR_SPAN} blocks above it: how far the weather is cleared. */
+	/** 0 below the top of the stratosphere, 1 {@link #FOG_CLEAR_SPAN} blocks above it or near the side limit to space: how far the weather is cleared. */
 	private static float fogClear;
 	/** Less than the height over the stratosphere where the camera goes to space (SeamLayout), which has no weather. */
 	private static final double FOG_CLEAR_SPAN = 20.0;
@@ -329,7 +329,13 @@ public final class CubeSky {
 			+ sq(cubeZ - Math.clamp(cubeZ, -core, core))) - CubeTime.EDGE_BLEND - ORBIT_START;
 		orbit = Mth.smoothstep(Mth.clamp((float) (over / ORBIT_SPAN), 0.0F, 1.0F));
 		double aboveAir = over + ORBIT_START - (layout.stratosphereTop() - layout.radius);
-		fogClear = Mth.smoothstep(Mth.clamp((float) (aboveAir / FOG_CLEAR_SPAN), 0.0F, 1.0F));
+		// Near an edge an entity moves to space by its side distance, before it is over the stratosphere.
+		double ax = Math.abs(cubeX);
+		double ay = Math.abs(cubeY);
+		double az = Math.abs(cubeZ);
+		double side = Math.max(Math.min(ax, ay), Math.min(Math.max(ax, ay), az));
+		double toSide = side - layout.sideSpaceLevel() + 4.0 + FOG_CLEAR_SPAN;
+		fogClear = Mth.smoothstep(Mth.clamp((float) (Math.max(aboveAir, toSide) / FOG_CLEAR_SPAN), 0.0F, 1.0F));
 		CUBE_FROM_FEET.set(FRAME).m33(1.0F);
 		double[] sun = CubeTime.sunDirection(ticks);
 		SUN.set(sun[0], sun[1], sun[2]);

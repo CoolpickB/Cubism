@@ -715,6 +715,14 @@ public final class SeamLayout {
 		return this.hasSpace() && !this.storable(face, this.cubeOffset(region, x, y, z), STRIP_LEAVE_MARGIN) ? SPACE : face;
 	}
 
+	/**
+	 * The second largest distance from the cube center along an axis at which an entity moves to space, whatever its
+	 * height: the side limit of {@link #storable} for the face it is over. Near an edge it is far under the stratosphere.
+	 */
+	public double sideSpaceLevel() {
+		return this.spacing / 2.0 - STRIP_LEAVE_MARGIN;
+	}
+
 	/** True when a face stores a position relative to the cube center more than {@code margin} blocks inside its strip. */
 	private boolean storable(int face, Vec3 p, double margin) {
 		int[] m = this.rotations[face];
