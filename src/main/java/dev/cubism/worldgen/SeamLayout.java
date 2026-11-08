@@ -414,8 +414,10 @@ public final class SeamLayout {
 	 * in the sky, at the surface and underground. A level smaller than the radius is round, so near the center of the
 	 * cube the turn narrows down to the center, where the pull points to the center from every side.
 	 *
-	 * <p>The rounding is a curve of the cubic norm, not a circle. A circle starts the turn at its full rate, so the view
-	 * snapped from level into a turn. This curve starts the turn at a rate of 0 and is fastest on the diagonal.
+	 * <p>The rounding is a curve of the norm of power 2.5, between a circle (2) and the cubic norm (3). A circle starts the
+	 * turn at its full rate, about 7 degrees per block, so the view snapped from level into a turn. The cubic norm starts
+	 * at a rate of 0 but then felt too sudden on the diagonal (9 degrees per block). This curve starts at a rate of 0 and
+	 * reaches about 7 degrees per block.
 	 */
 	public @Nullable Vec3 airGravity(double x, double y, double z, double radius) {
 		int bx = Mth.floor(x);
@@ -433,17 +435,17 @@ public final class SeamLayout {
 		if (dy > 0.0 && dx * dx + dz * dz < 1.0E-6 * dy * dy) {
 			return null;
 		}
-		// The normal of the level, the gradient of the cubic norm of the offset from the box.
-		double nx = dx * Math.abs(dx);
-		double ny = dy * Math.abs(dy);
-		double nz = dz * Math.abs(dz);
+		// The normal of the level, the gradient of the norm of the offset from the box.
+		double nx = dx * Math.sqrt(Math.abs(dx));
+		double ny = dy * Math.sqrt(Math.abs(dy));
+		double nz = dz * Math.sqrt(Math.abs(dz));
 		double length = Math.sqrt(nx * nx + ny * ny + nz * nz);
 		return length < 1.0E-12 ? null : new Vec3(-nx / length, -ny / length, -nz / length);
 	}
 
 	/**
 	 * The half size of the box that the level through a point of the positive octant is rounded about: the box at the
-	 * cubic norm distance of the radius from the point. Without a radius the levels are plain cubes, and a box a hair smaller
+	 * norm distance of the radius from the point. Without a radius the levels are plain cubes, and a box a hair smaller
 	 * gives the direction of the largest axis.
 	 */
 	private static double levelCore(double ax, double ay, double az, double radius) {
@@ -456,7 +458,7 @@ public final class SeamLayout {
 		if (mid <= max - radius) {
 			return max - radius;
 		}
-		if (ax * ax * ax + ay * ay * ay + az * az * az <= radius * radius * radius) {
+		if (power(ax) + power(ay) + power(az) <= power(radius)) {
 			return 0.0;
 		}
 		// The distance to the box falls as the box grows: it is at least the radius at the low end, 0 at the high end.
@@ -464,7 +466,7 @@ public final class SeamLayout {
 		double high = max;
 		for (int i = 0; i < 40; i++) {
 			double half = (low + high) * 0.5;
-			if (cubicBoxDistance(ax, ay, az, half) > radius) {
+			if (boxPower(ax, ay, az, half) > power(radius)) {
 				low = half;
 			} else {
 				high = half;
@@ -473,11 +475,14 @@ public final class SeamLayout {
 		return (low + high) * 0.5;
 	}
 
-	private static double cubicBoxDistance(double ax, double ay, double az, double half) {
-		double dx = Math.max(ax - half, 0.0);
-		double dy = Math.max(ay - half, 0.0);
-		double dz = Math.max(az - half, 0.0);
-		return Math.cbrt(dx * dx * dx + dy * dy * dy + dz * dz * dz);
+	/** The norm distance from a point to the box, to the power 2.5. */
+	private static double boxPower(double ax, double ay, double az, double half) {
+		return power(Math.max(ax - half, 0.0)) + power(Math.max(ay - half, 0.0)) + power(Math.max(az - half, 0.0));
+	}
+
+	/** A value of at least 0 to the power 2.5, without the cost of {@link Math#pow}: the turn runs for every block shade. */
+	private static double power(double value) {
+		return value * value * Math.sqrt(value);
 	}
 
 	public static int indexOf(Direction face) {
