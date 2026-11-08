@@ -132,7 +132,7 @@ The Steadfast effect keeps an entity on the face where it stands. Mining near a 
 - **Lore.** The core of the overworld is intact inside the inner bedrock, and heavy cores break off it. The cores of the End collapsed into voids. Shulkers grip surfaces against the pull of these voids.
 - **In space.** A locked entity in space falls toward the down of the face that it left, or of the forced face. The fall has no end.
 
-The treads have their own item texture and worn textures. Placeholder: the effect icon is a plain purple ring.
+The treads and the effect have their own textures.
 
 Tested on the dev server: the items, the potion and the effect load, and the recipes parse. A pig with Steadfast past a diagonal stayed in its region and fell straight down in the frame of its face. A pig without the effect crossed. A locked pig past a diagonal fell to y -1300 and more, and it did not die or cross. A pig with level 1 moved to the down face and lived. Not tested by me: a player with the treads, sneaking to change face, the camera, the roll, forced faces on a player, the opposite face view, and brewing in a stand.
 
