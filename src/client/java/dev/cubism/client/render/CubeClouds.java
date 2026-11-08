@@ -169,7 +169,7 @@ public final class CubeClouds {
 			// by the shift. Vanilla adds its own drift from the game time, so the time is zero, and it adds an offset
 			// on Z.
 			Vec3 cellOrigin = new Vec3(localX - shiftX - partialTicks * SPEED, camera.y, localZ - shiftZ - VANILLA_Z_OFFSET);
-			layer.prepare(color, status, layerY, range, cellOrigin, 0L, partialTicks);
+			layer.prepare(FaceLightmaps.cloudColor(face, color, partialTicks), status, layerY, range, cellOrigin, 0L, partialTicks);
 			SHOWN.add(layer);
 		}
 		return true;

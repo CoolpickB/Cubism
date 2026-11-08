@@ -8,7 +8,10 @@ import java.util.function.BiConsumer;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.Lightmap;
 import net.minecraft.client.renderer.state.LightmapRenderState;
+import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
+import net.minecraft.world.attribute.EnvironmentAttributes;
+import org.joml.Vector4fc;
 import net.minecraft.world.attribute.EnvironmentAttributeProbe;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
@@ -103,6 +106,21 @@ public final class FaceLightmaps {
 		} finally {
 			rendering = false;
 		}
+	}
+
+	/** The color of the cloud layer of a face: the color at the local time of the face, turned in from the camera color with the orbit. */
+	public static int cloudColor(int face, int cameraColor, float partialTicks) {
+		float orbit = CubeSky.orbit();
+		if (!ready || orbit <= 0.0F || face < 0 || face >= FACES || PROBES[face] == null) {
+			return cameraColor;
+		}
+		Vector4fc own = PROBES[face].getValue(EnvironmentAttributes.CLOUD_COLOR, partialTicks);
+		return ARGB.colorFromFloat(
+			Mth.lerp(orbit, ARGB.alphaFloat(cameraColor), own.w()),
+			Mth.lerp(orbit, ARGB.redFloat(cameraColor), own.x()),
+			Mth.lerp(orbit, ARGB.greenFloat(cameraColor), own.y()),
+			Mth.lerp(orbit, ARGB.blueFloat(cameraColor), own.z())
+		);
 	}
 
 	/** The lightmap of the face that draws now, where the one of the camera is asked for. */
