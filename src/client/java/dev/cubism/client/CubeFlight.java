@@ -40,6 +40,14 @@ public final class CubeFlight {
 
 	private static float weight;
 	private static float weightO;
+	/** How far the player flies in creative or spectator mode, which turns over an edge with a radius that grows with height. */
+	private static float wideWeight;
+	private static float wideWeightO;
+	/** How far a Steadfast lock holds the frame, and the last frame it held, so the frame eases when the lock begins or ends. */
+	private static float lockWeight;
+	private static float lockWeightO;
+	private static final Quaternionf lastLocked = new Quaternionf();
+	private static boolean hasLastLocked;
 	/** True while vanilla moves the player in the air frame, where velocity and look are in that frame. */
 	private static boolean inFrame;
 	private static final Quaternionf physicsFrame = new Quaternionf();
@@ -102,6 +110,17 @@ public final class CubeFlight {
 	/** Eases the frame in or out, then makes a crossing of a diagonal when the player flew past it. */
 	public static void tick(LocalPlayer player) {
 		weightO = weight;
+		wideWeightO = wideWeight;
+		lockWeightO = lockWeight;
+		SeamLayout tickLayout = SeamLayout.of(player.level());
+		boolean wide = tickLayout != null && player.getAbilities().flying && !player.isFallFlying() && !player.isPassenger();
+		wideWeight = Mth.clamp(wideWeight + (wide ? 1.0F : -1.0F) / EASE_TICKS, 0.0F, 1.0F);
+		boolean held = tickLayout != null && GravityLock.locked(player);
+		lockWeight = Mth.clamp(lockWeight + (held ? 1.0F : -1.0F) / EASE_TICKS, 0.0F, 1.0F);
+		if (held) {
+			lastLocked.set(lockedFrame(tickLayout, player));
+			hasLastLocked = true;
+		}
 		boolean flies = SeamLayout.of(player.level()) != null && SeamCrossing.flies(player);
 		weight = Mth.clamp(weight + (flies ? 1.0F : -1.0F) / EASE_TICKS, 0.0F, 1.0F);
 		float startYRot = player.getYRot();
@@ -430,10 +449,37 @@ public final class CubeFlight {
 		if (layout == null || !(entity instanceof LocalPlayer) || t <= 0.0F) {
 			return new Quaternionf();
 		}
-		if (GravityLock.locked(entity)) {
-			return lockedFrame(layout, entity);
+		Vec3 center = entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0);
+		return withLock(layout, entity, partialTicks, () -> frameAt(layout, center, t, radiusAt(layout, center, layout.turnRadius(), partialTicks)));
+	}
+
+	/**
+	 * The turn radius at a body center: the given one, and for creative and spectator flight a radius that grows with
+	 * the height over the ground (see {@link SeamLayout#flightRadius}), eased in and out with the flight.
+	 */
+	private static double radiusAt(SeamLayout layout, Vec3 center, double base, float partialTicks) {
+		float wide = Mth.lerp(partialTicks, wideWeightO, wideWeight);
+		int region = wide <= 0.0F ? -1 : SeamInteraction.regionFace(layout, center.x, center.z);
+		if (region < 0) {
+			return base;
 		}
-		return frameAt(layout, entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0), t, layout.turnRadius());
+		Vec3 c = layout.cubeOffset(region, center.x, center.y, center.z);
+		double level = Math.max(Math.abs(c.x), Math.max(Math.abs(c.y), Math.abs(c.z)));
+		return Mth.lerp(wide, base, layout.flightRadius(level));
+	}
+
+	/**
+	 * The frame of a lock for the local player, eased with the lock: a lock that begins or ends in the air would turn
+	 * the view in one tick from the frame of its face to the frame of the pull. Other entities have the frame of the lock at once.
+	 */
+	private static Quaternionf withLock(SeamLayout layout, Entity entity, float partialTicks, java.util.function.Supplier<Quaternionf> free) {
+		boolean locked = GravityLock.locked(entity);
+		float t = entity instanceof LocalPlayer ? Mth.lerp(partialTicks, lockWeightO, lockWeight) : locked ? 1.0F : 0.0F;
+		if (t <= 0.0F || !locked && !hasLastLocked) {
+			return free.get();
+		}
+		Quaternionf held = locked ? lockedFrame(layout, entity) : new Quaternionf(lastLocked);
+		return t >= 1.0F ? held : free.get().slerp(held, t * t * (3.0F - 2.0F * t));
 	}
 
 	/** The air frame at a body center for a radius of the turn over an edge, eased in by a weight. */
@@ -484,18 +530,20 @@ public final class CubeFlight {
 		if (layout == null || entity instanceof LocalPlayer && BarrelRoll.rolling(entity)) {
 			return new Quaternionf();
 		}
-		if (GravityLock.locked(entity)) {
-			return lockedFrame(layout, entity);
-		}
+		return withLock(layout, entity, partialTicks, () -> freeViewFrame(layout, entity, partialTicks));
+	}
+
+	private static Quaternionf freeViewFrame(SeamLayout layout, Entity entity, float partialTicks) {
 		Vec3 position = entity.getPosition(partialTicks);
 		Vec3 offset = entity instanceof LocalPlayer ? viewOffsetO.lerp(viewOffset, partialTicks) : Vec3.ZERO;
 		Vec3 center = position.add(offset).add(0.0, entity.getBbHeight() / 2.0, 0.0);
+		double radius = entity instanceof LocalPlayer ? radiusAt(layout, center, layout.turnRadius(), partialTicks) : layout.turnRadius();
 		if (ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer)) {
-			return frameAt(layout, center, 1.0F, layout.turnRadius());
+			return frameAt(layout, center, 1.0F, radius);
 		}
 		// With the tilt off the view on the ground turns only over the last blocks before the diagonal, so it does not
 		// snap at the crossing. In flight it eases to the frame of the flight.
-		return frameAt(layout, center, 1.0F, TILT_OFF_RADIUS).slerp(frameAt(layout, center, 1.0F, layout.turnRadius()), flightWeight(partialTicks));
+		return frameAt(layout, center, 1.0F, TILT_OFF_RADIUS).slerp(frameAt(layout, center, 1.0F, radius), flightWeight(partialTicks));
 	}
 
 	/**

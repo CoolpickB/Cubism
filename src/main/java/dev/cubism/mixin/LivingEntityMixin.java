@@ -101,11 +101,13 @@ public abstract class LivingEntityMixin extends Entity {
 			}
 			// With no pull left a body has nothing to push against, so jump rises and sneak sinks, as when swimming. Up is
 			// where the view shows up: away from the cube center, as the camera frame of the planet.
-			if (space.lengthSqr() < 1.0E-6 && (Object) this instanceof Player swimmer && !swimmer.getAbilities().flying && this.jumping != swimmer.isShiftKeyDown()) {
+			// The push grows as the pull fades, so there is no switch between falling and swimming.
+			double authority = 1.0 - Math.min(1.0, space.length());
+			if (authority > 0.02 && (Object) this instanceof Player swimmer && !swimmer.getAbilities().flying && this.jumping != swimmer.isShiftKeyDown()) {
 				Vec3 center = this.getBoundingBox().getCenter();
 				Vec3 up = layout.cubeOffset(SeamLayout.SPACE, center.x, center.y, center.z);
 				if (up.lengthSqr() > 1.0E-6) {
-					this.setDeltaMovement(this.getDeltaMovement().add(up.normalize().scale(this.jumping ? SPACE_SWIM_RISE : -SPACE_SWIM_RISE)));
+					this.setDeltaMovement(this.getDeltaMovement().add(up.normalize().scale(authority * (this.jumping ? SPACE_SWIM_RISE : -SPACE_SWIM_RISE))));
 				}
 			}
 			return;

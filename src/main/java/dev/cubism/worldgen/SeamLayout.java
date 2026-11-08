@@ -48,8 +48,8 @@ public final class SeamLayout {
 	private static final double STRIP_RETURN_MARGIN = 16.0;
 	/** Blocks between the box corners of the storage top and the exosphere, so the sphere holds the whole box. */
 	private static final double EXOSPHERE_CORNER_GAP = 20.0;
-	/** Blocks past the exosphere over which the pull fades out. */
-	private static final double EXOSPHERE_FADE = 16.0;
+	/** Blocks past the exosphere over which the pull fades out, with a smoothstep, so weightlessness comes on slowly. */
+	private static final double EXOSPHERE_FADE = 120.0;
 
 	private static volatile @Nullable SeamLayout clientOverworld;
 	private static volatile @Nullable SeamLayout clientNether;
@@ -468,6 +468,19 @@ public final class SeamLayout {
 		return Math.max(MIN_TURN_RADIUS, this.edgeRounding());
 	}
 
+	/** How much wider the turn of the pull gets for each block of height over the ground, for creative and spectator flight. */
+	private static final double FLIGHT_RADIUS_RATE = 0.5;
+
+	/**
+	 * The radius of the turn of the pull for creative and spectator flight at a level (the box norm of the position,
+	 * relative to the cube center). It grows with the height over the ground, as the levels of a rounded cube do, so
+	 * high up the pull turns slowly over an edge and meets the round pull of space without a step. Walking and elytra
+	 * keep {@link #turnRadius} at every height.
+	 */
+	public double flightRadius(double level) {
+		return this.turnRadius() + FLIGHT_RADIUS_RATE * Math.max(0.0, level - this.radius);
+	}
+
 	/** {@link #airGravity(double, double, double, double)} with the turn of the pull, {@link #turnRadius}. */
 	public @Nullable Vec3 airGravity(double x, double y, double z) {
 		return this.airGravity(x, y, z, this.turnRadius());
@@ -517,8 +530,8 @@ public final class SeamLayout {
 	}
 
 	/** The pull of the box levels at a position relative to the cube center (see {@link #cubeOffset}), in the cube frame. */
-	private @Nullable Vec3 boxPull(double cx, double cy, double cz) {
-		double core = levelCore(Math.abs(cx), Math.abs(cy), Math.abs(cz), this.turnRadius());
+	private @Nullable Vec3 boxPull(double cx, double cy, double cz, double radius) {
+		double core = levelCore(Math.abs(cx), Math.abs(cy), Math.abs(cz), radius);
 		return levelNormal(cx - Math.clamp(cx, -core, core), cy - Math.clamp(cy, -core, core), cz - Math.clamp(cz, -core, core));
 	}
 
@@ -552,9 +565,14 @@ public final class SeamLayout {
 	 * past the exosphere the pull fades out.
 	 */
 	public @Nullable Vec3 spacePull(double cx, double cy, double cz) {
+		return this.spacePull(cx, cy, cz, this.turnRadius());
+	}
+
+	/** {@link #spacePull(double, double, double)} with the radius of the turn of the box part, see {@link #flightRadius}. */
+	public @Nullable Vec3 spacePull(double cx, double cy, double cz, double radius) {
 		double level = Math.max(Math.abs(cx), Math.max(Math.abs(cy), Math.abs(cz)));
 		double top = this.stratosphereTop();
-		Vec3 box = this.boxPull(cx, cy, cz);
+		Vec3 box = this.boxPull(cx, cy, cz, radius);
 		if (level <= top) {
 			return box;
 		}
@@ -562,7 +580,8 @@ public final class SeamLayout {
 		Vec3 radial = new Vec3(-cx / distance, -cy / distance, -cz / distance);
 		double exosphere = this.exosphereRadius();
 		if (distance >= exosphere) {
-			double share = 1.0 - (distance - exosphere) / EXOSPHERE_FADE;
+			double x = Mth.clamp((distance - exosphere) / EXOSPHERE_FADE, 0.0, 1.0);
+			double share = 1.0 - x * x * (3.0 - 2.0 * x);
 			return share <= 0.0 ? null : radial.scale(share);
 		}
 		// The share of the way from the box of the top to the sphere, along the ray from the center.
@@ -580,7 +599,7 @@ public final class SeamLayout {
 			return this.airGravity(x, y, z, radius);
 		}
 		Vec3 p = this.cubeOffset(SPACE, x, y, z);
-		Vec3 pull = this.spacePull(p.x, p.y, p.z);
+		Vec3 pull = this.spacePull(p.x, p.y, p.z, radius);
 		Vec3 direction = pull == null || pull.lengthSqr() < 1.0E-6 ? p.reverse() : pull;
 		return direction.lengthSqr() < 1.0E-12 ? null : direction.normalize();
 	}
