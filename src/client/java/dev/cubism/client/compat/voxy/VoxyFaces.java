@@ -382,9 +382,10 @@ public final class VoxyFaces {
 	}
 
 	/**
-	 * Fills the voxels of a section that are past the wedge of its face with the real blocks there, from the face that
-	 * owns them, as the meshers of Sodium read them (see LevelSliceMixin). The region of a face holds only air past its
-	 * wedge, so Voxy would draw the cut faces of the ground along the diagonal. The draw of the face clips these voxels away.
+	 * Fills the voxels of a section that are past the wedge of its face with the blocks of the face mirrored across the
+	 * diagonal, or, where the mirror is not loaded, with the real blocks of the face that owns them. The region of a face
+	 * holds only air past its wedge, so Voxy would draw the cut faces of the ground along the diagonal. The draw of the
+	 * face clips these voxels away.
 	 * This runs on a Voxy thread and reads the client level, as the meshers of Sodium do from their threads.
 	 */
 	public static VoxelizedSection fillPastWedge(VoxelizedSection section, Mapper mapper) {
@@ -408,11 +409,27 @@ public final class VoxyFaces {
 		int[] owner = new int[3];
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		int nonAir = 0;
+		int ox = layout.inRegion(bx + 8, bz + 8) ? layout.offsetX(layout.faceIndexAt(bx + 8)) : 0;
 		for (int i = 0; i < 4096; i++) {
 			int x = bx + (i & 15), y = by + (i >> 8 & 15), z = bz + (i >> 4 & 15);
-			// The face across the seam is loaded later or not at all; reingestAcrossSeam fills the voxel when it loads.
-			if (!layout.insideWedge(x, y, z) && layout.ownerStorage(x, y, z, owner) && level.hasChunk(owner[0] >> 4, owner[2] >> 4)) {
-				pos.set(owner[0], owner[1], owner[2]);
+			if (layout.insideWedge(x, y, z)) {
+				if (!Mapper.isAir(data[i])) {
+					nonAir++;
+				}
+				continue;
+			}
+			// The mirror of the voxel across the diagonal, in the wedge of the same face. The coarse levels of Voxy merge
+			// voxels on both sides of the diagonal, and the clip keeps a merged voxel on the face side. With the real blocks
+			// across the seam, the sea floor of the next face showed over the water of this face along the seam.
+			int lx = x - ox, ly = y - layout.centerY;
+			boolean alongX = Math.abs(lx) >= Math.abs(z);
+			int mx = alongX ? ox + (lx >= 0 ? ly : -ly) : x;
+			int mz = alongX ? z : (z >= 0 ? ly : -ly);
+			int my = layout.centerY + (alongX ? Math.abs(lx) : Math.abs(z));
+			boolean mirrored = level.hasChunk(mx >> 4, mz >> 4) && layout.insideWedge(mx, my, mz);
+			// Without the mirror, the real block across the seam. That face is loaded later or not at all; reingestAcrossSeam fills the voxel when it loads.
+			if (mirrored || layout.ownerStorage(x, y, z, owner) && level.hasChunk(owner[0] >> 4, owner[2] >> 4)) {
+				pos.set(mirrored ? mx : owner[0], mirrored ? my : owner[1], mirrored ? mz : owner[2]);
 				BlockState state = level.getBlockState(pos);
 				if (!state.isSolidRender() && state.getFluidState().isEmpty()) {
 					// A block that is not a full cube keeps the orientation of its own face, which is turned here.
