@@ -20,7 +20,7 @@ public abstract class ShaderChunkRendererMixin {
 		builder.withUniform("u_LightTex2", UniformType.COMBINED_IMAGE_SAMPLER);
 		builder.withUniform("u_LightTex3", UniformType.COMBINED_IMAGE_SAMPLER);
 		builder.withUniform("u_LightTex4", UniformType.COMBINED_IMAGE_SAMPLER);
-		builder.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER);
+		builder.withUniform("CubismLightBlend", UniformType.UNIFORM_BUFFER);
 		return original.call(builder);
 	}
 }

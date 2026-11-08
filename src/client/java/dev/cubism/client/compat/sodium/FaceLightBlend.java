@@ -33,6 +33,6 @@ public final class FaceLightBlend {
 		if (on) {
 			frame.m00((float) (cameraX - layout.offsetX(face))).m01((float) (cameraY - layout.centerY)).m02((float) cameraZ).m03(WIDTH);
 		}
-		pass.setUniform("DynamicTransforms", RenderSystem.getDynamicUniforms().writeTransform(new Matrix4f(), new Vector4f(on ? 1.0F : 0.0F, 0.0F, 0.0F, 0.0F), new Vector3f(), frame));
+		pass.setUniform("CubismLightBlend", RenderSystem.getDynamicUniforms().writeTransform(new Matrix4f(), new Vector4f(on ? 1.0F : 0.0F, 0.0F, 0.0F, 0.0F), new Vector3f(), frame));
 	}
 }
