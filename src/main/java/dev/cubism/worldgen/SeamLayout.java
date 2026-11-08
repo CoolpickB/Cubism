@@ -596,6 +596,26 @@ public final class SeamLayout {
 	 */
 	public @Nullable Vec3 pullAt(double x, double y, double z, double radius) {
 		if (!this.inSpace(Mth.floor(x), Mth.floor(z))) {
+			int region = this.hasSpace() ? this.regionAt(Mth.floor(x), Mth.floor(z)) : -1;
+			if (region >= 0) {
+				// Over the top of the stratosphere the field is the one of space, also on the face that still stores the
+				// entity: the hand-off to the space region, 24 blocks higher, then turns the view by nothing.
+				Vec3 up = this.cubeOffset(region, x, y, z);
+				if (Math.max(Math.abs(up.x), Math.max(Math.abs(up.y), Math.abs(up.z))) > this.stratosphereTop()) {
+					Vec3 pull = this.spacePull(up.x, up.y, up.z, radius);
+					Vec3 cube = pull == null || pull.lengthSqr() < 1.0E-6 ? up.reverse() : pull;
+					if (cube.lengthSqr() < 1.0E-12) {
+						return null;
+					}
+					cube = cube.normalize();
+					int[] m = this.rotations[region];
+					return new Vec3(
+						m[0] * cube.x + m[3] * cube.y + m[6] * cube.z,
+						m[1] * cube.x + m[4] * cube.y + m[7] * cube.z,
+						m[2] * cube.x + m[5] * cube.y + m[8] * cube.z
+					);
+				}
+			}
 			return this.airGravity(x, y, z, radius);
 		}
 		Vec3 p = this.cubeOffset(SPACE, x, y, z);

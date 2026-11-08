@@ -21,6 +21,7 @@ import me.cortex.voxy.common.world.service.VoxelIngestService;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.opengl.GL45C;
 import org.slf4j.Logger;
@@ -216,9 +217,35 @@ public final class VoxyFaces {
 		return true;
 	}
 
+	/**
+	 * From space the faces overlap in the view. Each face draws its levels of detail without the depth of the faces
+	 * before it, so the face that draws last shows on top, and a far face drawn after the near one showed through it.
+	 * The faces draw from the farthest to the nearest: the faces that turn away from the camera first. On a face the
+	 * camera face keeps drawing first.
+	 */
+	private static void sortFarToNear() {
+		SeamLayout layout = SeamClient.layout;
+		if (layout == null || DEFERRED.size() < 2) {
+			return;
+		}
+		Vec3 camera = Minecraft.getInstance().gameRenderer.mainCamera().position();
+		if (!SeamClient.faceFarView(layout, camera)) {
+			return;
+		}
+		Vec3 c = layout.cubeOffset(SeamLayout.SPACE, camera.x, camera.y, camera.z);
+		DEFERRED.sort(java.util.Comparator.comparingDouble(draw -> {
+			if (draw.face >= SeamLayout.FACES.length) {
+				return Double.NEGATIVE_INFINITY;
+			}
+			Vec3 down = layout.faceDown(draw.face);
+			return -(down.x * c.x + down.y * c.y + down.z * c.z);
+		}));
+	}
+
 	private static void drawDeferred(VoxyRenderSystem system) {
 		drawingDeferred = true;
 		copied = false;
+		sortFarToNear();
 		try {
 			laterFace = false;
 			for (Deferred draw : DEFERRED) {
