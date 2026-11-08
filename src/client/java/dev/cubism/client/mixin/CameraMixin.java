@@ -291,7 +291,7 @@ public abstract class CameraMixin {
 			CubeFlight.traceLine(String.format(java.util.Locale.ROOT,
 				"  frame=%.3f wanted=%.3f %.3f %.3f shown=%.3f %.3f %.3f reach=%.3f of %.3f fwd=%.3f %.3f %.3f up=%.3f %.3f %.3f",
 				now, wanted.x, wanted.y, wanted.z, clear.x, clear.y, clear.z, reach, wanted.distanceTo(vanillaEye),
-				this.forwards.x, this.forwards.y, this.forwards.z, this.up.x, this.up.y, this.up.z));
+				this.forwards.x, this.forwards.y, this.forwards.z, this.up.x, this.up.y, this.up.z) + CubeFlight.traceFrameTimes());
 			return;
 		}
 		Quaternionf eyeFrame = this.cubism$eyeFrame;

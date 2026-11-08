@@ -2,6 +2,7 @@ package dev.cubism.client.compat.sodium.mixin;
 
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.textures.GpuSampler;
+import dev.cubism.client.CubeFlight;
 import dev.cubism.client.SeamClient;
 import dev.cubism.client.compat.sodium.SeamFaces;
 import net.caffeinemc.mods.sodium.client.SodiumClientMod;
@@ -25,6 +26,7 @@ import org.joml.Vector3d;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -90,9 +92,12 @@ public abstract class SodiumWorldRendererMixin {
 		ci.cancel();
 	}
 
+	@Unique private long cubism$terrainStart;
+
 	@Inject(method = "setupTerrain", at = @At("HEAD"))
 	private void cubism$swapPrimary(Camera camera, Viewport viewport, FogParameters fog, boolean occlusion, boolean immediately,
 		Matrix4f cullMatrix, CallbackInfo ci) {
+		this.cubism$terrainStart = System.nanoTime();
 		if (SeamClient.layout == null) {
 			return;
 		}
@@ -112,9 +117,13 @@ public abstract class SodiumWorldRendererMixin {
 	@Inject(method = "setupTerrain", at = @At("TAIL"))
 	private void cubism$driveFaces(Camera camera, Viewport viewport, FogParameters fog, boolean occlusion, boolean immediately,
 		Matrix4f cullMatrix, CallbackInfo ci) {
+		long folded = System.nanoTime();
 		if (SeamFaces.active()) {
 			SeamFaces.drive(camera, viewport, fog, occlusion, immediately, cullMatrix, immediately ? this.renderDistance : 1);
 		}
+		long end = System.nanoTime();
+		CubeFlight.traceFoldedNanos += end - folded;
+		CubeFlight.traceTerrainNanos += end - this.cubism$terrainStart;
 	}
 
 	@Inject(method = "prepareChunkRendering", at = @At("TAIL"))
