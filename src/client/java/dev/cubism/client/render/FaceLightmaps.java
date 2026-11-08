@@ -123,6 +123,33 @@ public final class FaceLightmaps {
 		);
 	}
 
+	public static boolean ready() {
+		return ready;
+	}
+
+	/**
+	 * The lightmaps of the faces across the +X, -X, +Z and -Z edges of a face in its storage frame, for the terrain
+	 * shader to blend toward near the diagonals. A face without a lightmap gets {@code fallback}.
+	 */
+	public static GpuTextureView[] neighbors(int face, GpuTextureView fallback) {
+		GpuTextureView[] views = {fallback, fallback, fallback, fallback};
+		SeamLayout layout = SeamClient.layout;
+		if (layout == null || face < 0 || face >= FACES) {
+			return views;
+		}
+		int[] m = layout.rotation(face);
+		int[][] sides = {{m[0], m[3], m[6]}, {-m[0], -m[3], -m[6]}, {m[2], m[5], m[8]}, {-m[2], -m[5], -m[8]}};
+		for (int side = 0; side < 4; side++) {
+			for (int other = 0; other < FACES; other++) {
+				int[] n = layout.rotation(other);
+				if (MAPS[other] != null && n[1] == sides[side][0] && n[4] == sides[side][1] && n[7] == sides[side][2]) {
+					views[side] = MAPS[other].getTextureView();
+				}
+			}
+		}
+		return views;
+	}
+
 	/** The lightmap of the face that draws now, where the one of the camera is asked for. */
 	public static GpuTextureView view(GpuTextureView requested, GpuTextureView camera) {
 		SeamLayout layout = SeamClient.layout;

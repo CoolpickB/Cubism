@@ -5,7 +5,10 @@
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"ChunkBuilderMeshingTaskMixin",
+		"DefaultChunkRendererMixin",
 		"LevelSliceMixin",
+		"ShaderChunkRendererMixin",
+		"ShaderManagerMixin",
 		"SodiumWorldRendererMixin"
 	],
 	"injectors": {
