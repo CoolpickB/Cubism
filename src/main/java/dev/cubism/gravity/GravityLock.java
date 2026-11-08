@@ -65,7 +65,7 @@ public final class GravityLock {
 	private GravityLock() {}
 
 	public static void register() {
-		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT).register(output -> output.insertAfter(Items.NETHERITE_BOOTS, SHULKER_TREADS));
+		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT).register(output -> output.insertAfter(Items.TURTLE_HELMET, SHULKER_TREADS));
 	}
 
 	private static Identifier id(String path) {
