@@ -29,9 +29,6 @@ const float DENSITY = 0.15;
 const float SUN_REACH = 0.81649658;
 const vec3 AXIS = vec3(0.57735027);
 const int STEPS = 48;
-// Seen from space, the night side turns dark this much faster past the terminator. The twilight of a ground view
-// spans about 30 degrees past it, which from orbit made the whole globe look lit until the camera was over the night side.
-const float ORBIT_TWILIGHT = 2.5;
 
 void main() {
 #ifdef SPACE
@@ -51,9 +48,6 @@ void main() {
 
     vec3 q0 = camera - clamp(camera, -inner, inner);
     float ground = min(-48.0, length(q0) - EDGE - 16.0);
-
-    // 0 on the ground, 1 well above the air.
-    float orbit = clamp((length(q0) - EDGE - TOP) / 300.0, 0.0, 1.0);
 
     float far = 2.0 * (inner + EDGE + TOP) * 1.7320508;
     float transmittance = 1.0;
@@ -78,8 +72,7 @@ void main() {
         vec3 normal = r > 0.0 ? q / r : vec3(0.0, 1.0, 0.0);
 
         // The local time is the vanilla time with the same height of the sun over this bit of air.
-        float lit = dot(sun, normal);
-        float rise = acos(clamp((lit < 0.0 ? lit * mix(1.0, ORBIT_TWILIGHT, orbit) : lit) / SUN_REACH, -1.0, 1.0)) / PI * 12000.0;
+        float rise = acos(clamp(dot(sun, normal) / SUN_REACH, -1.0, 1.0)) / PI * 12000.0;
         float ticks = dot(sunMotion, normal) >= 0.0 ? 6000.0 - rise : 6000.0 + rise;
         vec4 sky = texture(Sampler0, vec2(ticks / DAY, 1.0 / 6.0));
         vec3 fog = texture(Sampler0, vec2(ticks / DAY, 0.5)).rgb;
