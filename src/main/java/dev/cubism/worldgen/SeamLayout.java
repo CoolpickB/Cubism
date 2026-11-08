@@ -392,7 +392,7 @@ public final class SeamLayout {
 	}
 
 	/** The smallest radius of the turn over an edge, so that a sharp edge still turns the pull and the view smoothly. */
-	public static final int MIN_TURN_RADIUS = 8;
+	public static final int MIN_TURN_RADIUS = 12;
 
 	/** The radius of the turn of the pull over an edge, at every height: the edge rounding, but at least {@link #MIN_TURN_RADIUS}. */
 	public int turnRadius() {
@@ -416,8 +416,8 @@ public final class SeamLayout {
 	 *
 	 * <p>The rounding is a curve of the norm of power 2.5, between a circle (2) and the cubic norm (3). A circle starts the
 	 * turn at its full rate, about 7 degrees per block, so the view snapped from level into a turn. The cubic norm starts
-	 * at a rate of 0 but then felt too sudden on the diagonal (9 degrees per block). This curve starts at a rate of 0 and
-	 * reaches about 7 degrees per block.
+	 * at a rate of 0 but then felt too sudden on the diagonal (9 degrees per block at a radius of 8). This curve starts at
+	 * a rate of 0 and is fastest on the diagonal, about 56 / radius degrees per block (4.7 at the smallest radius, 12).
 	 */
 	public @Nullable Vec3 airGravity(double x, double y, double z, double radius) {
 		int bx = Mth.floor(x);
