@@ -14,6 +14,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
+import org.joml.AxisAngle4f;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -84,6 +85,10 @@ public abstract class CameraMixin {
 	/** The frame of the view of {@link CubeFlight#viewFrame} in this frame and the last one. The eye stands along it. */
 	@Unique private Quaternionf cubism$view = new Quaternionf();
 	@Unique private Quaternionf cubism$lastView = new Quaternionf();
+	/** The camera rotation of the frame before the last one, and the times of the two frames, for the turn rate of the camera. */
+	@Unique private final Quaternionf cubism$rotationBefore = new Quaternionf();
+	@Unique private float cubism$timeBefore;
+	@Unique private float cubism$lastTime;
 	/**
 	 * How far the shown eye stands from the vanilla eye, in blocks. It moves in at once when a wall comes near and out
 	 * at {@link #EYE_EASE_OUT} blocks per tick. A broken block loses its collision at once, but its chunk mesh is built
@@ -107,6 +112,9 @@ public abstract class CameraMixin {
 			this.cubism$lastView = this.cubism$view;
 		}
 		this.cubism$turnAcrossSeam(partialTicks, now, airTurn);
+		this.cubism$rotationBefore.set(this.rotation);
+		this.cubism$timeBefore = this.cubism$lastTime;
+		this.cubism$lastTime = now;
 		this.cubism$frameRotation.set(this.cubism$smoothedCorrection(now).mul(airTurn));
 		this.cubism$eyeFrame.set(this.cubism$smoothedCorrection(now));
 		SeamClient.lightFrame.set(this.cubism$smoothedCorrection(now).mul(this.cubism$view));
@@ -178,8 +186,10 @@ public abstract class CameraMixin {
 			);
 			if (carried.distanceToSqr(position) < SEAM_TURN_MAX_JUMP * SEAM_TURN_MAX_JUMP) {
 				Quaternionf motion = new Quaternionf().setFromNormalized(new Matrix3f(m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]));
-				// The camera rotation still holds the last frame, with any turn in progress.
-				Quaternionf shown = new Quaternionf(motion).mul(this.rotation);
+				// The camera rotation still holds the last frame, with any turn in progress. The correction starts from
+				// where the camera turned on to by now at its last rate. From the last frame itself, the view stood still
+				// for this frame and then caught up, a visible hitch while the view turns over an edge.
+				Quaternionf shown = new Quaternionf(motion).mul(this.cubism$continued(now));
 				float yRot = this.entity.getViewYRot(partialTicks);
 				float xRot = this.entity.getViewXRot(partialTicks);
 				// The front view of vanilla looks back at the entity, and the last rotation holds that view.
@@ -188,6 +198,7 @@ public abstract class CameraMixin {
 				float roll = BarrelRoll.rolling(this.entity) ? BarrelRoll.roll(this.entity) : 0.0F;
 				Quaternionf view = new Quaternionf(airTurn).mul(mirrored ? CubeFlight.rolledView(yRot + 180.0F, -xRot, roll) : CubeFlight.rolledView(yRot, xRot, roll));
 				this.cubism$correction.set(shown.mul(view.conjugate()));
+				CubeFlight.traceLine(String.format(java.util.Locale.ROOT, "  seam correction=%.2f deg", Math.toDegrees(this.cubism$correction.angle())));
 				// The eye stands along the air frame. The correction keeps it where the motion carries the last eye.
 				this.cubism$eyeCorrection.set(motion.mul(this.cubism$smoothed(this.cubism$eyeCorrection, now))
 					.mul(this.cubism$lastView).mul(new Quaternionf(this.cubism$view).conjugate()));
@@ -197,6 +208,20 @@ public abstract class CameraMixin {
 		}
 		this.cubism$lastFace = face;
 		this.cubism$lastPosition = position;
+	}
+
+	/** The rotation of the last frame, turned on to the given time at the rate between the last two frames. */
+	@Unique
+	private Quaternionf cubism$continued(float now) {
+		Quaternionf last = new Quaternionf(this.rotation);
+		float span = this.cubism$lastTime - this.cubism$timeBefore;
+		float ahead = now - this.cubism$lastTime;
+		if (span <= 1.0E-4F || span > 1.0F || ahead <= 0.0F) {
+			return last;
+		}
+		AxisAngle4f turn = new AxisAngle4f(new Quaternionf(this.rotation).mul(new Quaternionf(this.cubism$rotationBefore).conjugate()));
+		float angle = turn.angle > (float) Math.PI ? turn.angle - 2.0F * (float) Math.PI : turn.angle;
+		return new Quaternionf().rotationAxis(angle * Math.min(ahead / span, 3.0F), turn.x, turn.y, turn.z).mul(last);
 	}
 
 	@Unique
