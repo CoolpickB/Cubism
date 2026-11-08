@@ -208,6 +208,7 @@ public final class CubeShaderPatch {
 		    // blocks of cubismAlt, and over an edge the place follows the normal of that rounding, as the mesh does.
 		    vec4 cubismPlanetPlace(vec3 p) {
 		        float rounding = cubismPlanetShort(ivec2(0, 64));
+		        if (rounding < 1.0) return vec4(0.0, 0.0, 1.0e6, -1.0);
 		        float radius = cubism_core + 32.0;
 		        float core = radius - rounding;
 		        vec3 q = clamp(p, -core, core);
@@ -231,6 +232,8 @@ public final class CubeShaderPatch {
 		        for (int j = 0; j < 96; j++) {
 		            vec3 p = origin + t * dir;
 		            vec4 place = cubismPlanetPlace(p);
+		            // No texture yet.
+		            if (place.w < 0.0) return maxT;
 		            ivec2 cell = clamp(ivec2(floor(place.xy)), ivec2(0), ivec2(63));
 		            if (place.z < cubismPlanetShort(ivec2(int(place.w) * 64 + cell.x, cell.y))) return t;
 		            // The planet is convex, so a ray over every column that goes away from it never comes back.
@@ -243,6 +246,7 @@ public final class CubeShaderPatch {
 		    // 1 over a cold biome, 0 elsewhere, blended between the centers of the cells.
 		    float cubismPlanetCold(vec3 p) {
 		        vec4 place = cubismPlanetPlace(p);
+		        if (place.w < 0.0) return 0.0;
 		        vec2 c = clamp(place.xy - 0.5, vec2(0.0), vec2(63.0));
 		        ivec2 i = ivec2(min(floor(c), vec2(62.0)));
 		        vec2 f = c - vec2(i);
@@ -620,12 +624,13 @@ public final class CubeShaderPatch {
 				.replace("GetAtmFogAltitudeFactor(cameraPosition.y + ", "GetAtmFogAltitudeFactor(cubismCameraAlt() + ");
 		}
 		if (name.endsWith("/program/deferred1.glsl")) {
-			// From orbit the aurora also shows over the ground of the planet, in front of the ground that the ray meets.
+			// The aurora also shows in front of the ground, up to the ground that the ray meets. A camera over the band sees it
+			// below, over the ground, before it is in orbit.
 			source = source.replace("DoFog(color, skyFade, lViewPos, playerPos, VdotU, VdotS, dither, false, 0.0);\n",
 				"""
 				DoFog(color, skyFade, lViewPos, playerPos, VdotU, VdotS, dither, false, 0.0);
 				        #if AURORA_STYLE > 0 && defined OVERWORLD && defined CUBISM_CUBE_AURORA
-				            if (cubismSpace() > 0.0) color.rgb += GetAuroraBorealisCube(viewPos.xyz, VdotU, dither, lViewPos) * cubismSpace();
+				            if (cubism_active != 0) color.rgb += GetAuroraBorealisCube(viewPos.xyz, VdotU, dither, lViewPos);
 				        #endif
 				""");
 		}

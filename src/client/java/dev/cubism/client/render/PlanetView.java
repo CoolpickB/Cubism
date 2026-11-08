@@ -24,6 +24,7 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
 
 /**
  * The cube from space as a coarse mesh, for where the levels of detail draw nothing and for a game without them. The
@@ -243,6 +244,14 @@ public final class PlanetView {
 		target.getPixels().setPixel(0, cells, packed(layout.edgeRounding(), false));
 		target.getPixels().setPixel(1, cells, packed(highest, false));
 		target.upload();
+		int cold = 0;
+		for (boolean[] face : nodeCold) {
+			for (boolean node : face) {
+				cold += node ? 1 : 0;
+			}
+		}
+		LoggerFactory.getLogger("cubism").info("Planet texture for shader packs: rounding {}, highest column {}, {} cold nodes, registered {}",
+			layout.edgeRounding(), highest, cold, Minecraft.getInstance().getTextureManager().getTexture(TEXTURE) == target);
 	}
 
 	private static int texel(double along, int radius) {
