@@ -2,6 +2,8 @@ package dev.cubism.client.mixin;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.cubism.client.CubeFlight;
+import dev.cubism.seam.SeamInteraction;
+import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
@@ -46,7 +48,11 @@ public abstract class AvatarRendererMixin {
 			AIR.remove(state);
 			return;
 		}
-		AIR.put(state, new Pose(air, CubeFlight.flightWeight(partialTicks)));
+		// In space the body floats, and its box stays upright in the cube frame while the view frame turns with the
+		// planet, so it turns about its center, as in flight, or the feet would swing off the box.
+		SeamLayout layout = SeamLayout.of(player.level());
+		boolean floating = layout != null && SeamInteraction.regionFace(layout, player.getX(), player.getZ()) == SeamLayout.SPACE;
+		AIR.put(state, new Pose(air, floating ? 1.0F : CubeFlight.flightWeight(partialTicks)));
 		float headRot = Mth.rotLerp(partialTicks, entity.yHeadRotO, entity.yHeadRot);
 		// The look of this frame. The head yaw follows it a tick late, and close to straight down in a tilted frame the
 		// yaw turns far for a small turn of the look, so the late yaw with the pitch of this frame jerked the model.
