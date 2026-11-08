@@ -71,6 +71,7 @@ public final class PlanetView {
 	public static void load(byte[] bytes) {
 		close();
 		data = bytes;
+		LoggerFactory.getLogger("cubism").info("Planet map received: {} bytes, layout {}", bytes.length, SeamClient.layout != null);
 	}
 
 	public static void close() {
@@ -122,6 +123,9 @@ public final class PlanetView {
 		int nodes = cells + 1;
 		int faces = SeamLayout.FACES.length;
 		if (bytes.length != faces * nodes * nodes * PlanetMap.BYTES_PER_NODE) {
+			LoggerFactory.getLogger("cubism").warn("Planet map has {} bytes, expected {}", bytes.length, faces * nodes * nodes * PlanetMap.BYTES_PER_NODE);
+			// A map of another version of the mod. Without it, this ran again each frame.
+			data = null;
 			return;
 		}
 		ByteBuffer in = ByteBuffer.wrap(bytes);

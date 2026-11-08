@@ -132,7 +132,10 @@ public final class CubeNetworking {
 					if (handler.getPlayer().connection == handler) {
 						ServerPlayNetworking.send(handler.getPlayer(), new PlanetPayload(data));
 					}
-				}));
+				})).exceptionally(error -> {
+					org.slf4j.LoggerFactory.getLogger("cubism").error("The planet map failed", error);
+					return null;
+				});
 			}
 		});
 	}

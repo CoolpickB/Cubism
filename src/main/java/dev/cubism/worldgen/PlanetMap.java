@@ -75,6 +75,7 @@ public final class PlanetMap {
 						out.writeByte(rgb >> 16);
 						out.writeByte(rgb >> 8);
 						out.writeByte(rgb);
+						out.writeByte(biome.getBaseTemperature() <= COLD ? 1 : 0);
 					}
 				}
 			}
