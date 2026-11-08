@@ -229,6 +229,11 @@ public final class CubeSky {
 		return DAY_SKY;
 	}
 
+	/** 0 on the ground, 1 well above the air: how far the camera is into orbit. */
+	public static float orbit() {
+		return orbit;
+	}
+
 	public static float starMax() {
 		return starMax;
 	}

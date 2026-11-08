@@ -28,6 +28,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * An entity that crosses a seam moves to another face region and its view turns with the face motion. The camera
@@ -72,6 +73,15 @@ public abstract class CameraMixin {
 	private Vec3 cubism$probeAtTimeFocus(Vec3 position) {
 		SeamLayout layout = SeamLayout.of(this.entity.level());
 		return layout == null ? position : layout.ownerStorage(CubeFlight.timeFocus(this.entity, 1.0F));
+	}
+
+	/** The extractor of the lightmap reads the probe of the camera. For the lightmap of a face it gets the probe of that face. */
+	@Inject(method = "attributeProbe", at = @At("RETURN"), cancellable = true)
+	private void cubism$faceProbe(CallbackInfoReturnable<net.minecraft.world.attribute.EnvironmentAttributeProbe> cir) {
+		var probe = dev.cubism.client.render.FaceLightmaps.probeOverride();
+		if (probe != null) {
+			cir.setReturnValue(probe);
+		}
 	}
 
 	@Unique private Entity cubism$lastEntity;
