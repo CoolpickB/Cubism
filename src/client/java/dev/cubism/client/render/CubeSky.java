@@ -82,6 +82,8 @@ public final class CubeSky {
 	private static final double ORBIT_SPAN = 400.0;
 	/** 0 on the ground, 1 well above the air: how much the sky is that of the planet seen from afar. */
 	private static float orbit;
+	/** The sky fog distance read at the middle of a face, the same wherever the camera is. */
+	private static float planetSkyEnd = 1.0F;
 	private static double sq(double v) {
 		return v * v;
 	}
@@ -310,6 +312,7 @@ public final class CubeSky {
 
 		Vector3fc cameraSky = level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, sample, null);
 		float daylight = Math.max(cameraSky.x(), Math.max(cameraSky.y(), cameraSky.z())) / maxSky;
+		planetSkyEnd = level.environmentAttributes().getValue(EnvironmentAttributes.SKY_FOG_END_DISTANCE, new Vec3(layout.offsetX(0) + 0.5, layout.centerY + layout.radius, 0.5), null);
 		// From orbit the moon is lit by the sun whatever the local time under the camera is.
 		moonBrightness = Mth.lerp(orbit, 1.0F - 0.85F * Mth.clamp(daylight, 0.0F, 1.0F), 1.0F);
 	}
@@ -335,7 +338,7 @@ public final class CubeSky {
 			box = vertices;
 		}
 		var transforms = RenderSystem.getDynamicUniforms().writeTransform(
-			RenderSystem.getModelViewMatrixCopy(), new Vector4f(radius, starMax, orbit, 0.0F), SUN, FRAME
+			RenderSystem.getModelViewMatrixCopy(), new Vector4f(radius, starMax, orbit, planetSkyEnd), SUN, FRAME
 		);
 		renderPass.pushDebugGroup(() -> label);
 		renderPass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));

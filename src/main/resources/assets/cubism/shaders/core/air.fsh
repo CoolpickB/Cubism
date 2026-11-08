@@ -7,7 +7,7 @@
 // Inputs, packed into the transform uniforms by CubeSky:
 //   TextureMat: columns 0-2 turn the camera face frame into the cube frame. Column 3 is the camera position in the
 //               cube frame, and in w the local time at the camera.
-//   ColorModulator: x the cube radius, y the brightest stars of the day, z how far the camera is into orbit, 0 to 1.
+//   ColorModulator: x the cube radius, y the brightest stars of the day, z how far the camera is into orbit, 0 to 1, w the sky fog distance of the planet.
 //   ModelOffset: the direction toward the sun in the cube frame.
 // Sampler0 holds the vanilla colors over one day: row 0 the sky color with the star brightness in alpha, row 1 the
 // fog color, row 2 the sunrise and sunset glow with its strength in alpha.
@@ -40,6 +40,10 @@ void main() {
     float inner = ColorModulator.x - EDGE;
     float starMax = ColorModulator.y;
     vec3 sun = ModelOffset;
+    // The fog values of vanilla belong to the camera and change with the face under it, so they turn into the same
+    // value for the whole planet as the camera rises.
+    float skyEnd = mix(FogSkyEnd, ColorModulator.w, ColorModulator.z);
+    float fogAlpha = mix(FogColor.a, 1.0, ColorModulator.z);
     vec3 sunMotion = cross(AXIS, sun);
 
     // The fog color of vanilla at the camera has extra tints, such as the blend toward the sky at a short render
@@ -87,8 +91,8 @@ void main() {
         // to fog toward the horizon. Here the horizon is that of the surface under this bit of air, so the haze bends
         // over the edges with the air.
         float elevation = dot(direction, normal);
-        float haze = elevation <= 0.0 ? 1.0 : clamp(16.0 / (elevation * FogSkyEnd), 0.0, 1.0);
-        vec3 air = mix(sky.rgb, fog, haze * FogColor.a);
+        float haze = elevation <= 0.0 ? 1.0 : clamp(16.0 / (elevation * skyEnd), 0.0, 1.0);
+        vec3 air = mix(sky.rgb, fog, haze * fogAlpha);
 
         float opacity;
         if (height < ground) {
