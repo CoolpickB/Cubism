@@ -86,12 +86,12 @@ public final class CubeFlight {
 		if (player.onGround()) {
 			groundY = y;
 		}
-		Vec3 target = new Vec3(0.0, player.onGround() ? 0.0 : Math.min(0.0, groundY - y), 0.0);
 		if (flies || player.isPassenger() || face < 0 || viewFace < 0) {
-			viewOffset = target;
-			viewOffsetO = target;
+			viewOffset = Vec3.ZERO;
+			viewOffsetO = Vec3.ZERO;
 			groundY = y;
 		} else {
+			Vec3 target = new Vec3(0.0, player.onGround() ? 0.0 : Math.min(0.0, groundY - y), 0.0);
 			Vec3 lag = viewOffset.add(target.subtract(viewOffset).scale(VIEW_EASE)).subtract(target);
 			viewOffset = target.add(lag.length() > VIEW_MAX_LAG ? lag.scale(VIEW_MAX_LAG / lag.length()) : lag);
 		}
