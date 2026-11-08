@@ -349,6 +349,21 @@ public final class CubeShaderPatch {
 
 
 
+		// The distance along the ray from t on to where it comes into the band of the aurora, from below or from above, or -1.
+		// It steps by the gap to the band. A ray that goes under the sea has met the planet.
+		float cubismAuroraEntry(vec3 cam, vec3 dir, float t, float maxT) {
+		    float top = cubismAuroraLow + cubismAuroraDepth;
+		    for (int j = 0; j < 64; j++) {
+		        float alt = cubismAlt(cam + t * dir);
+		        float gap = max(cubismAuroraLow - alt, alt - top);
+		        if (gap < 1.0) return t;
+		        if (alt < 62.0) return -1.0;
+		        t += max(gap, max(2.0, t * 0.01));
+		        if (t > min(maxT, 100000.0)) return -1.0;
+		    }
+		    return -1.0;
+		}
+
 		// The ray ends at maxT, where it meets the ground.
 		vec3 GetAuroraBorealisCube(vec3 viewPos, float VdotU, float dither, float maxT) {
 		    // The rain is at the camera, and from orbit the camera sees past it.
@@ -372,17 +387,8 @@ public final class CubeShaderPatch {
 		    vec3 sunDir = normalize(mat3(cubism_cubeFromView) * cubism_sunPosition);
 		    float top = cubismAuroraLow + cubismAuroraDepth;
 
-		    // Step along the ray into the band of the aurora, from below or from above, by the gap to it.
-		    float t = 0.0;
-		    bool hit = false;
-		    for (int j = 0; j < 64; j++) {
-		        float alt = cubismAlt(cam + t * dir);
-		        float gap = max(cubismAuroraLow - alt, alt - top);
-		        if (gap < 1.0) { hit = true; break; }
-		        t += max(gap, max(2.0, t * 0.01));
-		        if (t > min(maxT, 100000.0)) break;
-		    }
-		    if (!hit) return vec3(0.0);
+		    float t = cubismAuroraEntry(cam, dir, 0.0, maxT);
+		    if (t < 0.0) return vec3(0.0);
 
 		    #ifdef DEFERRED1
 		        int sampleCount = 25;
@@ -396,12 +402,19 @@ public final class CubeShaderPatch {
 		    vec3 aurora = vec3(0.0);
 		    float path = 0.0;
 		    t += layer * dither;
-		    for (int i = 0; i < sampleCount * 2; i++) {
+		    for (int i = 0; i < sampleCount * 3; i++) {
 		        if (t > maxT) break;
 		        vec3 p = cam + t * dir;
 		        float alt = cubismAlt(p);
-		        // Out of the top into space, or out of the bottom toward the ground, which hides the far side of the band.
-		        if (alt < cubismAuroraLow - 1.0 || alt > top + 1.0) break;
+		        // The height along a ray falls and then rises, so a ray out of the top never comes back. A ray out of the bottom
+		        // can come back into the band past an edge, over the next face, unless it meets the planet first.
+		        if (alt > top + 1.0) break;
+		        if (alt < cubismAuroraLow - 1.0) {
+		            t = cubismAuroraEntry(cam, dir, t, maxT);
+		            if (t < 0.0) break;
+		            t += layer * dither;
+		            continue;
+		        }
 		        vec3 n = cubismNormal(p);
 		        // About one sample for each layer that a ray straight up crosses. A slanted ray takes longer steps, which
 		        // weigh more, as it sees more of the aurora.

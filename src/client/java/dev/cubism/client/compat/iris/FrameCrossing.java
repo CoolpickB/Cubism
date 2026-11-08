@@ -32,7 +32,8 @@ public final class FrameCrossing {
 		}
 		int now = layout.regionOfX(Mth.floor(client.gameRenderer.mainCamera().position().x));
 		int[] m = face >= 0 && face != now ? layout.motion(face, now) : null;
-		motion = m != null && m[4] != -1 ? m : null;
+		// Opposite faces never meet, but the space region meets every face, the bottom one too.
+		motion = m != null && (m[4] != -1 || face == SeamLayout.SPACE || now == SeamLayout.SPACE) ? m : null;
 		face = now;
 	}
 
