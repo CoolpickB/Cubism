@@ -343,7 +343,7 @@ public final class CubeSky {
 
 	/** Draws the coarse planet over the stars, when the camera is in orbit. */
 	public static void renderPlanet(RenderPass renderPass) {
-		GpuBuffer vertices = orbit > 0.0F ? PlanetView.mesh() : null;
+		GpuBuffer vertices = orbit > 0.25F ? PlanetView.mesh() : null;
 		if (vertices == null) {
 			return;
 		}

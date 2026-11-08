@@ -7,6 +7,7 @@
 		"ViewportAccessor",
 		"VoxyBoundStoreMixin",
 		"VoxyIngestMixin",
+		"VoxyLightMapHelperMixin",
 		"VoxyPipelineMixin",
 		"VoxyPreviousMatrixMixin",
 		"VoxyReadyColumnsMixin",

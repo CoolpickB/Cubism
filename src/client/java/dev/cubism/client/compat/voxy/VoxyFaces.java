@@ -129,6 +129,9 @@ public final class VoxyFaces {
 		}
 		if (path.endsWith("lod/quad_util.glsl")) {
 			String pos = "    vec4 pos = MVP * vec4(point, 1.0f);";
+			// The fragment shader reads the light, blended toward the faces across the edges, from the id in the top bits.
+			source = replaceOnce(path, source, "    vec4 tinting = getLighting(lighting);", "    vec4 tinting = vec4(1.0, 1.0, 1.0, getLighting(lighting).w);");
+			source = replaceOnce(path, source, "    attributes.z = addin|(face<<8);", "    attributes.z = addin|(face<<8)|(lighting<<16);");
 			source = replaceOnce(path, source, "vec4 getQuadCornerPos(", "vec3 cubismCorner;\n\nvec4 getQuadCornerPos(");
 			return replaceOnce(path, source, pos, "    cubismCorner = point;\n" + pos);
 		}
@@ -137,7 +140,8 @@ public final class VoxyFaces {
 			return replaceOnce(path, source, "    #ifndef USE_NV_BARRY\n    uv = getCornerUV", "    cubismPoint = cubismCorner;\n\n    #ifndef USE_NV_BARRY\n    uv = getCornerUV");
 		}
 		if (path.endsWith("lod/gl46/quads.frag")) {
-			source = replaceOnce(path, source, "\nvoid main() {", "\nlayout(location = 6) in vec3 cubismPoint;\n\nvoid main() {");
+			source = replaceOnce(path, source, "#import <voxy:lod/lighting.glsl>", "#import <voxy:lod/lighting.glsl>\n" + LIGHT_BLEND);
+			source = replaceOnce(path, source, "    return (colour * uint2vec4RGBA(interData.y)) +", "    vec4 cubismTint = uint2vec4RGBA(interData.y);\n    cubismTint.rgb *= cubismLight(interData.w >> 16).rgb;\n    return (colour * cubismTint) +");
 			// The block of a fragment lies just behind its face, against the direction that the face points to.
 			return replaceOnce(path, source, "    if (any(notEqual(clamp(tile,", """
 				    {
@@ -160,6 +164,52 @@ public final class VoxyFaces {
 				    if (any(notEqual(clamp(tile,""");
 		}
 		return source;
+	}
+
+	/**
+	 * The light of a fragment: the lightmap of the face blended toward the faces across its edges, half at the diagonal and
+	 * none 32 blocks from it, as in the terrain shader of Sodium. The position in the frame of the face is the position of
+	 * the fragment minus the region.
+	 */
+	private static final String LIGHT_BLEND = """
+		layout(location = 6) in vec3 cubismPoint;
+		layout(binding = 10) uniform sampler2D cubismLight0;
+		layout(binding = 11) uniform sampler2D cubismLight1;
+		layout(binding = 12) uniform sampler2D cubismLight2;
+		layout(binding = 13) uniform sampler2D cubismLight3;
+		layout(binding = 14) uniform sampler2D cubismLight4;
+
+		vec4 cubismLight(uint id) {
+		    vec2 uv = getLightmapUv(id);
+		    vec4 own = textureLod(cubismLight0, uv, 0);
+		    vec3 local = cubismPoint - cubismRegion.xyz;
+		    vec4 weights = 0.5 * (1.0 - clamp(vec4(local.y - local.x, local.y + local.x, local.y - local.z, local.y + local.z) / 32.0, 0.0, 1.0));
+		    float total = weights.x + weights.y + weights.z + weights.w;
+		    if (total <= 0.0) {
+		        return own;
+		    }
+		    vec4 other = textureLod(cubismLight1, uv, 0) * weights.x + textureLod(cubismLight2, uv, 0) * weights.y
+		        + textureLod(cubismLight3, uv, 0) * weights.z + textureLod(cubismLight4, uv, 0) * weights.w;
+		    return mix(own, other / total, min(total, 1.0));
+		}
+		""";
+
+	/** First texture unit that {@link #bindLightBlend} fills: the face, then the faces across +X, -X, +Z and -Z. Must match the bindings above. */
+	private static final int LIGHT_UNIT = 10;
+
+	/** Binds the lightmaps that the patched fragment shader blends, after Voxy bound the one of the face. */
+	public static void bindLightBlend(int sampler) {
+		var own = Minecraft.getInstance().gameRenderer.levelLightmap();
+		var views = dev.cubism.client.render.FaceLightmaps.neighbors(SeamFaces.currentFace(), own);
+		bindUnit(LIGHT_UNIT, own, sampler);
+		for (int side = 0; side < 4; side++) {
+			bindUnit(LIGHT_UNIT + 1 + side, views[side], sampler);
+		}
+	}
+
+	private static void bindUnit(int unit, com.mojang.renderpearl.api.textures.GpuTextureView view, int sampler) {
+		GL45C.glBindSampler(unit, sampler);
+		GL45C.glBindTextureUnit(unit, ((com.mojang.renderpearl.backend.opengl.GlTexture) view.texture()).glId());
 	}
 
 	private static String replaceOnce(String path, String source, String find, String replacement) {
