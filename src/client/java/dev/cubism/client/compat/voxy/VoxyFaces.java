@@ -35,15 +35,17 @@ import org.slf4j.LoggerFactory;
 public final class VoxyFaces {
 	private static final Logger LOGGER = LoggerFactory.getLogger("cubism");
 	private static final int FACES = SeamLayout.FACES.length;
-	private static final Object[] VIEWPORT_KEYS = new Object[FACES];
-	private static final StreamedBoundStore[] STORES = new StreamedBoundStore[FACES];
+	/** The faces and space: Sodium has a manager for the empty chunks of space too, and Voxy needs a store and a viewport for it. */
+	private static final int REGIONS = FACES + 1;
+	private static final Object[] VIEWPORT_KEYS = new Object[REGIONS];
+	private static final StreamedBoundStore[] STORES = new StreamedBoundStore[REGIONS];
 	private static @Nullable VoxyRenderSystem storesOf;
 	private static int depthCopy, copyWidth, copyHeight, copyFormat;
 	private static final java.util.List<Deferred> DEFERRED = new java.util.ArrayList<>();
 	private static boolean drawingDeferred, copied, laterFace, waterHeld, waterPass, firstWater;
 
 	static {
-		for (int f = 0; f < FACES; f++) {
+		for (int f = 0; f < REGIONS; f++) {
 			VIEWPORT_KEYS[f] = new Object();
 		}
 	}
@@ -75,7 +77,7 @@ public final class VoxyFaces {
 	}
 
 	public static void free() {
-		for (int f = 0; f < FACES; f++) {
+		for (int f = 0; f < REGIONS; f++) {
 			if (STORES[f] != null) {
 				STORES[f].free();
 				STORES[f] = null;
