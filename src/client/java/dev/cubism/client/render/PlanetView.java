@@ -129,7 +129,6 @@ public final class PlanetView {
 					for (int j = 0; j < cells; j++) {
 						int height = top[face][i * cells + j];
 						int color = cellColor[face][i * cells + j];
-						int wall = shade(color);
 						float[] t00 = corners.at(face, i, j, height);
 						float[] t01 = corners.at(face, i, j + 1, height);
 						float[] t10 = corners.at(face, i + 1, j, height);
@@ -139,19 +138,19 @@ public final class PlanetView {
 						total += emit(builder, color, t10, t01, t11);
 						if (i + 1 < cells && top[face][(i + 1) * cells + j] < height) {
 							int low = top[face][(i + 1) * cells + j];
-							total += wall(builder, wall, t10, t11, corners.at(face, i + 1, j, low), corners.at(face, i + 1, j + 1, low), true);
+							total += wall(builder, color, t10, t11, corners.at(face, i + 1, j, low), corners.at(face, i + 1, j + 1, low), true);
 						}
 						if (i > 0 && top[face][(i - 1) * cells + j] < height) {
 							int low = top[face][(i - 1) * cells + j];
-							total += wall(builder, wall, t00, t01, corners.at(face, i, j, low), corners.at(face, i, j + 1, low), false);
+							total += wall(builder, color, t00, t01, corners.at(face, i, j, low), corners.at(face, i, j + 1, low), false);
 						}
 						if (j + 1 < cells && top[face][i * cells + j + 1] < height) {
 							int low = top[face][i * cells + j + 1];
-							total += wall(builder, wall, t01, t11, corners.at(face, i, j + 1, low), corners.at(face, i + 1, j + 1, low), false);
+							total += wall(builder, color, t01, t11, corners.at(face, i, j + 1, low), corners.at(face, i + 1, j + 1, low), false);
 						}
 						if (j > 0 && top[face][i * cells + j - 1] < height) {
 							int low = top[face][i * cells + j - 1];
-							total += wall(builder, wall, t00, t10, corners.at(face, i, j, low), corners.at(face, i + 1, j, low), true);
+							total += wall(builder, color, t00, t10, corners.at(face, i, j, low), corners.at(face, i + 1, j, low), true);
 						}
 					}
 				}
@@ -185,13 +184,6 @@ public final class PlanetView {
 			emit(builder, color, b, lowA, lowB);
 		}
 		return 6;
-	}
-
-	private static int shade(int color) {
-		int r = (int) (((color >> 16) & 0xFF) * 0.72F);
-		int g = (int) (((color >> 8) & 0xFF) * 0.72F);
-		int b = (int) ((color & 0xFF) * 0.72F);
-		return 0xFF000000 | r << 16 | g << 8 | b;
 	}
 
 	/** The position in the cube frame of a node of a face at a height over the top of the face. */
