@@ -41,6 +41,9 @@ public final class PlanetView {
 			.build()
 	);
 
+	/** Blocks that each column top sits under the lowest of its nodes. */
+	private static final int SINK = 6;
+
 	private static byte @Nullable [] data;
 	private static @Nullable GpuBuffer mesh;
 	private static int vertices;
@@ -118,7 +121,10 @@ public final class PlanetView {
 			for (int i = 0; i < cells; i++) {
 				for (int j = 0; j < cells; j++) {
 					int a = i * nodes + j;
-					top[face][i * cells + j] = Math.round((nodeHeight[face][a] + nodeHeight[face][a + 1] + nodeHeight[face][a + nodes] + nodeHeight[face][a + nodes + 1]) / 4.0F);
+					// Under the real ground, so that where the terrain draws it covers the mesh, and the mesh shows only
+					// where no terrain draws. A mean of the nodes stands over valleys and shows past hills of other faces.
+					top[face][i * cells + j] = Math.min(Math.min(nodeHeight[face][a], nodeHeight[face][a + 1]),
+						Math.min(nodeHeight[face][a + nodes], nodeHeight[face][a + nodes + 1])) - SINK;
 					cellColor[face][i * cells + j] = 0xFF000000 | nodeColor[face][a];
 				}
 			}
