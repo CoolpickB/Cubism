@@ -51,48 +51,47 @@ public final class CubeFlight {
 	private CubeFlight() {}
 
 	/**
-	 * The height that the view frame of the player is taken at. The turn over an edge depends on the height, so a step
-	 * of a stair or a slab tilted the view by a few degrees in one tick, and a jump bobbed it. On foot this height eases
-	 * after the ground, and a jump does not raise it. In flight and in a vehicle it is the height of the player.
+	 * Where the view frame of the player is taken, as an offset from the player. The turn over an edge depends on the
+	 * height, so a step of a stair or a slab tilted the view by a few degrees in one tick, and a jump bobbed it. On foot
+	 * the point eases after the ground, and a jump does not raise it. In flight and in a vehicle it is at the player.
 	 */
-	private static double viewY;
-	private static double viewYO;
+	private static Vec3 viewOffset = Vec3.ZERO;
+	private static Vec3 viewOffsetO = Vec3.ZERO;
 	private static double groundY;
-	private static double lastY;
 	private static int viewFace = -1;
-	private static final double VIEW_Y_EASE = 0.35;
+	private static final double VIEW_EASE = 0.35;
 	/**
-	 * The most the eased height trails the target. A fall then moves the view at the speed of the fall, a block behind,
+	 * The most the eased point trails the target. A fall then moves the view at the speed of the fall, a block behind,
 	 * where a snap at a larger gap tilted the view by up to 20 degrees in one tick.
 	 */
-	private static final double VIEW_Y_MAX_LAG = 1.0;
+	private static final double VIEW_MAX_LAG = 1.0;
 
 	private static void tickViewY(LocalPlayer player, boolean flies) {
 		SeamLayout layout = SeamLayout.of(player.level());
 		int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
 		double y = player.getY();
-		viewYO = viewY;
-		if (face != viewFace) {
-			// The heights of the two faces differ at the crossing. Keep the eased height and the held ground at the
-			// same distance from the player, else a jump over the diagonal takes the view 1 or 2 blocks too low.
-			double shift = y - lastY;
-			viewY += shift;
-			viewYO += shift;
-			groundY += shift;
+		viewOffsetO = viewOffset;
+		if (face != viewFace && face >= 0 && viewFace >= 0) {
+			// The up of the old face is sideways in the new one. Kept as a height in the new face, a lag of half a block
+			// moved the view 4 to 7 degrees at the crossing.
+			int[] m = layout.motion(viewFace, face);
+			viewOffset = SeamInteraction.rotate(m, viewOffset);
+			viewOffsetO = SeamInteraction.rotate(m, viewOffsetO);
+			groundY = y;
 		}
 		if (player.onGround()) {
 			groundY = y;
 		}
-		double target = player.onGround() ? y : Math.min(y, groundY);
-		if (flies || player.isPassenger() || viewFace == -1) {
-			viewY = target;
-			viewYO = target;
+		Vec3 target = new Vec3(0.0, player.onGround() ? 0.0 : Math.min(0.0, groundY - y), 0.0);
+		if (flies || player.isPassenger() || face < 0 || viewFace < 0) {
+			viewOffset = target;
+			viewOffsetO = target;
 			groundY = y;
 		} else {
-			viewY = Mth.clamp(viewY + (target - viewY) * VIEW_Y_EASE, target - VIEW_Y_MAX_LAG, target + VIEW_Y_MAX_LAG);
+			Vec3 lag = viewOffset.add(target.subtract(viewOffset).scale(VIEW_EASE)).subtract(target);
+			viewOffset = target.add(lag.length() > VIEW_MAX_LAG ? lag.scale(VIEW_MAX_LAG / lag.length()) : lag);
 		}
 		viewFace = face;
-		lastY = y;
 	}
 
 	/** Eases the frame in or out, then makes a crossing of a diagonal when the player flew past it. */
@@ -389,9 +388,9 @@ public final class CubeFlight {
 			int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
 			float[] angles = anglesIn(view, player.getYRot(), player.getXRot());
 			Vec3 delta = player.getDeltaMovement();
-			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f roll=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b viewY=%.2f lock=%s fly=%b glide=%b sneak=%b",
+			lookLog.println(String.format(Locale.ROOT, "t=%d face=%d pos=%.2f %.2f %.2f yaw=%.1f pitch=%.1f roll=%.1f airYaw=%.1f airPitch=%.1f moveYaw=%.1f tilt=%.1f vel=%.3f %.3f %.3f move=%s ground=%b viewY=%.2f lag=%.2f %.2f %.2f lock=%s fly=%b glide=%b sneak=%b",
 				player.tickCount, face, player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), BarrelRoll.roll(player), angles[0], angles[1], moveYaw(player),
-				Math.toDegrees(view.angle()), delta.x, delta.y, delta.z, player.input.getMoveVector(), player.onGround(), viewY,
+				Math.toDegrees(view.angle()), delta.x, delta.y, delta.z, player.input.getMoveVector(), player.onGround(), player.getY() + viewOffset.y, viewOffset.x, viewOffset.y, viewOffset.z,
 				player.hasEffect(GravityLock.STEADFAST) ? player.getEffect(GravityLock.STEADFAST).getAmplifier() + (GravityLock.holdsFace(player) ? "held" : "free") : "none",
 				player.getAbilities().flying, player.isFallFlying(), player.isShiftKeyDown()));
 		} catch (java.io.IOException e) {
@@ -479,8 +478,8 @@ public final class CubeFlight {
 			return new Quaternionf();
 		}
 		Vec3 position = entity.getPosition(partialTicks);
-		double y = entity instanceof LocalPlayer ? Mth.lerp(partialTicks, viewYO, viewY) : position.y;
-		Vec3 center = new Vec3(position.x, y + entity.getBbHeight() / 2.0, position.z);
+		Vec3 offset = entity instanceof LocalPlayer ? viewOffsetO.lerp(viewOffset, partialTicks) : Vec3.ZERO;
+		Vec3 center = position.add(offset).add(0.0, entity.getBbHeight() / 2.0, 0.0);
 		if (ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer)) {
 			return frameAt(layout, center, 1.0F, layout.turnRadius());
 		}
