@@ -426,6 +426,15 @@ public final class VoxyFaces {
 			int mx = alongX ? ox + (lx >= 0 ? ly : -ly) : x;
 			int mz = alongX ? z : (z >= 0 ? ly : -ly);
 			int my = layout.centerY + (alongX ? Math.abs(lx) : Math.abs(z));
+			// Voxy stores a chunk again as it unloads, when the chunks around it may be gone. The mirror in this section
+			// is always there; with the voxel left as air, Voxy drew the cut faces of the ground along the diagonal.
+			if (mx - bx >= 0 && mx - bx < 16 && my - by >= 0 && my - by < 16 && mz - bz >= 0 && mz - bz < 16 && layout.insideWedge(mx, my, mz)) {
+				data[i] = data[(my - by) << 8 | (mz - bz) << 4 | (mx - bx)];
+				if (!Mapper.isAir(data[i])) {
+					nonAir++;
+				}
+				continue;
+			}
 			boolean mirrored = level.hasChunk(mx >> 4, mz >> 4) && layout.insideWedge(mx, my, mz);
 			// Without the mirror, the real block across the seam. That face is loaded later or not at all; reingestAcrossSeam fills the voxel when it loads.
 			if (mirrored || layout.ownerStorage(x, y, z, owner) && level.hasChunk(owner[0] >> 4, owner[2] >> 4)) {
