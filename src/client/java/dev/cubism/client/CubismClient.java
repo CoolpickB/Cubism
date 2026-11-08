@@ -39,6 +39,8 @@ public class CubismClient implements ClientModInitializer {
 				return 1;
 			}))));
 		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+			ClientCommands.literal("cubelight").executes(context -> DebugLight.print())));
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
 			ClientCommands.literal("cubevoxy").then(ClientCommands.literal("hide").then(
 				ClientCommands.argument("mode", IntegerArgumentType.integer(0, 2)).executes(context -> {
 					ClientConfig.voxyHide = IntegerArgumentType.getInteger(context, "mode");
