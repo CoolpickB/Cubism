@@ -2,7 +2,9 @@ package dev.cubism.network;
 
 import dev.cubism.CubismMod;
 import dev.cubism.worldgen.CubeSettings;
+import dev.cubism.worldgen.PlanetMap;
 import dev.cubism.worldgen.SeamLayout;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
@@ -42,6 +44,20 @@ public final class CubeNetworking {
 
 		@Override
 		public Type<SeamPayload> type() {
+			return TYPE;
+		}
+	}
+
+	/** The coarse map of the surface for the view from space, see {@link dev.cubism.worldgen.PlanetMap}. */
+	public record PlanetPayload(byte[] data) implements CustomPacketPayload {
+		public static final Type<PlanetPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(CubismMod.MOD_ID, "planet"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, PlanetPayload> CODEC = StreamCodec.composite(
+			ByteBufCodecs.BYTE_ARRAY, PlanetPayload::data,
+			PlanetPayload::new
+		);
+
+		@Override
+		public Type<PlanetPayload> type() {
 			return TYPE;
 		}
 	}
@@ -88,6 +104,8 @@ public final class CubeNetworking {
 	public static void register() {
 		PayloadTypeRegistry.clientboundPlay().register(SeamPayload.TYPE, SeamPayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(MovingBlockPayload.TYPE, MovingBlockPayload.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(PlanetPayload.TYPE, PlanetPayload.CODEC);
+		ServerLifecycleEvents.SERVER_STOPPED.register(server -> PlanetMap.clear());
 
 		ServerTickEvents.END_LEVEL_TICK.register(level -> {
 			if (PENDING_MOVING_BLOCKS.isEmpty()) {
@@ -109,6 +127,12 @@ public final class CubeNetworking {
 				CubeSettings settings = CubeSettings.of(server.overworld().getChunkSource().getGenerator());
 				ServerLevel nether = server.getLevel(Level.NETHER);
 				sender.sendPacket(new SeamPayload(settings.diameterChunks(), settings.edgeRounding(), nether != null && SeamLayout.of(nether) != null));
+				// The map is made in the background and goes out when it is ready.
+				PlanetMap.of(server.overworld()).thenAccept(data -> server.execute(() -> {
+					if (handler.getPlayer().connection == handler) {
+						ServerPlayNetworking.send(handler.getPlayer(), new PlanetPayload(data));
+					}
+				}));
 			}
 		});
 	}

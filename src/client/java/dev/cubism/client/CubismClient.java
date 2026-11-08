@@ -55,6 +55,9 @@ public class CubismClient implements ClientModInitializer {
 			SeamClient.layout = level == null ? null : SeamLayout.of(level);
 		});
 
+		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.PlanetPayload.TYPE, (payload, context) -> context.client().execute(() -> dev.cubism.client.render.PlanetView.load(payload.data())));
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> dev.cubism.client.render.PlanetView.clear());
+
 		// The seam chunks of the old level are of another cube, or of none.
 		ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register((client, level) -> {
 			SeamRenderer.clear();

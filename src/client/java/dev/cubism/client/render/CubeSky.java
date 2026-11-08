@@ -340,6 +340,24 @@ public final class CubeSky {
 		draw(renderPass, AIR, "Cube air");
 	}
 
+	/** Draws the coarse planet over the stars, when the camera is in orbit. */
+	public static void renderPlanet(RenderPass renderPass) {
+		GpuBuffer vertices = orbit > 0.0F ? PlanetView.mesh() : null;
+		if (vertices == null) {
+			return;
+		}
+		var transforms = RenderSystem.getDynamicUniforms().writeTransform(
+			RenderSystem.getModelViewMatrixCopy(), new Vector4f(radius, starMax, orbit, planetSkyEnd), SUN, FRAME
+		);
+		renderPass.pushDebugGroup(() -> "Cube planet");
+		renderPass.setPipeline(RenderSystem.getCompiledPipeline(PlanetView.PIPELINE));
+		RenderSystem.bindDefaultUniforms(renderPass);
+		renderPass.setUniform("DynamicTransforms", transforms);
+		renderPass.setVertexBuffer(0, vertices.slice());
+		renderPass.draw(PlanetView.vertices(), 1, 0, 0);
+		renderPass.popDebugGroup();
+	}
+
 	private static void draw(RenderPass renderPass, RenderPipeline pipeline, String label) {
 		DynamicTexture texture = table;
 		if (texture == null) {

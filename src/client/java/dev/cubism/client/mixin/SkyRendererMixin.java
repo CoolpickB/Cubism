@@ -76,6 +76,7 @@ public abstract class SkyRendererMixin {
 		PoseStack poseStack = new PoseStack();
 		poseStack.rotate(new Quaternionf().setFromNormalized(celestial));
 		this.renderStars(renderPass, CubeSky.starMax(), poseStack);
+		CubeSky.renderPlanet(renderPass);
 		CubeSky.renderAir(renderPass);
 	}
 

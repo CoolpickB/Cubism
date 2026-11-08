@@ -128,8 +128,9 @@ public final class CubeClouds {
 		for (int face = 0; face < LAYERS.length; face++) {
 			int[] toCamera = layout.motion(face, cameraFace);
 			PLACEMENTS[face] = null;
-			// The opposite face is under the camera face, out of sight.
-			if (toCamera[4] == -1) {
+			// The opposite face is under the camera face, out of sight. In space the camera frame is the one of UP, and
+			// DOWN is then in view on the far side of the cube.
+			if (toCamera[4] == -1 && cameraFace != SeamLayout.SPACE) {
 				continue;
 			}
 			CloudRenderer layer = LAYERS[face];
