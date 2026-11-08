@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.state.level.SkyRenderState;
 import net.minecraft.util.Mth;
 import net.minecraft.world.clock.ClockInstance;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.MoonPhase;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3fc;
@@ -77,7 +78,18 @@ public abstract class SkyRendererMixin {
 		poseStack.rotate(new Quaternionf().setFromNormalized(celestial));
 		this.renderStars(renderPass, CubeSky.starMax(), poseStack);
 		CubeSky.renderAir(renderPass);
-		CubeSky.renderPlanet(renderPass);
+	}
+
+	/** The planet draws after the sun and the moon, so that it hides them when they are behind it. */
+	@WrapOperation(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SkyRenderer;renderSunMoonAndStars(Lcom/mojang/renderpearl/api/commands/RenderPass;Lcom/mojang/blaze3d/vertex/PoseStack;FFFLnet/minecraft/world/level/MoonPhase;FF)V"))
+	private void cubism$planetOverSun(
+		SkyRenderer renderer, RenderPass renderPass, PoseStack poseStack, float sunAngle, float moonAngle, float starAngle, MoonPhase moonPhase,
+		float rainBrightness, float starBrightness, Operation<Void> original
+	) {
+		original.call(renderer, renderPass, poseStack, sunAngle, moonAngle, starAngle, moonPhase, rainBrightness, starBrightness);
+		if (cubism$celestial != null && CubeSky.active() && !(SeamClient.IRIS && CubeShaderPatch.packInUse())) {
+			CubeSky.renderPlanet(renderPass);
+		}
 	}
 
 	@WrapOperation(method = "renderSunMoonAndStars", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SkyRenderer;renderStars(Lcom/mojang/renderpearl/api/commands/RenderPass;FLcom/mojang/blaze3d/vertex/PoseStack;)V"))

@@ -37,6 +37,8 @@ public final class PlanetView {
 			.build()
 	);
 
+	/** A column on the edge of a face has a wall this deep, so the next face shows no gap if its ground is lower. */
+	private static final int EDGE_DEPTH = 128;
 	private static byte @Nullable [] data;
 	private static @Nullable GpuBuffer mesh;
 	private static int vertices;
@@ -136,21 +138,21 @@ public final class PlanetView {
 						// Counterclockwise seen from outside: u runs along X of the face, v along Z, and the outside is +Y.
 						total += emit(builder, color, t00, t01, t10);
 						total += emit(builder, color, t10, t01, t11);
-						if (i + 1 < cells && top[face][(i + 1) * cells + j] < height) {
-							int low = top[face][(i + 1) * cells + j];
-							total += wall(builder, color, t10, t11, corners.at(face, i + 1, j, low), corners.at(face, i + 1, j + 1, low), true);
+						int low0 = i + 1 < cells ? top[face][(i + 1) * cells + j] : height - EDGE_DEPTH;
+						if (low0 < height) {
+							total += wall(builder, color, t10, t11, corners.at(face, i + 1, j, low0), corners.at(face, i + 1, j + 1, low0), true);
 						}
-						if (i > 0 && top[face][(i - 1) * cells + j] < height) {
-							int low = top[face][(i - 1) * cells + j];
-							total += wall(builder, color, t00, t01, corners.at(face, i, j, low), corners.at(face, i, j + 1, low), false);
+						int low1 = i > 0 ? top[face][(i - 1) * cells + j] : height - EDGE_DEPTH;
+						if (low1 < height) {
+							total += wall(builder, color, t00, t01, corners.at(face, i, j, low1), corners.at(face, i, j + 1, low1), false);
 						}
-						if (j + 1 < cells && top[face][i * cells + j + 1] < height) {
-							int low = top[face][i * cells + j + 1];
-							total += wall(builder, color, t01, t11, corners.at(face, i, j + 1, low), corners.at(face, i + 1, j + 1, low), false);
+						int low2 = j + 1 < cells ? top[face][i * cells + j + 1] : height - EDGE_DEPTH;
+						if (low2 < height) {
+							total += wall(builder, color, t01, t11, corners.at(face, i, j + 1, low2), corners.at(face, i + 1, j + 1, low2), false);
 						}
-						if (j > 0 && top[face][i * cells + j - 1] < height) {
-							int low = top[face][i * cells + j - 1];
-							total += wall(builder, color, t00, t10, corners.at(face, i, j, low), corners.at(face, i + 1, j, low), true);
+						int low3 = j > 0 ? top[face][i * cells + j - 1] : height - EDGE_DEPTH;
+						if (low3 < height) {
+							total += wall(builder, color, t00, t10, corners.at(face, i, j, low3), corners.at(face, i + 1, j, low3), true);
 						}
 					}
 				}
