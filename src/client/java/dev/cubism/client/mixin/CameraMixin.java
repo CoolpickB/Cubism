@@ -199,9 +199,12 @@ public abstract class CameraMixin {
 				Quaternionf view = new Quaternionf(airTurn).mul(mirrored ? CubeFlight.rolledView(yRot + 180.0F, -xRot, roll) : CubeFlight.rolledView(yRot, xRot, roll));
 				this.cubism$correction.set(shown.mul(view.conjugate()));
 				CubeFlight.traceLine(String.format(java.util.Locale.ROOT, "  seam correction=%.2f deg", Math.toDegrees(this.cubism$correction.angle())));
-				// The eye stands along the air frame. The correction keeps it where the motion carries the last eye.
-				this.cubism$eyeCorrection.set(motion.mul(this.cubism$smoothed(this.cubism$eyeCorrection, now))
-					.mul(this.cubism$lastView).mul(new Quaternionf(this.cubism$view).conjugate()));
+				// The eye stands along the air frame. The correction keeps it where the motion carries the last eye. It is
+				// the shortest turn between the two ups: the two frames come from other storage axes and also differ by a
+				// twist about the up, which moves no eye at the crossing, but half eased it swung the eye 15 degrees aside.
+				Vector3f lastUp = motion.mul(this.cubism$smoothed(this.cubism$eyeCorrection, now)).mul(this.cubism$lastView).transform(new Vector3f(UP));
+				Vector3f nowUp = this.cubism$view.transform(new Vector3f(UP));
+				this.cubism$eyeCorrection.rotationTo(nowUp, lastUp);
 				this.cubism$flipTime = now;
 				this.cubism$smoothTicks = roll != 0.0F ? ROLL_SMOOTH_TICKS : SMOOTH_TICKS;
 			}
