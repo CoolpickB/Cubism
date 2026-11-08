@@ -85,9 +85,10 @@ public final class CubeSky {
 	private static float orbit;
 	/** The sky fog distance read at the middle of a face, the same wherever the camera is. */
 	private static float planetSkyEnd = 1.0F;
-	/** 0 below the top of the stratosphere, 1 {@link #FOG_CLEAR_SPAN} blocks above it: how far the fog of the weather is cleared. */
+	/** 0 below the top of the stratosphere, 1 {@link #FOG_CLEAR_SPAN} blocks above it: how far the weather is cleared. */
 	private static float fogClear;
-	private static final double FOG_CLEAR_SPAN = 48.0;
+	/** Less than the height over the stratosphere where the camera goes to space (SeamLayout), which has no weather. */
+	private static final double FOG_CLEAR_SPAN = 20.0;
 	private static double sq(double v) {
 		return v * v;
 	}

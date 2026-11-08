@@ -55,7 +55,8 @@
 		"DebugEntryPositionMixin",
 		"SkyRendererMixin",
 		"SoundEngineMixin",
-		"WeatherEffectRendererMixin"
+		"WeatherEffectRendererMixin",
+		"LevelRainMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
