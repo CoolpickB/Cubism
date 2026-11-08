@@ -70,7 +70,8 @@ public abstract class CameraMixin {
 	 */
 	@ModifyArg(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/attribute/EnvironmentAttributeProbe;tick(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/phys/Vec3;)V"), index = 1)
 	private Vec3 cubism$probeAtTimeFocus(Vec3 position) {
-		return SeamLayout.of(this.entity.level()) == null ? position : CubeFlight.timeFocus(this.entity, 1.0F);
+		SeamLayout layout = SeamLayout.of(this.entity.level());
+		return layout == null ? position : layout.ownerStorage(CubeFlight.timeFocus(this.entity, 1.0F));
 	}
 
 	@Unique private Entity cubism$lastEntity;

@@ -349,6 +349,29 @@ public final class SeamLayout {
 	}
 
 	/**
+	 * A storage position for reads of biome and sky: a position of space moves into the region of the face that owns
+	 * it, at most as high as the top of the stratosphere. Space chunks are the void biome, which has a dark sky, but
+	 * an entity that falls through space still has the sky and the biome of the face under it. Other positions stay.
+	 */
+	public Vec3 ownerStorage(Vec3 storage) {
+		if (this.regionAt(Mth.floor(storage.x), Mth.floor(storage.z)) != SPACE) {
+			return storage;
+		}
+		Vec3 p = this.cubeOffset(SPACE, storage.x, storage.y, storage.z);
+		double top = this.stratosphereTop();
+		double x = Math.clamp(p.x, -top, top);
+		double y = Math.clamp(p.y, -top, top);
+		double z = Math.clamp(p.z, -top, top);
+		int face = dominantFace(x, y, z);
+		int[] m = this.rotations[face];
+		return new Vec3(
+			m[0] * x + m[3] * y + m[6] * z + this.offsetX(face) + 0.5,
+			m[1] * x + m[4] * y + m[7] * z + this.centerY + 0.5,
+			m[2] * x + m[5] * y + m[8] * z + 0.5
+		);
+	}
+
+	/**
 	 * Face that owns a cube position. Positions on a diagonal between faces go to the first face in the order
 	 * Y, X, Z, so that every position has exactly one owner.
 	 */

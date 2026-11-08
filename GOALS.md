@@ -152,7 +152,13 @@ Commands take cube positions, so `/summon armor_stand 0 1000 0` puts an armor st
 
 Tested on the dev server (size 24): an armor stand at cube y 500 fell through space, moved to the up face and landed. Stands at y 750 and 1000 floated with no pull. A stand at a corner (350, 380, 350) moved to space, fell toward the center, and landed on the up face. Not tested: a player, the client view from space, and Steadfast in space.
 
-Past the exosphere, jump rises and sneak sinks along the cube up axis (untested by the user). Next: the sky fades to black above build height, and the client draws the planet from space. Then the planet-ahead view past the exosphere: the view turns slowly so that the planet is ahead, and the flight keys follow the view. Then Voxy, Iris and Xaero in space. Later, other dimensions can get space too.
+Past the exosphere, jump rises and sneak sinks along the cube up axis (works, tested by the user). From space, the planet shows as a blue glow with day and night colors and no terrain, because only loaded chunks draw. The sky and the lighting of an entity that falls through space (a Steadfast fall) read the biome of the face that owns its cube position, not the void biome of the space chunks (`SeamLayout.ownerStorage`, not yet tested by the user).
+
+Next, in this order:
+1. Culling that knows the faces. Voxy and EntityCulling assume that what is in the frustum can be seen, but a face on the far side is hidden by the planet. A face-level horizon test is cheap, and it also helps the Sodium faces.
+2. The planet from far away. With Voxy: tell Voxy that the camera stands at the top of the stratosphere above the nearest point of each face once it is higher, so the far LOD stays loaded. Without Voxy: draw our own rounded cube with averaged LOD textures (for example 64x64 per face).
+3. The planet-ahead view past the exosphere, and flight keys that follow the view.
+4. Iris and Xaero in space. Later, other dimensions can get space too.
 
 ## Phases
 

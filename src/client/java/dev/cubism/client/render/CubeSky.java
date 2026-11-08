@@ -236,6 +236,7 @@ public final class CubeSky {
 		if (!active) {
 			return;
 		}
+		Vec3 sample = layout.ownerStorage(camera);
 		DynamicTexture texture = table;
 		if (texture == null) {
 			texture = new DynamicTexture(() -> "Cube sky colors", TABLE_SIZE, 3, false);
@@ -245,10 +246,10 @@ public final class CubeSky {
 		float maxSky = 1.0E-4F;
 		for (int i = 0; i < TABLE_SIZE; i++) {
 			long sampleTicks = (long) i * CubeTime.DAY_TICKS / TABLE_SIZE;
-			Vector3fc sky = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, camera, null));
-			Vector3fc fog = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, camera, null));
-			float stars = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.STAR_BRIGHTNESS, camera, null));
-			Vector4fc glow = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, camera, null));
+			Vector3fc sky = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, sample, null));
+			Vector3fc fog = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.FOG_COLOR, sample, null));
+			float stars = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.STAR_BRIGHTNESS, sample, null));
+			Vector4fc glow = time.sampleAt(sampleTicks, () -> level.environmentAttributes().getValue(EnvironmentAttributes.SUNRISE_SUNSET_COLOR, sample, null));
 			texture.getPixels().setPixel(i, 0, ARGB.colorFromFloat(stars, sky.x(), sky.y(), sky.z()));
 			texture.getPixels().setPixel(i, 1, ARGB.colorFromFloat(1.0F, fog.x(), fog.y(), fog.z()));
 			texture.getPixels().setPixel(i, 2, ARGB.colorFromFloat(glow.w(), glow.x(), glow.y(), glow.z()));
@@ -292,7 +293,7 @@ public final class CubeSky {
 		double[] sun = CubeTime.sunDirection(ticks);
 		SUN.set(sun[0], sun[1], sun[2]);
 
-		Vector3fc cameraSky = level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, camera, null);
+		Vector3fc cameraSky = level.environmentAttributes().getValue(EnvironmentAttributes.SKY_COLOR, sample, null);
 		float daylight = Math.max(cameraSky.x(), Math.max(cameraSky.y(), cameraSky.z())) / maxSky;
 		moonBrightness = 1.0F - 0.85F * Mth.clamp(daylight, 0.0F, 1.0F);
 	}
