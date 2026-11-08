@@ -53,34 +53,46 @@ public final class CubeFlight {
 	/**
 	 * The height that the view frame of the player is taken at. The turn over an edge depends on the height, so a step
 	 * of a stair or a slab tilted the view by a few degrees in one tick, and a jump bobbed it. On foot this height eases
-	 * after the ground, and a jump does not raise it. In flight, in a vehicle and after a crossing it is the height of
-	 * the player.
+	 * after the ground, and a jump does not raise it. In flight and in a vehicle it is the height of the player.
 	 */
 	private static double viewY;
 	private static double viewYO;
 	private static double groundY;
+	private static double lastY;
 	private static int viewFace = -1;
 	private static final double VIEW_Y_EASE = 0.35;
-	/** A larger change of the height than this is a fall or a teleport, which the view follows at once. */
-	private static final double VIEW_Y_MAX_EASE = 2.0;
+	/**
+	 * The most the eased height trails the target. A fall then moves the view at the speed of the fall, a block behind,
+	 * where a snap at a larger gap tilted the view by up to 20 degrees in one tick.
+	 */
+	private static final double VIEW_Y_MAX_LAG = 1.0;
 
 	private static void tickViewY(LocalPlayer player, boolean flies) {
 		SeamLayout layout = SeamLayout.of(player.level());
 		int face = layout == null ? -1 : layout.faceIndexAt(Mth.floor(player.getX()));
 		double y = player.getY();
+		viewYO = viewY;
+		if (face != viewFace) {
+			// The heights of the two faces differ at the crossing. Keep the eased height and the held ground at the
+			// same distance from the player, else a jump over the diagonal takes the view 1 or 2 blocks too low.
+			double shift = y - lastY;
+			viewY += shift;
+			viewYO += shift;
+			groundY += shift;
+		}
 		if (player.onGround()) {
 			groundY = y;
 		}
 		double target = player.onGround() ? y : Math.min(y, groundY);
-		viewYO = viewY;
-		if (flies || player.isPassenger() || face != viewFace || Math.abs(target - viewY) > VIEW_Y_MAX_EASE) {
+		if (flies || player.isPassenger() || viewFace == -1) {
 			viewY = target;
 			viewYO = target;
 			groundY = y;
 		} else {
-			viewY += (target - viewY) * VIEW_Y_EASE;
+			viewY = Mth.clamp(viewY + (target - viewY) * VIEW_Y_EASE, target - VIEW_Y_MAX_LAG, target + VIEW_Y_MAX_LAG);
 		}
 		viewFace = face;
+		lastY = y;
 	}
 
 	/** Eases the frame in or out, then makes a crossing of a diagonal when the player flew past it. */
