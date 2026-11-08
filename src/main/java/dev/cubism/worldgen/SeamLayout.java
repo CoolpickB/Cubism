@@ -360,13 +360,20 @@ public final class SeamLayout {
 		}
 		Vec3 p = this.cubeOffset(SPACE, storage.x, storage.y, storage.z);
 		double top = this.stratosphereTop();
-		// Scaled toward the center, not clamped per axis: a clamp maps a wide patch of space onto one corner and changes the
-		// local time there with the axis that saturates last.
-		double reach = Math.max(Math.abs(p.x), Math.max(Math.abs(p.y), Math.abs(p.z)));
-		double scale = reach > top ? top / reach : 1.0;
-		double x = p.x * scale;
-		double y = p.y * scale;
-		double z = p.z * scale;
+		// Only the part past the core is scaled. The local time follows the direction of that part (see CubeTime.surfaceNormal),
+		// so the owner position has the local time of the position, and no edge of a face lies between them.
+		double inner = this.radius - CubeTime.EDGE_BLEND;
+		double cx = Mth.clamp(p.x, -inner, inner);
+		double cy = Mth.clamp(p.y, -inner, inner);
+		double cz = Mth.clamp(p.z, -inner, inner);
+		double ex = p.x - cx;
+		double ey = p.y - cy;
+		double ez = p.z - cz;
+		double excess = Math.max(Math.abs(ex), Math.max(Math.abs(ey), Math.abs(ez)));
+		double scale = excess > top - inner ? (top - inner) / excess : 1.0;
+		double x = cx + ex * scale;
+		double y = cy + ey * scale;
+		double z = cz + ez * scale;
 		int face = dominantFace(x, y, z);
 		int[] m = this.rotations[face];
 		return new Vec3(
