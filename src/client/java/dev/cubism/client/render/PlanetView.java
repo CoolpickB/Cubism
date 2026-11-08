@@ -81,6 +81,11 @@ public final class PlanetView {
 		return vertices;
 	}
 
+	/** The faces are stored one after the other, this many vertices each. */
+	static int verticesPerFace() {
+		return PlanetMap.CELLS * PlanetMap.CELLS * 6;
+	}
+
 	private static void build(SeamLayout layout, byte[] bytes) {
 		int cells = PlanetMap.CELLS;
 		int nodes = cells + 1;
@@ -130,9 +135,11 @@ public final class PlanetView {
 						int a = (face * nodes + i) * nodes + j;
 						int b = a + nodes;
 						// Counterclockwise seen from outside: u runs along X of the face, v along Z, and the outside is +Y.
+						// One color for the whole cell, so the ground looks blocky and does not blend across the cells.
+						int cellColor = color[a];
 						for (int corner : new int[] {a, a + 1, b, b, a + 1, b + 1}) {
 							float[] p = position[corner];
-							builder.addVertex(p[0], p[1], p[2]).setColor(color[corner]);
+							builder.addVertex(p[0], p[1], p[2]).setColor(cellColor);
 						}
 					}
 				}

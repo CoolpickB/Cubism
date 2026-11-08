@@ -76,8 +76,8 @@ public abstract class SkyRendererMixin {
 		PoseStack poseStack = new PoseStack();
 		poseStack.rotate(new Quaternionf().setFromNormalized(celestial));
 		this.renderStars(renderPass, CubeSky.starMax(), poseStack);
-		CubeSky.renderPlanet(renderPass);
 		CubeSky.renderAir(renderPass);
+		CubeSky.renderPlanet(renderPass);
 	}
 
 	@WrapOperation(method = "renderSunMoonAndStars", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SkyRenderer;renderStars(Lcom/mojang/renderpearl/api/commands/RenderPass;FLcom/mojang/blaze3d/vertex/PoseStack;)V"))

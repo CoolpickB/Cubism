@@ -15,6 +15,7 @@ import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.textures.FilterMode;
 import dev.cubism.seam.CubeTime;
 import dev.cubism.seam.CubeTimeLevel;
+import dev.cubism.client.SeamClient;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -354,7 +355,26 @@ public final class CubeSky {
 		RenderSystem.bindDefaultUniforms(renderPass);
 		renderPass.setUniform("DynamicTransforms", transforms);
 		renderPass.setVertexBuffer(0, vertices.slice());
-		renderPass.draw(PlanetView.vertices(), 1, 0, 0);
+		// The pass has no depth, so the faces draw from the farthest to the nearest.
+		SeamLayout layout = SeamClient.layout;
+		if (layout == null) {
+			return;
+		}
+		Vector3f camera = FRAME.getTranslation(new Vector3f());
+		Integer[] order = new Integer[SeamLayout.FACES.length];
+		double[] distance = new double[order.length];
+		for (int face = 0; face < order.length; face++) {
+			int[] m = layout.rotation(face);
+			double dx = m[1] * layout.radius - camera.x;
+			double dy = m[4] * layout.radius - camera.y;
+			double dz = m[7] * layout.radius - camera.z;
+			distance[face] = dx * dx + dy * dy + dz * dz;
+			order[face] = face;
+		}
+		java.util.Arrays.sort(order, (a, b) -> Double.compare(distance[b], distance[a]));
+		for (int face : order) {
+			renderPass.draw(PlanetView.verticesPerFace(), 1, face * PlanetView.verticesPerFace(), 0);
+		}
 		renderPass.popDebugGroup();
 	}
 
