@@ -85,6 +85,7 @@ public abstract class CameraMixin {
 	/** The frame of the view of {@link CubeFlight#viewFrame} in this frame and the last one. The eye stands along it. */
 	@Unique private Quaternionf cubism$view = new Quaternionf();
 	@Unique private Quaternionf cubism$lastView = new Quaternionf();
+	@Unique private Quaternionf cubism$viewBefore = new Quaternionf();
 	/** The camera rotation of the frame before the last one, and the times of the two frames, for the turn rate of the camera. */
 	@Unique private final Quaternionf cubism$rotationBefore = new Quaternionf();
 	@Unique private float cubism$timeBefore;
@@ -101,6 +102,7 @@ public abstract class CameraMixin {
 	@Inject(method = "alignWithEntity", at = @At("HEAD"))
 	private void cubism$updateFrameRotation(float partialTicks, CallbackInfo ci) {
 		float now = this.entity.tickCount + partialTicks;
+		this.cubism$viewBefore = this.cubism$lastView;
 		this.cubism$lastView = this.cubism$view;
 		this.cubism$view = CubeFlight.viewFrame(this.entity, partialTicks);
 		Quaternionf airTurn = this.cubism$airTurn(partialTicks);
@@ -110,6 +112,7 @@ public abstract class CameraMixin {
 			this.cubism$eyeCorrection.identity();
 			this.cubism$lastFace = -1;
 			this.cubism$lastView = this.cubism$view;
+			this.cubism$viewBefore = this.cubism$view;
 		}
 		this.cubism$turnAcrossSeam(partialTicks, now, airTurn);
 		this.cubism$rotationBefore.set(this.rotation);
@@ -189,7 +192,7 @@ public abstract class CameraMixin {
 				// The camera rotation still holds the last frame, with any turn in progress. The correction starts from
 				// where the camera turned on to by now at its last rate. From the last frame itself, the view stood still
 				// for this frame and then caught up, a visible hitch while the view turns over an edge.
-				Quaternionf shown = new Quaternionf(motion).mul(this.cubism$continued(now));
+				Quaternionf shown = new Quaternionf(motion).mul(this.cubism$continued(this.rotation, this.cubism$rotationBefore, now));
 				float yRot = this.entity.getViewYRot(partialTicks);
 				float xRot = this.entity.getViewXRot(partialTicks);
 				// The front view of vanilla looks back at the entity, and the last rotation holds that view.
@@ -202,7 +205,9 @@ public abstract class CameraMixin {
 				// The eye stands along the air frame. The correction keeps it where the motion carries the last eye. It is
 				// the shortest turn between the two ups: the two frames come from other storage axes and also differ by a
 				// twist about the up, which moves no eye at the crossing, but half eased it swung the eye 15 degrees aside.
-				Vector3f lastUp = motion.mul(this.cubism$smoothed(this.cubism$eyeCorrection, now)).mul(this.cubism$lastView).transform(new Vector3f(UP));
+				// The last up also turns on at its last rate, as the camera rotation does, or the eye stood still for a frame.
+				Quaternionf lastView = this.cubism$continued(this.cubism$lastView, this.cubism$viewBefore, now);
+				Vector3f lastUp = motion.mul(this.cubism$smoothed(this.cubism$eyeCorrection, now)).mul(lastView).transform(new Vector3f(UP));
 				Vector3f nowUp = this.cubism$view.transform(new Vector3f(UP));
 				this.cubism$eyeCorrection.rotationTo(nowUp, lastUp);
 				this.cubism$flipTime = now;
@@ -213,16 +218,16 @@ public abstract class CameraMixin {
 		this.cubism$lastPosition = position;
 	}
 
-	/** The rotation of the last frame, turned on to the given time at the rate between the last two frames. */
+	/** A rotation of the last frame, turned on to the given time at its rate since the frame before. */
 	@Unique
-	private Quaternionf cubism$continued(float now) {
-		Quaternionf last = new Quaternionf(this.rotation);
+	private Quaternionf cubism$continued(Quaternionf lastRotation, Quaternionf rotationBefore, float now) {
+		Quaternionf last = new Quaternionf(lastRotation);
 		float span = this.cubism$lastTime - this.cubism$timeBefore;
 		float ahead = now - this.cubism$lastTime;
 		if (span <= 1.0E-4F || span > 1.0F || ahead <= 0.0F) {
 			return last;
 		}
-		AxisAngle4f turn = new AxisAngle4f(new Quaternionf(this.rotation).mul(new Quaternionf(this.cubism$rotationBefore).conjugate()));
+		AxisAngle4f turn = new AxisAngle4f(new Quaternionf(lastRotation).mul(new Quaternionf(rotationBefore).conjugate()));
 		float angle = turn.angle > (float) Math.PI ? turn.angle - 2.0F * (float) Math.PI : turn.angle;
 		return new Quaternionf().rotationAxis(angle * Math.min(ahead / span, 3.0F), turn.x, turn.y, turn.z).mul(last);
 	}
