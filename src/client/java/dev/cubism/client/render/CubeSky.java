@@ -245,6 +245,11 @@ public final class CubeSky {
 		return fogClear;
 	}
 
+	/** The direction toward the sun in the cube frame. */
+	public static Vector3fc sun() {
+		return SUN;
+	}
+
 	public static float starMax() {
 		return starMax;
 	}

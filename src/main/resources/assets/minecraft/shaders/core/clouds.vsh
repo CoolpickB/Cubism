@@ -106,4 +106,12 @@ void main() {
     cubeClip = vec4(ModelOffset + pos, ColorModulator.x < 0.0 ? ColorModulator.y : 0.0);
     vertexDistance = fog_spherical_distance(pos);
     vertexColor = (useTopColor ? faceColors[1] : faceColors[direction]) * CloudColor;
+    // Cube world, from orbit: the day and night of the cloud follow the sun at its place on the rounded cube.
+    if (ColorModulator.x < 0.0 && ColorModulator.z > 0.0) {
+        vec3 cube = mat3(TextureMat) * cubeClip.xyz;
+        vec3 normal = normalize(cube - clamp(cube, -ColorModulator.w, ColorModulator.w));
+        float day = smoothstep(-0.15, 0.35, dot(normal, TextureMat[3].xyz));
+        vec3 lit = (useTopColor ? faceColors[1] : faceColors[direction]).rgb * mix(vec3(0.08, 0.09, 0.13), vec3(1.0), day);
+        vertexColor.rgb = mix(vertexColor.rgb, lit, ColorModulator.z);
+    }
 }

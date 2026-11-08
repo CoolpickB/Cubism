@@ -32,7 +32,7 @@ import java.util.function.Consumer;
  * <p>All state is used on the render thread only.
  */
 public final class CubeClouds {
-	public record Placement(Matrix4f rotation, Vector3f cameraInFace) {}
+	public record Placement(int face, Matrix4f rotation, Vector3f cameraInFace) {}
 
 	private static final int CELL = 12;
 	/** Cells per side of the texture of a layer. A face at the cloud height is about 54 cells wide. */
@@ -165,7 +165,7 @@ public final class CubeClouds {
 				toCamera[2], toCamera[5], toCamera[8], 0,
 				0, 0, 0, 1
 			);
-			PLACEMENTS[face] = new Placement(rotation, new Vector3f((float) (localX - CENTER), (float) (camera.y - layout.centerY - CENTER), (float) (localZ - CENTER)));
+			PLACEMENTS[face] = new Placement(face, rotation, new Vector3f((float) (localX - CENTER), (float) (camera.y - layout.centerY - CENTER), (float) (localZ - CENTER)));
 			// Vanilla finds the cloud cell of a point from the camera position it gets, so this position moves the grid
 			// by the shift. Vanilla adds its own drift from the game time, so the time is zero, and it adds an offset
 			// on Z.
