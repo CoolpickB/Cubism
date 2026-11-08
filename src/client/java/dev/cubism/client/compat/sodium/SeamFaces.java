@@ -187,7 +187,9 @@ public final class SeamFaces {
 		}
 		for (int f = 0; f < FACES; f++) {
 			drawn[f] = false;
-			RenderSectionManager manager = managers[f];
+			// A manager exists once a chunk of its face loads. After a login or a reload in space none has, and Voxy draws
+			// its levels of detail from inside the manager, so the faces would show none until chunks load on the ground.
+			RenderSectionManager manager = layout != null && SeamClient.VOXY && f != primary ? manager(f) : managers[f];
 			if (layout == null || manager == null || f == primary) {
 				continue;
 			}
