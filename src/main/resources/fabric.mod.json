@@ -42,6 +42,10 @@
 		{
 			"config": "cubism.compat.xaerominimap.mixins.json",
 			"environment": "client"
+		},
+		{
+			"config": "cubism.compat.xaeroworldmap.mixins.json",
+			"environment": "client"
 		}
 	],
 	"custom": {

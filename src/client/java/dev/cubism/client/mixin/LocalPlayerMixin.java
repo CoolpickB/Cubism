@@ -16,6 +16,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -71,7 +72,11 @@ public abstract class LocalPlayerMixin extends LivingEntity {
 
 	@Override
 	public void moveRelative(float speed, Vec3 input) {
-		this.setDeltaMovement(this.getDeltaMovement().add(getInputVector(input, speed, CubeFlight.moveYaw((LocalPlayer) (Object) this))));
+		LocalPlayer player = (LocalPlayer) (Object) this;
+		Quaternionf space = CubeFlight.spaceMoveFrame(player);
+		Vec3 push = space == null ? getInputVector(input, speed, CubeFlight.moveYaw(player))
+			: CubeFlight.fromFrame(space, getInputVector(input, speed, CubeFlight.yawInFrame(player, space)));
+		this.setDeltaMovement(this.getDeltaMovement().add(push));
 	}
 
 	/**

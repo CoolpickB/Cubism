@@ -4,6 +4,7 @@
 	"plugin": "dev.cubism.client.compat.CompatMixinPlugin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"EntityUtilsMixin",
 		"WaypointTeleportMixin",
 		"WaypointWorldRendererMixin",
 		"WaypointWorldRenderReaderMixin"

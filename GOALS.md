@@ -228,3 +228,10 @@ Fifth pass (2026-11-08, untested). The user found that the clouds drew in front 
 - After user test: the cold-biome auroras work. The aurora now also draws in front of the ground below orbit. A ray that leaves the band through the bottom looks for the band again past an edge, and stops only at the sea level of the planet. Before, the aurora below vanished once the camera was inside the band.
 - The last frame that a pack reprojects is carried into the frame of the space region at the handoff, from the bottom face too. This change did not stop the bright flash at the handoff.
 - The bright flash of a face at the handoff to space and back is fixed (confirmed by the user). Iris draws the shadow pass first, and it puts only the old primary manager into its shadow state. The new primary manager then drew its empty shadow lists, so the shadow map was empty for one frame. `SeamFaces.beginShadowScope` puts the new manager into the shadow state at the swap.
+
+Space, last pass (2026-11-08, confirmed by the user):
+- A player that floats in space without flight moves level in the view frame. Before this, the keys moved level in the frame of the UP face, which the view shows tilted on the other sides of the cube.
+- In space, the view frame of the local player turns from the frame of the last tick by the shortest turn of its up (`CubeFlight.spaceFrame`). Before this, the frame spun about its up directly under the DOWN face.
+- Xaero: in space, the minimap and the world map show the player at a fixed point. The point is past the middle of the row of faces, 512 blocks out from the face strips (`XaeroSpace`).
+- The server starts the planet map when the world loads. A new world waits for the map at the end of the pre-generation. On the dev server, the map took 33 s, in a pre-generation of 72 s.
+- Not built, by decision: the planet-ahead view, and elytra rules in space.

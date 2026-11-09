@@ -14,6 +14,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -53,6 +54,13 @@ public final class CubeFlight {
 	private static final Quaternionf physicsFrame = new Quaternionf();
 	private static float worldYRot;
 	private static float worldXRot;
+	/**
+	 * The view frame of the local player in the space region, carried from tick to tick by the shortest turn of its up.
+	 * Space is stored in the frame of the UP face, and a frame made from that up alone spun about its up directly
+	 * under the DOWN face, where the turn to the up is half a turn about no clear axis.
+	 */
+	private static final Quaternionf spaceFrame = new Quaternionf();
+	private static boolean hasSpaceFrame;
 	/** The last ticks before a crossing and the ticks after it, for the load trace. */
 	private static final ArrayDeque<String> RECENT_TICKS = new ArrayDeque<>();
 	private static int traceTicksLeft;
@@ -130,6 +138,7 @@ public final class CubeFlight {
 		}
 		float crossYRot = player.getYRot();
 		float crossXRot = player.getXRot();
+		tickSpaceFrame(player);
 		tickViewY(player, flies);
 		carryLook(player);
 		traceTick(player);
@@ -450,7 +459,7 @@ public final class CubeFlight {
 			return new Quaternionf();
 		}
 		Vec3 center = entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0);
-		return withLock(layout, entity, partialTicks, () -> frameAt(layout, center, t, radiusAt(layout, center, layout.turnRadius(), partialTicks)));
+		return withLock(layout, entity, partialTicks, () -> frameAt(layout, center, t, radiusAt(layout, center, layout.turnRadius(), partialTicks), true));
 	}
 
 	/**
@@ -483,13 +492,40 @@ public final class CubeFlight {
 	}
 
 	/** The air frame at a body center for a radius of the turn over an edge, eased in by a weight. */
-	private static Quaternionf frameAt(SeamLayout layout, Vec3 center, float t, double radius) {
+	private static Quaternionf frameAt(SeamLayout layout, Vec3 center, float t, double radius, boolean local) {
 		Vec3 gravity = layout.pullAt(center.x, center.y, center.z, radius);
 		if (gravity == null || t <= 0.0F) {
 			return new Quaternionf();
 		}
-		Quaternionf full = new Quaternionf().rotationTo(0.0F, 1.0F, 0.0F, (float) -gravity.x, (float) -gravity.y, (float) -gravity.z);
+		Vector3f up = new Vector3f((float) -gravity.x, (float) -gravity.y, (float) -gravity.z);
+		Quaternionf full = local && hasSpaceFrame && SeamInteraction.regionFace(layout, center.x, center.z) == SeamLayout.SPACE
+			? new Quaternionf().rotationTo(spaceFrame.transform(new Vector3f(0.0F, 1.0F, 0.0F)), up).mul(spaceFrame)
+			: new Quaternionf().rotationTo(new Vector3f(0.0F, 1.0F, 0.0F), up);
 		return new Quaternionf().slerp(full, t * t * (3.0F - 2.0F * t));
+	}
+
+	/**
+	 * Carries {@link #spaceFrame} to the up at the player. It starts upright in the storage frame, or turned half a turn
+	 * when the up points down there, so the first turn is never more than a quarter turn.
+	 */
+	private static void tickSpaceFrame(LocalPlayer player) {
+		SeamLayout layout = SeamLayout.of(player.level());
+		Vec3 center = player.position().add(0.0, player.getBbHeight() / 2.0, 0.0);
+		Vec3 gravity = layout == null || SeamInteraction.regionFace(layout, center.x, center.z) != SeamLayout.SPACE ? null
+			: layout.pullAt(center.x, center.y, center.z, layout.turnRadius());
+		if (gravity == null || gravity.lengthSqr() < 1.0E-12) {
+			hasSpaceFrame = false;
+			return;
+		}
+		Vector3f up = new Vector3f((float) -gravity.x, (float) -gravity.y, (float) -gravity.z).normalize();
+		if (!hasSpaceFrame) {
+			spaceFrame.identity();
+			if (up.y < 0.0F) {
+				spaceFrame.rotationX((float) Math.PI);
+			}
+			hasSpaceFrame = true;
+		}
+		spaceFrame.premul(new Quaternionf().rotationTo(spaceFrame.transform(new Vector3f(0.0F, 1.0F, 0.0F)), up)).normalize();
 	}
 
 	private static boolean isIdentity(Quaternionf q) {
@@ -539,11 +575,11 @@ public final class CubeFlight {
 		Vec3 center = position.add(offset).add(0.0, entity.getBbHeight() / 2.0, 0.0);
 		double radius = entity instanceof LocalPlayer ? radiusAt(layout, center, layout.turnRadius(), partialTicks) : layout.turnRadius();
 		if (ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer)) {
-			return frameAt(layout, center, 1.0F, radius);
+			return frameAt(layout, center, 1.0F, radius, entity instanceof LocalPlayer);
 		}
 		// With the tilt off the view on the ground turns only over the last blocks before the diagonal, so it does not
 		// snap at the crossing. In flight it eases to the frame of the flight.
-		return frameAt(layout, center, 1.0F, TILT_OFF_RADIUS).slerp(frameAt(layout, center, 1.0F, radius), flightWeight(partialTicks));
+		return frameAt(layout, center, 1.0F, TILT_OFF_RADIUS, true).slerp(frameAt(layout, center, 1.0F, radius, true), flightWeight(partialTicks));
 	}
 
 	/**
@@ -620,6 +656,32 @@ public final class CubeFlight {
 		}
 		syncScreenUp(player, frame);
 		return yaw(heading(look(player.getYRot(), player.getXRot()), frame), player.getYRot());
+	}
+
+	/**
+	 * The view frame for the movement keys of a player that floats in the space region, or null elsewhere. Space is
+	 * stored in the frame of the UP face, so vanilla moved the player level in that frame, which the view shows tilted
+	 * or upside down on the other sides of the cube. Flight already moves in the air frame.
+	 */
+	public static @Nullable Quaternionf spaceMoveFrame(LocalPlayer player) {
+		SeamLayout layout = SeamLayout.of(player.level());
+		if (inFrame || layout == null || SeamInteraction.regionFace(layout, player.getX(), player.getZ()) != SeamLayout.SPACE) {
+			return null;
+		}
+		Quaternionf frame = viewFrame(player, 1.0F);
+		return isIdentity(frame) ? null : frame;
+	}
+
+	/** The yaw in a view frame of the heading of the screen, for {@link #spaceMoveFrame}. */
+	public static float yawInFrame(LocalPlayer player, Quaternionf frame) {
+		syncScreenUp(player, frame);
+		Vector3f heading = new Quaternionf(frame).conjugate().transform(heading(look(player.getYRot(), player.getXRot()), frame));
+		return yaw(heading, player.getYRot());
+	}
+
+	/** A vector in a frame, turned into the face frame. */
+	public static Vec3 fromFrame(Quaternionf frame, Vec3 v) {
+		return turn(frame, v);
 	}
 
 	/**

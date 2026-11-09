@@ -55,6 +55,7 @@ public final class PlanetMap {
 	}
 
 	private static byte[] build(ServerLevel level, SeamLayout layout) {
+		long start = System.nanoTime();
 		ChunkGenerator generator = level.getChunkSource().getGenerator();
 		RandomState random = level.getChunkSource().randomState();
 		BiomeResolver biomes = generator.getBiomeSource().createResolver(random.createClimateSampler(SamplerContext.builder().enableCaches().build()));
@@ -82,6 +83,7 @@ public final class PlanetMap {
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
+		org.slf4j.LoggerFactory.getLogger("cubism").info("Planet map made in {} ms", (System.nanoTime() - start) / 1_000_000L);
 		return bytes.toByteArray();
 	}
 

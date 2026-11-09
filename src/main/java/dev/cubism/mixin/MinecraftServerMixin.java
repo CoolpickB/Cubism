@@ -3,6 +3,7 @@ package dev.cubism.mixin;
 import dev.cubism.debug.LoadTrace;
 import dev.cubism.worldgen.CubePregen;
 import dev.cubism.worldgen.CubeSettings;
+import dev.cubism.worldgen.PlanetMap;
 import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.server.MinecraftServer;
@@ -20,6 +21,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 
 @Mixin(MinecraftServer.class)
@@ -100,7 +102,13 @@ public abstract class MinecraftServerMixin {
 	private void cubism$pregenerate(CallbackInfo ci) {
 		ServerLevel level = this.overworld();
 		SeamLayout layout = SeamLayout.of(level);
-		if (!this.cubism$newWorld || layout == null) {
+		if (layout == null) {
+			return;
+		}
+		// The map of the planet for the view from space is made on its own thread while the chunks load. A new world
+		// waits for it, so the planet shows from the first join.
+		CompletableFuture<byte[]> planet = PlanetMap.of(level);
+		if (!this.cubism$newWorld) {
 			return;
 		}
 		ChunkPos spawn = ChunkPos.containing(this.selectLevelLoadFocusPos().pos());
@@ -121,7 +129,7 @@ public abstract class MinecraftServerMixin {
 		LoadTrace.event("server: pre-generation start, " + pregen.total() + " columns");
 		CubePregen.unsyncedWrites = true;
 		try {
-			while (!pregen.tick()) {
+			while (!pregen.tick() || !planet.isDone()) {
 				if (!this.isRunning()) {
 					return;
 				}
