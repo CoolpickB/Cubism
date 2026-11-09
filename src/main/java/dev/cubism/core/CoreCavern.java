@@ -12,14 +12,16 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.feature.Feature;
 
 /**
- * Caves in the rock over the inner bedrock cube. The bedrock stays a plain cube, so its edges and corners stand out
- * of the caves. The caves are 3D noise in cube coordinates, so they are the same on every face and whole across the
+ * A hall over each face of the inner bedrock cube. The bedrock stays a plain cube and is the floor, so its edges and
+ * corners stand out of the hall. The shape is in cube coordinates, so it is the same on every face and whole across the
  * diagonals, and each cube position is written by the face that owns it.
  * <p>
- * With {@code h} the height over the cube face, a position is air where chamber noise passes a threshold that rises
- * with {@code h}, or where two tunnel noises are both near zero. So the caves lie close over the bedrock and fade out
- * about {@link #CAVE_HEIGHT} blocks up, with chambers, winding tunnels and dead ends. Rock within {@link #PURPUR_DEPTH}
- * blocks of the air is purpur, and rock within {@link #SHELL_DEPTH} blocks of it is obsidian.
+ * With {@code h} the height over the cube face and {@code t} the distance to the diagonal plane of the nearest edge, the
+ * ceiling is {@link #CAVE_HEIGHT} blocks high over the middle of the face and sinks to a low crawl gap as {@code t} goes
+ * to zero. So each hall clings to its face and is pinched where two faces meet. Noise makes the ceiling uneven, and
+ * adds pillars and mounds on the floor. Rock within {@link #PURPUR_DEPTH} blocks of the air is purpur, and rock within
+ * {@link #SHELL_DEPTH} blocks of it is obsidian. The feature only writes into solid rock: caves, water and lava that
+ * the vanilla generator made stay, so they run into and through the hall and its lining.
  */
 public record CoreCavern() implements Feature {
 	public static final MapCodec<CoreCavern> CODEC = MapCodec.unit(CoreCavern::new);
@@ -33,9 +35,11 @@ public record CoreCavern() implements Feature {
 	private static final int MARGIN = SHELL_DEPTH + 1;
 	private static final double CRYING_CHANCE = 1.0 / 40.0;
 	/** Budding bedrock grows only on the edges and corners of the cube, where it juts into the caves. */
-	private static final double BUDDING_EDGE = 1.0 / 8.0;
-	private static final double BUDDING_CORNER = 1.0 / 3.0;
-	private static final int EDGE_REACH = 3;
+	private static final double BUDDING_EDGE = 1.0 / 100.0;
+	private static final double BUDDING_CORNER = 1.0 / 4.0;
+	private static final int EDGE_REACH = 1;
+	/** Blocks from the diagonal plane of an edge over which the ceiling rises from the crawl gap to full height. */
+	private static final double POLE_REACH = 24.0;
 	private static final byte FAR = 127;
 
 	@Override
@@ -237,15 +241,35 @@ public record CoreCavern() implements Feature {
 		return false;
 	}
 
-	/** Chambers over a threshold that rises with the height, and tunnels where two noises are near zero together. */
-	private static boolean isAir(long seed, int x, int y, int z, int h) {
-		double chambers = 0.55 * noise(seed + 1L, x, y, z, 18.0) + 0.30 * noise(seed + 2L, x, y, z, 8.0) + 0.15 * noise(seed + 3L, x, y, z, 4.0);
-		double ratio = (double) h / CAVE_HEIGHT;
-		double floorOpen = h <= 2 ? 0.3 : 0.0;
-		if (chambers > 0.08 - floorOpen + 0.87 * ratio * ratio) {
-			return true;
+	/** Air under a ceiling that sinks toward the edges, minus pillars and floor mounds. */
+	private static boolean isAir(long seed, int cx, int cy, int cz, int h) {
+		int ax = Math.abs(cx);
+		int ay = Math.abs(cy);
+		int az = Math.abs(cz);
+		int a = Math.max(ax, Math.max(ay, az));
+		int b = ax + ay + az - a - Math.min(ax, Math.min(ay, az));
+		int u;
+		int v;
+		if (a == ax) {
+			u = cy;
+			v = cz;
+		} else if (a == ay) {
+			u = cx;
+			v = cz;
+		} else {
+			u = cx;
+			v = cy;
 		}
-		return ratio <= 0.8 && Math.abs(noise(seed + 4L, x, y, z, 14.0)) < 0.10 && Math.abs(noise(seed + 5L, x, y, z, 14.0)) < 0.10;
+		double rise = Mth.clamp((a - b) / POLE_REACH, 0.0, 1.0);
+		rise = smooth(rise);
+		double ceiling = 2.5 + (CAVE_HEIGHT - 2.5) * rise + 6.0 * rise * noise(seed + 1L, cx, cy, cz, 11.0) + 2.5 * noise(seed + 2L, cx, cy, cz, 5.0);
+		if (h > ceiling) {
+			return false;
+		}
+		if (h > 2 && noise(seed + 3L, u, 0, v, 10.0) > 0.7) {
+			return false;
+		}
+		return h > 6.0 * Math.max(0.0, noise(seed + 4L, u, 0, v, 8.0) - 0.25);
 	}
 
 	private static double smooth(double t) {
