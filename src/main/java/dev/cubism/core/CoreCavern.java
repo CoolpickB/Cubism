@@ -19,7 +19,7 @@ import net.minecraft.world.level.levelgen.feature.Feature;
  * With {@code h} the height over the cube face and {@code t} the distance to the diagonal plane of the nearest edge, the
  * ceiling is {@link #CAVE_HEIGHT} blocks high over the middle of the face and sinks to a low crawl gap as {@code t} goes
  * to zero. So each hall clings to its face and is pinched where two faces meet. Noise makes the ceiling uneven, and
- * adds pillars and mounds on the floor. Rock within {@link #PURPUR_DEPTH} blocks of the air is purpur, and rock within
+ * adds pillars, and in places a layer of rock keeps the hall off the bedrock. Rock within {@link #PURPUR_DEPTH} blocks of the air is purpur, and rock within
  * {@link #SHELL_DEPTH} blocks of it is obsidian. The feature only writes into solid rock: caves, water and lava that
  * the vanilla generator made stay, so they run into and through the hall and its lining.
  */
@@ -39,6 +39,9 @@ public record CoreCavern() implements Feature {
 	private static final double BUDDING_CORNER = 1.0 / 4.0;
 	private static final int EDGE_REACH = 1;
 	/** Blocks from the diagonal plane of an edge over which the ceiling rises from the crawl gap to full height. */
+	/** Contact noise above this value lets the hall touch the bedrock; below it, rock lifts the floor by up to FLOOR_LIFT blocks. */
+	private static final double CONTACT = 0.1;
+	private static final double FLOOR_LIFT = 7.0;
 	private static final double POLE_REACH = 24.0;
 	private static final byte FAR = 127;
 
@@ -241,7 +244,7 @@ public record CoreCavern() implements Feature {
 		return false;
 	}
 
-	/** Air under a ceiling that sinks toward the edges, minus pillars and floor mounds. */
+	/** Air under a ceiling that sinks toward the edges, minus pillars and a floor lifted by rock where the hall does not touch the bedrock. */
 	private static boolean isAir(long seed, int cx, int cy, int cz, int h) {
 		int ax = Math.abs(cx);
 		int ay = Math.abs(cy);
@@ -262,14 +265,16 @@ public record CoreCavern() implements Feature {
 		}
 		double rise = Mth.clamp((a - b) / POLE_REACH, 0.0, 1.0);
 		rise = smooth(rise);
-		double ceiling = 2.5 + (CAVE_HEIGHT - 2.5) * rise + 6.0 * rise * noise(seed + 1L, cx, cy, cz, 11.0) + 2.5 * noise(seed + 2L, cx, cy, cz, 5.0);
+		double ceiling = 2.5 + (CAVE_HEIGHT - 2.5) * rise + 6.0 * rise * noise(seed + 1L, cx, cy, cz, 11.0);
 		if (h > ceiling) {
 			return false;
 		}
 		if (h > 2 && noise(seed + 3L, u, 0, v, 10.0) > 0.7) {
 			return false;
 		}
-		return h > 6.0 * Math.max(0.0, noise(seed + 4L, u, 0, v, 8.0) - 0.25);
+		// Near an edge the hall always reaches the bedrock, as at a pole. Elsewhere, where the contact noise is high it does; elsewhere rock keeps it up to FLOOR_LIFT blocks off.
+		double lift = FLOOR_LIFT * Mth.clamp((CONTACT - noise(seed + 4L, u, 0, v, 14.0) - 0.8 * (1.0 - rise)) * 6.0, 0.0, 1.0);
+		return h > lift;
 	}
 
 	private static double smooth(double t) {
