@@ -104,6 +104,7 @@ public abstract class SodiumWorldRendererMixin {
 			SeamFaces.setPrimary(face);
 			this.renderSectionManager = SeamFaces.manager(face);
 			this.uniformBufferManager = SeamFaces.uniforms(face);
+			SeamFaces.beginShadowScope();
 			this.renderSectionManager.notifyChangedCamera();
 			this.lastCameraPos = null;
 		}

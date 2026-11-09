@@ -144,6 +144,16 @@ public final class SeamFaces {
 		level = null;
 	}
 
+	/**
+	 * Puts every manager into the Iris shadow state. Iris enters only the manager that was primary when its shadow pass began,
+	 * so a manager that becomes primary inside that pass would cull for the shadow camera into its main lists and draw empty shadow lists.
+	 */
+	public static void beginShadowScope() {
+		if (SeamClient.IRIS && IrisLink.shadowsActive()) {
+			IrisLink.setShadowScope(managers, uniforms, true);
+		}
+	}
+
 	/** Takes every manager out of the Iris shadow state. */
 	public static void endShadowScope() {
 		if (SeamClient.IRIS) {
