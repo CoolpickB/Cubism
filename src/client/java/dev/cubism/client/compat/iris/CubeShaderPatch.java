@@ -386,6 +386,10 @@ public final class CubeShaderPatch {
 		    vec3 cam = cubism_cubeFromFeet[3].xyz;
 		    vec3 sunDir = normalize(mat3(cubism_cubeFromView) * cubism_sunPosition);
 		    float top = cubismAuroraLow + cubismAuroraDepth;
+		    // The planet mesh writes no depth, so over it the ground distance is the sky. The aurora ends at the mesh.
+		    #ifdef CUBISM_PLANET
+		        if (cubismSpace() > 0.0) maxT = min(maxT, cubismPlanetHit(cam, dir, maxT));
+		    #endif
 
 		    float t = cubismAuroraEntry(cam, dir, 0.0, maxT);
 		    if (t < 0.0) return vec3(0.0);
