@@ -2,6 +2,10 @@ package dev.cubism.core;
 
 import com.mojang.serialization.MapCodec;
 import dev.cubism.worldgen.SeamLayout;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
@@ -12,16 +16,16 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.feature.Feature;
 
 /**
- * A hall over each face of the inner bedrock cube. The bedrock stays a plain cube and is the floor, so its edges and
- * corners stand out of the hall. The shape is in cube coordinates, so it is the same on every face and whole across the
+ * Field lines over the inner bedrock cube. The 8 corners are poles, and along each of the 12 edges a bundle of arcs
+ * joins the two corner poles, like iron filings around a magnet. Each arc is a tube of air that is thin at the poles,
+ * where it runs along the edge, and wider in the middle, where it lifts off and bulges away from the cube. The bundle
+ * fans out between the two faces at the edge, each arc with its own height. Everything else stays solid, so the middle
+ * of a face has no air over it. The shape is in cube coordinates, so it is the same on every face and whole across the
  * diagonals, and each cube position is written by the face that owns it.
  * <p>
- * With {@code h} the height over the cube face and {@code t} the distance to the diagonal plane of the nearest edge, the
- * ceiling is {@link #CAVE_HEIGHT} blocks high over the middle of the face and sinks to a low crawl gap as {@code t} goes
- * to zero. So each hall clings to its face and is pinched where two faces meet. Noise makes the ceiling uneven, and
- * adds pillars, and in places a layer of rock keeps the hall off the bedrock. Rock within {@link #PURPUR_DEPTH} blocks of the air is purpur, and rock within
- * {@link #SHELL_DEPTH} blocks of it is obsidian. The feature only writes into solid rock: caves, water and lava that
- * the vanilla generator made stay, so they run into and through the hall and its lining.
+ * Rock within {@link #PURPUR_DEPTH} blocks of the air is purpur, and rock within {@link #SHELL_DEPTH} blocks of it is
+ * obsidian. The feature only writes into solid rock: caves, water and lava that the vanilla generator made stay, so
+ * they run into and through the tubes and their lining.
  */
 public record CoreCavern() implements Feature {
 	public static final MapCodec<CoreCavern> CODEC = MapCodec.unit(CoreCavern::new);
@@ -38,12 +42,19 @@ public record CoreCavern() implements Feature {
 	private static final double BUDDING_EDGE = 1.0 / 100.0;
 	private static final double BUDDING_CORNER = 1.0 / 4.0;
 	private static final int EDGE_REACH = 1;
-	/** Blocks from the diagonal plane of an edge over which the ceiling rises from the crawl gap to full height. */
-	/** Contact noise above this value lets the hall touch the bedrock; below it, rock lifts the floor by up to FLOOR_LIFT blocks. */
-	private static final double CONTACT = 0.1;
-	private static final double FLOOR_LIFT = 7.0;
-	private static final double POLE_REACH = 24.0;
 	private static final byte FAR = 127;
+	private static final int ARCS_PER_EDGE = 4;
+	private static final int ARC_MAX_HEIGHT = 22;
+	private static final int ARC_MIN_HEIGHT = 8;
+	private static final double RADIUS_POLE = 1.6;
+	private static final double RADIUS_MIDDLE = 3.0;
+	/** The tube points are spaced so that neighbouring spheres overlap. */
+	private static final double POINT_SPACING = 1.5;
+	private static final int BUCKET = 4;
+	private static volatile ArcCache arcCache;
+
+	private record ArcCache(long seed, int baseA, double[][] points) {
+	}
 
 	@Override
 	public MapCodec<CoreCavern> codec() {
@@ -76,17 +87,49 @@ public record CoreCavern() implements Feature {
 
 		long seed = level.getSeed();
 		int n = 16 + 2 * MARGIN;
-		byte[] dist = new byte[n * n * ny];
+		int cells = n * n * ny;
+		int[] gx = new int[cells];
+		int[] gy = new int[cells];
+		int[] gz = new int[cells];
 		int[] cube = new int[3];
+		int minX = Integer.MAX_VALUE;
+		int minY = Integer.MAX_VALUE;
+		int minZ = Integer.MAX_VALUE;
+		int maxX = Integer.MIN_VALUE;
+		int maxY = Integer.MIN_VALUE;
+		int maxZ = Integer.MIN_VALUE;
 		for (int ix = 0; ix < n; ix++) {
 			for (int iz = 0; iz < n; iz++) {
 				for (int iy = 0; iy < ny; iy++) {
 					layout.toCube(face, x0 - MARGIN + ix, y0 + iy, z0 - MARGIN + iz, cube);
-					int cy = cube[1] - layout.centerY;
-					int h = Math.max(Math.abs(cube[0]), Math.max(Math.abs(cy), Math.abs(cube[2]))) - baseA;
-					dist[(ix * n + iz) * ny + iy] = h >= 1 && h <= CAVE_HEIGHT && isAir(seed, cube[0], cy, cube[2], h) ? 0 : FAR;
+					int i = (ix * n + iz) * ny + iy;
+					gx[i] = cube[0];
+					gy[i] = cube[1] - layout.centerY;
+					gz[i] = cube[2];
+					minX = Math.min(minX, gx[i]);
+					maxX = Math.max(maxX, gx[i]);
+					minY = Math.min(minY, gy[i]);
+					maxY = Math.max(maxY, gy[i]);
+					minZ = Math.min(minZ, gz[i]);
+					maxZ = Math.max(maxZ, gz[i]);
 				}
 			}
+		}
+		Map<Long, List<double[]>> buckets = new HashMap<>();
+		for (double[] arc : arcs(seed, baseA)) {
+			for (int j = 0; j < arc.length; j += 4) {
+				double r = arc[j + 3];
+				if (arc[j] + r < minX || arc[j] - r > maxX || arc[j + 1] + r < minY || arc[j + 1] - r > maxY || arc[j + 2] + r < minZ || arc[j + 2] - r > maxZ) {
+					continue;
+				}
+				long key = bucketKey(Math.floorDiv((int) Math.floor(arc[j]), BUCKET), Math.floorDiv((int) Math.floor(arc[j + 1]), BUCKET), Math.floorDiv((int) Math.floor(arc[j + 2]), BUCKET));
+				buckets.computeIfAbsent(key, k -> new ArrayList<>()).add(new double[] {arc[j], arc[j + 1], arc[j + 2], arc[j + 3]});
+			}
+		}
+		byte[] dist = new byte[cells];
+		for (int i = 0; i < cells; i++) {
+			int h = Math.max(Math.abs(gx[i]), Math.max(Math.abs(gy[i]), Math.abs(gz[i]))) - baseA;
+			dist[i] = h >= 1 && h <= CAVE_HEIGHT && inTube(buckets, gx[i], gy[i], gz[i]) ? 0 : FAR;
 		}
 		for (int pass = 1; pass <= SHELL_DEPTH; pass++) {
 			for (int ix = 0; ix < n; ix++) {
@@ -244,41 +287,78 @@ public record CoreCavern() implements Feature {
 		return false;
 	}
 
-	/** Air under a ceiling that sinks toward the edges, minus pillars and a floor lifted by rock where the hall does not touch the bedrock. */
-	private static boolean isAir(long seed, int cx, int cy, int cz, int h) {
-		int ax = Math.abs(cx);
-		int ay = Math.abs(cy);
-		int az = Math.abs(cz);
-		int a = Math.max(ax, Math.max(ay, az));
-		int b = ax + ay + az - a - Math.min(ax, Math.min(ay, az));
-		int u;
-		int v;
-		if (a == ax) {
-			u = cy;
-			v = cz;
-		} else if (a == ay) {
-			u = cx;
-			v = cz;
-		} else {
-			u = cx;
-			v = cy;
-		}
-		double rise = Mth.clamp((a - b) / POLE_REACH, 0.0, 1.0);
-		rise = smooth(rise);
-		double ceiling = 2.5 + (CAVE_HEIGHT - 2.5) * rise + 6.0 * rise * noise(seed + 1L, cx, cy, cz, 11.0);
-		if (h > ceiling) {
-			return false;
-		}
-		if (h > 2 && noise(seed + 3L, u, 0, v, 10.0) > 0.7) {
-			return false;
-		}
-		// Near an edge the hall always reaches the bedrock, as at a pole. Elsewhere, where the contact noise is high it does; elsewhere rock keeps it up to FLOOR_LIFT blocks off.
-		double lift = FLOOR_LIFT * Mth.clamp((CONTACT - noise(seed + 4L, u, 0, v, 14.0) - 0.8 * (1.0 - rise)) * 6.0, 0.0, 1.0);
-		return h > lift;
+	private static long bucketKey(int bx, int by, int bz) {
+		return ((long) (bx & 0x1FFFFF) << 42) | ((long) (by & 0x1FFFFF) << 21) | (bz & 0x1FFFFF);
 	}
 
-	private static double smooth(double t) {
-		return t * t * (3.0 - 2.0 * t);
+	private static boolean inTube(Map<Long, List<double[]>> buckets, int x, int y, int z) {
+		int bx = Math.floorDiv(x, BUCKET);
+		int by = Math.floorDiv(y, BUCKET);
+		int bz = Math.floorDiv(z, BUCKET);
+		for (int ox = -1; ox <= 1; ox++) {
+			for (int oy = -1; oy <= 1; oy++) {
+				for (int oz = -1; oz <= 1; oz++) {
+					List<double[]> list = buckets.get(bucketKey(bx + ox, by + oy, bz + oz));
+					if (list == null) {
+						continue;
+					}
+					for (double[] p : list) {
+						double dx = x - p[0];
+						double dy = y - p[1];
+						double dz = z - p[2];
+						if (dx * dx + dy * dy + dz * dz <= p[3] * p[3]) {
+							return true;
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The arcs of the world as flat arrays of (x, y, z, radius) points in cube coordinates, y from the center. An arc
+	 * leaves a corner along an edge and lifts off with a height of {@code sin^1.5}, so it hugs the cube near the pole.
+	 */
+	private static double[][] arcs(long seed, int baseA) {
+		ArcCache cache = arcCache;
+		if (cache != null && cache.seed == seed && cache.baseA == baseA) {
+			return cache.points;
+		}
+		double length = 2.0 * baseA;
+		List<double[]> arcs = new ArrayList<>();
+		int edge = 0;
+		for (int k = 0; k < 3; k++) {
+			int a1 = (k + 1) % 3;
+			int a2 = (k + 2) % 3;
+			for (int s1 = -1; s1 <= 1; s1 += 2) {
+				for (int s2 = -1; s2 <= 1; s2 += 2) {
+					edge++;
+					for (int i = 0; i < ARCS_PER_EDGE; i++) {
+						double phi = (i + 0.3 + 0.4 * unit(seed + 103L, edge, i, 1)) / ARCS_PER_EDGE * (Math.PI / 2.0);
+						double height = ARC_MIN_HEIGHT + (ARC_MAX_HEIGHT - ARC_MIN_HEIGHT) * unit(seed + 101L, edge, i, 0);
+						int steps = Math.max(12, (int) Math.ceil((length + 3.0 * height) / POINT_SPACING));
+						double[] pts = new double[(steps + 1) * 4];
+						for (int j = 0; j <= steps; j++) {
+							double t = (double) j / steps;
+							double lift = height * Math.pow(Math.sin(Math.PI * t), 1.5);
+							double[] c = new double[3];
+							c[k] = -baseA + length * t;
+							c[a1] = s1 * (baseA + Math.cos(phi) * lift);
+							c[a2] = s2 * (baseA + Math.sin(phi) * lift);
+							pts[j * 4] = c[0];
+							pts[j * 4 + 1] = c[1];
+							pts[j * 4 + 2] = c[2];
+							pts[j * 4 + 3] = RADIUS_POLE + (RADIUS_MIDDLE - RADIUS_POLE) * Math.sin(Math.PI * t);
+						}
+						arcs.add(pts);
+					}
+				}
+			}
+		}
+		double[][] result = arcs.toArray(new double[0][]);
+		arcCache = new ArcCache(seed, baseA, result);
+		return result;
 	}
 
 	private static double unit(long seed, int x, int y, int z) {
@@ -287,27 +367,5 @@ public record CoreCavern() implements Feature {
 		h = (h ^ (h >>> 33)) * 0xc4ceb9fe1a85ec53L;
 		h ^= h >>> 33;
 		return (h >>> 11) * 0x1.0p-53;
-	}
-
-	/** Smooth value noise in -1 to 1. */
-	private static double noise(long seed, int x, int y, int z, double scale) {
-		double fx = x / scale;
-		double fy = y / scale;
-		double fz = z / scale;
-		int ix = Mth.floor(fx);
-		int iy = Mth.floor(fy);
-		int iz = Mth.floor(fz);
-		double tx = smooth(fx - ix);
-		double ty = smooth(fy - iy);
-		double tz = smooth(fz - iz);
-		double sum = 0.0;
-		for (int i = 0; i < 8; i++) {
-			int ox = i & 1;
-			int oy = i >> 1 & 1;
-			int oz = i >> 2 & 1;
-			double w = (ox == 0 ? 1.0 - tx : tx) * (oy == 0 ? 1.0 - ty : ty) * (oz == 0 ? 1.0 - tz : tz);
-			sum += w * unit(seed, ix + ox, iy + oy, iz + oz);
-		}
-		return sum * 2.0 - 1.0;
 	}
 }
