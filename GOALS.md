@@ -197,7 +197,6 @@ Status: the user played the space work in game on 2026-11-08 and it works. Items
 - Voxy with an Iris pack: the pack does its own light, so the edge light blend is off.
 - Entities and particles use the lightmap of the camera face, and the vanilla fog color is not per face.
 - Culling per chunk across a face boundary.
-- A smooth change of light across an edge needs the lightmap read per vertex from the local time of the vertex. The per-face lightmap steps at each edge.
 - Other dimensions can get space later.
 
 ## Phases
