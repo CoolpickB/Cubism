@@ -33,8 +33,8 @@ public record CoreCavern() implements Feature {
 	private static final int MARGIN = SHELL_DEPTH + 1;
 	private static final double CRYING_CHANCE = 1.0 / 40.0;
 	/** Budding bedrock grows only on the edges and corners of the cube, where it juts into the caves. */
-	private static final double BUDDING_EDGE = 1.0 / 20.0;
-	private static final double BUDDING_CORNER = 1.0 / 5.0;
+	private static final double BUDDING_EDGE = 1.0 / 8.0;
+	private static final double BUDDING_CORNER = 1.0 / 3.0;
 	private static final int EDGE_REACH = 3;
 	private static final byte FAR = 127;
 
@@ -241,7 +241,8 @@ public record CoreCavern() implements Feature {
 	private static boolean isAir(long seed, int x, int y, int z, int h) {
 		double chambers = 0.55 * noise(seed + 1L, x, y, z, 18.0) + 0.30 * noise(seed + 2L, x, y, z, 8.0) + 0.15 * noise(seed + 3L, x, y, z, 4.0);
 		double ratio = (double) h / CAVE_HEIGHT;
-		if (chambers > 0.08 + 0.87 * ratio * ratio) {
+		double floorOpen = h <= 2 ? 0.3 : 0.0;
+		if (chambers > 0.08 - floorOpen + 0.87 * ratio * ratio) {
 			return true;
 		}
 		return ratio <= 0.8 && Math.abs(noise(seed + 4L, x, y, z, 14.0)) < 0.10 && Math.abs(noise(seed + 5L, x, y, z, 14.0)) < 0.10;
