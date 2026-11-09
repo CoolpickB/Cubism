@@ -76,7 +76,9 @@ public final class PlanetView {
 
 	public static void close() {
 		if (mesh != null) {
-			mesh.close();
+			if (!mesh.isClosed()) {
+				mesh.close();
+			}
 			mesh = null;
 		}
 		builtFor = null;
@@ -91,13 +93,13 @@ public final class PlanetView {
 	/** The mesh buffer, built when the data or the layout is new. Null while the server has not sent the map. */
 	static @Nullable GpuBuffer mesh() {
 		prepare();
-		return mesh;
+		return mesh != null && !mesh.isClosed() ? mesh : null;
 	}
 
 	/** Builds the mesh and the texture when the data or the layout is new. */
 	static void prepare() {
 		SeamLayout layout = SeamClient.layout;
-		if (data == null || layout == null || (mesh != null && builtFor == layout)) {
+		if (data == null || layout == null || (mesh != null && !mesh.isClosed() && builtFor == layout)) {
 			return;
 		}
 		close();
