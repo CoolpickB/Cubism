@@ -94,7 +94,7 @@ The setting `finite_loot` (Customize screen, "Finite-cube loot") turns these sou
 
 Sources, by item:
 
-- **Armor trims (14).** The armorer sells one trim at each of the levels 2 to 5. Each level has its own pool, so a villager never offers the same trim twice. Rerolling the job block changes only the novice trades, so the four trims of a villager stay fixed. Level 2 (12 emeralds): coast, dune, wild, sentry. Level 3 (16): tide, vex, silence, ward. Level 4 (20): raiser, host, shaper. Level 5 (24): wayfinder, flow, bolt.
+- **Armor trims (14).** The armorer sells one trim at each of the levels 2 to 5. Each level has its own pool, so a villager never offers the same trim twice. Rerolling the job block changes only the novice trades, so the four trims of a villager stay fixed. The pools follow the origin of the trim. Level 2 (12 emeralds, shore and biome): coast, tide, dune, wild. Level 3 (16, dark places): sentry, vex, silence, ward. Level 4 (20, trail ruins): wayfinder, raiser, shaper, host. Level 5 (24, trial chambers): flow, bolt.
 - **Music discs.** A skeleton that kills a creeper has a 25 percent chance to give one more disc: relic, creator, creator music box, precipice or disc 5. It comes in addition to the vanilla disc.
 - **Banner patterns.** The cartographer sells flow at level 3 and guster at level 4 (16 emeralds).
 - **Enchantments.** The librarian sells Swift Sneak III at level 3 and Wind Burst III at level 4 (30 emeralds).
@@ -136,7 +136,19 @@ The treads and the effect have their own textures.
 
 Tested on the dev server: the items, the potion and the effect load, and the recipes parse. A pig with Steadfast past a diagonal stayed in its region and fell straight down in the frame of its face. A pig without the effect crossed. A locked pig past a diagonal fell to y -1300 and more, and it did not die or cross. A pig with level 1 moved to the down face and lived. Not tested by me: a player with the treads, sneaking to change face, the camera, the roll, forced faces on a player, the opposite face view, and brewing in a stand.
 
-Next: heavy core deposits above the inner bedrock, more of them near the corners of the core. Then the End: voids with a pull, shulkers on the rims of the voids, and a pull on elytra flight that Steadfast ignores. Later, some of these voids can also float far out past the cube, where a long locked fall finds them.
+Next: the End: voids with a pull, shulkers on the rims of the voids, and a pull on elytra flight that Steadfast ignores. Later, some of these voids can also float far out past the cube, where a long locked fall finds them. Later, the treads become Heavy Boots: iron boots, a heavy upgrade template (armorer, level 2) and a heavy core, at a smithing table.
+
+### Core cavern
+
+A cavern wraps the inner bedrock cube. The heavy cores for the boots and the mace grow in it. The feature `cubism:core_cavern` (`CoreCavern`) runs in the first generation step of every biome and acts only in the overworld cube.
+
+- **Shape.** The cavern works in cube coordinates, so it is the same on every face and whole across the diagonals. Over a face, it reaches 40 blocks from the plane of an edge and fades out. Over the middle of a face, nothing changes. It is up to 14 blocks high. The bedrock of the core rises into it in spires: 4 blocks along an edge and 9 more at a corner, with noise. At the smallest size, the inner bedrock cube is 3 blocks wide, so the cavern is one chamber around the center.
+- **Layers, from the air outward.** 2 blocks of purpur, 3 blocks of obsidian. One column in 28 has crying obsidian as the lowest obsidian block and no purpur under it, so it shines into the cavern (light level 10).
+- **Purpur.** The raw form of the purpur of the End cities, which the gravity of a core compresses. It has the strength of the vanilla block and needs a pickaxe. The vanilla Purpur Block is now called Purpur Bricks, with its stairs and slab, as prismarine has prismarine bricks.
+- **Budding bedrock.** Acts as bedrock in every way. On a random tick, with a chance of 1 in 10, it tries one of its six sides, and a heavy core grows there if the side is air. It sits on the surface of the spires: 10 percent of the corner blocks and 2.5 percent along the edges.
+- **Not yet.** Shulkers on the purpur. A recipe from purpur to purpur bricks. The textures of the purpur and the budding bedrock are placeholders.
+
+Tested on the dev server (size 24): the blocks load, the feature runs without errors, and the saved chunks around the center hold purpur, obsidian, crying obsidian (all with air under them) and budding bedrock (all next to air). Not tested: the growth of cores, the cavern at larger sizes, and walking in it.
 
 ### Outer space
 

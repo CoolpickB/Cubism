@@ -112,5 +112,10 @@
   "effect.cubism.steadfast.north": "Steadfast (North)",
   "effect.cubism.steadfast.south": "Steadfast (South)",
   "effect.cubism.steadfast.west": "Steadfast (West)",
-  "effect.cubism.steadfast.east": "Steadfast (East)"
+  "effect.cubism.steadfast.east": "Steadfast (East)",
+  "block.cubism.purpur": "Purpur",
+  "block.cubism.budding_bedrock": "Budding Bedrock",
+  "block.minecraft.purpur_block": "Purpur Bricks",
+  "block.minecraft.purpur_stairs": "Purpur Brick Stairs",
+  "block.minecraft.purpur_slab": "Purpur Brick Slab"
 }

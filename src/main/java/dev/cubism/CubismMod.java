@@ -1,5 +1,7 @@
 package dev.cubism;
 
+import dev.cubism.core.CoreBlocks;
+import dev.cubism.core.CoreCavern;
 import dev.cubism.gravity.GravityLock;
 import dev.cubism.loot.FiniteLoot;
 import dev.cubism.network.CubeNetworking;
@@ -7,6 +9,8 @@ import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamLight;
 import dev.cubism.seam.SeamTrackingView;
 import dev.cubism.worldgen.CubePregen;
+import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
+import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.api.ModInitializer;
@@ -17,7 +21,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,11 +62,20 @@ public class CubismMod implements ModInitializer {
 		3L * SeamTrackingView.REFRESH_TICKS, TicketType.FLAG_LOADING | TicketType.FLAG_SIMULATION
 	);
 
+	/** Added to every biome. The feature acts only in the overworld cube. */
+	public static final ResourceKey<PlacedFeature> CORE_CAVERN = ResourceKey.create(
+		Registries.PLACED_FEATURE,
+		Identifier.fromNamespaceAndPath(MOD_ID, "core_cavern")
+	);
+
 	@Override
 	public void onInitialize() {
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "seam"), SEAM_TICKET);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "seam_simulation"), SEAM_SIMULATION_TICKET);
 		Registry.register(BuiltInRegistries.TICKET_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "pregen"), CubePregen.TICKET);
+		Registry.register(BuiltInRegistries.FEATURE_TYPE, Identifier.fromNamespaceAndPath(MOD_ID, "core_cavern"), CoreCavern.CODEC);
+		CoreBlocks.register();
+		BiomeModifications.addFeature(BiomeSelectors.all(), GenerationStep.Decoration.RAW_GENERATION, CORE_CAVERN);
 		FiniteLoot.register();
 		GravityLock.register();
 		CubeNetworking.register();
