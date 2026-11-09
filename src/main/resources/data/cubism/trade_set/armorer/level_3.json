@@ -1,7 +1,7 @@
 {
   "amount": 1,
   "trades": [
-    "cubism:armorer/tide_trim",
+    "cubism:armorer/sentry_trim",
     "cubism:armorer/vex_trim",
     "cubism:armorer/silence_trim",
     "cubism:armorer/ward_trim"

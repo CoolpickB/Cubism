@@ -1,7 +1,6 @@
 {
   "amount": 1,
   "trades": [
-    "cubism:armorer/wayfinder_trim",
     "cubism:armorer/flow_trim",
     "cubism:armorer/bolt_trim"
   ]
