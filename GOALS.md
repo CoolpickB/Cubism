@@ -142,13 +142,13 @@ Next: the End: voids with a pull, shulkers on the rims of the voids, and a pull 
 
 A cavern wraps the inner bedrock cube. The heavy cores for the boots and the mace grow in it. The feature `cubism:core_cavern` (`CoreCavern`) runs in the first generation step of every biome and acts only in the overworld cube.
 
-- **Shape.** The cavern works in cube coordinates, so it is the same on every face and whole across the diagonals. Over a face, it reaches 40 blocks from the plane of an edge and fades out. Over the middle of a face, nothing changes. It is up to 14 blocks high. The bedrock of the core rises into it in spires: 4 blocks along an edge and 9 more at a corner, with noise. At the smallest size, the inner bedrock cube is 3 blocks wide, so the cavern is one chamber around the center.
-- **Layers, from the air outward.** 2 blocks of purpur, 3 blocks of obsidian. One column in 28 has crying obsidian as the lowest obsidian block and no purpur under it, so it shines into the cavern (light level 10).
+- **Shape.** The cavern works in cube coordinates, so it is the same on every face and whole across the diagonals. The inner bedrock stays a plain cube. Above it, noise carves natural caves up to 26 blocks high: chambers that thin out toward the top, and winding tunnels. Caves have dead ends and rough walls. The corners and edges of the cube poke into the caves where the caves reach them. At the smallest size, the inner bedrock cube is 9 blocks wide, and the caves sit on its top and sides.
+- **Layers, from the air outward.** 2 blocks of purpur, 3 blocks of obsidian. One cave-wall cell in 40 has crying obsidian as the lowest obsidian block and no purpur under it, so it shines into the cave.
 - **Purpur.** The raw form of the purpur of the End cities, which the gravity of a core compresses. It has the strength of the vanilla block and needs a pickaxe. The vanilla Purpur Block is now called Purpur Bricks, with its stairs and slab, as prismarine has prismarine bricks.
-- **Budding bedrock.** Acts as bedrock in every way. On a random tick, with a chance of 1 in 10, it tries one of its six sides, and a heavy core grows there if the side is air. It sits on the surface of the spires: 10 percent of the corner blocks and 2.5 percent along the edges.
+- **Budding bedrock.** Acts as bedrock in every way. On a random tick, with a chance of 1 in 10, it tries one of its six sides, and a heavy core grows there if the side is air. It is rare: it replaces bedrock only on the edges and corners of the cube where the bedrock touches air, with a chance of 1 in 20 on an edge block and 1 in 5 on a corner block.
 - **Not yet.** Shulkers on the purpur. A recipe from purpur to purpur bricks. The textures of the purpur and the budding bedrock are placeholders.
 
-Tested on the dev server (size 24): the blocks load, the feature runs without errors, and the saved chunks around the center hold purpur, obsidian, crying obsidian (all with air under them) and budding bedrock (all next to air). Not tested: the growth of cores, the cavern at larger sizes, and walking in it.
+Tested on the dev server (size 24): the feature runs without errors in 74 s of generation, and the saved chunks around the center hold caves, purpur, obsidian and crying obsidian (all next to air). One budding bedrock block formed in that world. Not tested: the growth of cores, the cavern at larger sizes, and walking in it.
 
 ### Outer space
 
