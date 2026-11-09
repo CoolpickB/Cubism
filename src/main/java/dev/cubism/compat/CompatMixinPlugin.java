@@ -1,4 +1,4 @@
-package dev.cubism.client.compat;
+package dev.cubism.compat;
 
 import java.util.List;
 import java.util.Set;
@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 /**
  * Applies the mixins of one integration only when its mod is loaded, as their targets do not exist otherwise. The mixin
- * config of each integration has the package {@code dev.cubism.client.compat.<mod id>.mixin}, and the id comes from it.
+ * config of each integration has the package {@code dev.cubism.[client.]compat.<mod id>.mixin}, and the id comes from it.
  */
 public final class CompatMixinPlugin implements IMixinConfigPlugin {
 	private boolean modLoaded;

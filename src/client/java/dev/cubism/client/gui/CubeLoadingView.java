@@ -36,6 +36,8 @@ public final class CubeLoadingView {
 	private static final long TURN_MS = 350L;
 	/** The cube stays on the screen this long after its last turn, before the game starts. */
 	private static final long HOLD_MS = 500L;
+	/** The cube turns on to the next face when this share of a face is full, so that a few slow cells do not hold the turn. */
+	private static final float TURN_SHARE = 0.95F;
 	/** Faces of the cross: the spawn face, then the faces at its right, left, top and bottom, then the opposite face below the bottom one. */
 	private static final int FACES = 6;
 	/** Low corner of each face in the cross, in units of h. */
@@ -114,6 +116,14 @@ public final class CubeLoadingView {
 		int target = progress.pregenFinished ? FACES : currentFace(progress);
 		if (target != turnedTo) {
 			long now = Util.getMillis();
+			if (turnedTo >= 0 && turnedTo < FACES) {
+				logLeftovers(progress, faceOrder[turnedTo], "leaves it");
+			}
+			if (target == FACES) {
+				for (int f = 0; f < FACES; f++) {
+					logLeftovers(progress, faceOrder[f], "finished");
+				}
+			}
 			Quaternionf current = turnedTo < 0 ? new Quaternionf(CUBE_VIEW) : turnAt(now);
 			Quaternionf next;
 			if (target == FACES) {
@@ -149,17 +159,47 @@ public final class CubeLoadingView {
 		return new Quaternionf(turnFrom).slerp(turnTo, eased);
 	}
 
-	/** The first face in {@link #faceOrder} with a cell that is not full, or the last face. */
+	/** The first face in {@link #faceOrder} that is less than {@link #TURN_SHARE} full, or the last face. */
 	private static int currentFace(CubePregen.Progress progress) {
 		for (int i = 0; i < FACES; i++) {
 			int[] table = cells[faceOrder[i]];
+			int drawn = 0;
+			int full = 0;
 			for (int at = 0; at < table.length; at += 3) {
-				if (table[at] >= 0 && progress.get(table[at], table[at + 1], table[at + 2]) != ChunkStatus.FULL) {
-					return i;
+				if (table[at] >= 0) {
+					drawn++;
+					if (progress.get(table[at], table[at + 1], table[at + 2]) == ChunkStatus.FULL) {
+						full++;
+					}
 				}
+			}
+			if (full < drawn * TURN_SHARE) {
+				return i;
 			}
 		}
 		return FACES - 1;
+	}
+
+	/** Logs the cells of a face that are not full, so that a cell that stays grey or red shows its face, columns and status. */
+	private static void logLeftovers(CubePregen.Progress progress, int face, String when) {
+		int[] table = cells[face];
+		int left = 0;
+		StringBuilder first = new StringBuilder();
+		for (int at = 0; at < table.length; at += 3) {
+			if (table[at] < 0) {
+				continue;
+			}
+			ChunkStatus status = progress.get(table[at], table[at + 1], table[at + 2]);
+			if (status != ChunkStatus.FULL) {
+				if (left++ < 8) {
+					first.append(" (face ").append(table[at]).append(" col ").append(table[at + 1]).append(',').append(table[at + 2])
+						.append(' ').append(status == null ? "none" : status.getName().replace("minecraft:", "")).append(')');
+				}
+			}
+		}
+		if (left > 0) {
+			LoadTrace.event("client: visualizer " + when + ", view face " + face + " has " + left + " cells not full:" + first);
+		}
 	}
 
 	/** {@link CubePregen} generates the spawn face first, then the neighbor faces in the order of their regions, then the opposite face. */

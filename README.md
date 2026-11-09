@@ -27,7 +27,7 @@ To play, select the **Cubism** world type when you create a world. The mod must 
 | More Culling | 🟡 | |
 | Sodium | 🟢 | |
 | Voxy | 🟢 | |
-| Voxygen | 🟢 | |
+| Voxygen | 🟡 | Voxygen scans the six faces of the cube as one row, from the middle, wherever the player is, and skips the chunks outside the faces. This is not tested in game yet. |
 | Xaero's Minimap and Xaero's World Map | 🟡 | The maps show the six faces side by side, not as a cube. Waypoint markers and teleports work across faces. |
 
 If you find a problem with another mod, open an issue. See [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -1,0 +1,13 @@
+{
+	"required": true,
+	"package": "dev.cubism.compat.voxyworldgenv3.mixin",
+	"plugin": "dev.cubism.compat.CompatMixinPlugin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"EngineManagerMixin",
+		"TargetMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

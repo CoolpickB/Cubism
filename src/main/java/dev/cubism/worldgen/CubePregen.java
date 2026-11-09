@@ -224,6 +224,10 @@ public final class CubePregen {
 			ChunkHolder holder = chunks.chunkMap.getUpdatingChunkIfPresent(pos.pack());
 			if (holder != null && holder.getTickingChunk() != null) {
 				chunks.removeTicketWithRadius(TICKET, pos, TICKET_RADIUS);
+				Progress tracked = progress;
+				if (tracked != null) {
+					tracked.markFull(pos);
+				}
 				this.unloading.add(pos);
 				this.ready++;
 				return true;
@@ -304,6 +308,19 @@ public final class CubePregen {
 						}
 					}
 				}
+			}
+		}
+
+		/**
+		 * Records a column that the pre-generation finished. A chunk can reach full status and unload between two polls,
+		 * and the loading screen then showed its column in a lower status for good.
+		 */
+		void markFull(ChunkPos pos) {
+			int face = this.layout.faceIndexAt(pos.getMiddleBlockX());
+			int i = pos.x() - Math.floorDiv(this.layout.offsetX(face) - this.layout.spacing / 2, 16);
+			int j = pos.z() - Math.floorDiv(-this.layout.spacing / 2, 16);
+			if (i >= 0 && j >= 0 && i < this.side && j < this.side) {
+				this.status[face][i * this.side + j] = (byte) (ChunkStatus.FULL.getIndex() + 1);
 			}
 		}
 

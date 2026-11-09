@@ -19,6 +19,7 @@
 	},
 	"mixins": [
 		"cubism.mixins.json",
+		"cubism.compat.voxyworldgenv3.mixins.json",
 		{
 			"config": "cubism.client.mixins.json",
 			"environment": "client"
