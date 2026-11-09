@@ -8,16 +8,19 @@ import org.jspecify.annotations.Nullable;
 /**
  * Where Voxygen scans in a cube world. The chunks of the cube are the six face regions, which form one rectangle along
  * +X in storage. Voxygen scans a circle around the player's chunk, and in storage that circle holds the player's own
- * face and, in space, nothing. It scans the middle of the row of faces instead, and counts only the chunks of the rectangle.
+ * face and, in space, nothing. In space it scans the middle of the row of faces instead, and it counts only the chunks of the rectangle.
  */
 public final class CubeScan {
 	private CubeScan() {
 	}
 
-	/** The middle of the row of faces for a cube level, or the fallback for any other level. */
+	/**
+	 * The middle of the row of faces for a player in space, so that the scan covers the faces. A player on a face, or in
+	 * any other level, keeps the own chunk, so that the chunks around the player come first.
+	 */
 	public static ChunkPos center(ServerLevel level, ChunkPos fallback) {
 		SeamLayout layout = SeamLayout.of(level);
-		return layout == null ? fallback : new ChunkPos(Math.floorDiv(layout.offsetX(SeamLayout.FACES.length - 1) / 2, 16), 0);
+		return layout == null || !outside(level, fallback.x(), fallback.z()) ? fallback : new ChunkPos(Math.floorDiv(layout.offsetX(SeamLayout.FACES.length - 1) / 2, 16), 0);
 	}
 
 	/** True for a chunk of a cube level that is outside the six face regions. */
