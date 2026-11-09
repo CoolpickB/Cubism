@@ -4,6 +4,8 @@ Cubism is a Minecraft mod that turns the world into a finite cube.
 
 You live on a six-sided planet floating in space. Each face plays like a normal Minecraft world, right up to the edge. Step over it and gravity turns with you, onto a side of the game you haven't seen before.
 
+Above the sky, the world opens into space. You can float out and see the whole planet.
+
 ## Requirements
 
 - Minecraft 26.3
