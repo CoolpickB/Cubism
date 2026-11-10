@@ -41,6 +41,7 @@ public record CoreCavern() implements Feature {
 	/** Budding bedrock grows only on the edges and corners of the cube, where it juts into the caves. */
 	private static final double BUDDING_EDGE = 1.0 / 100.0;
 	private static final double BUDDING_CORNER = 1.0 / 4.0;
+	private static final double PREGROWN_CHANCE = 1.0 / 3.0;
 	private static final int EDGE_REACH = 1;
 	private static final byte FAR = 127;
 	private static final int ARCS_PER_EDGE = 4;
@@ -152,6 +153,7 @@ public record CoreCavern() implements Feature {
 		BlockState air = Blocks.AIR.defaultBlockState();
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		boolean placed = false;
+		List<int[]> buddingPositions = new ArrayList<>();
 
 		for (int dx = 0; dx < 16; dx++) {
 			for (int dz = 0; dz < 16; dz++) {
@@ -184,6 +186,7 @@ public record CoreCavern() implements Feature {
 							double chance = a - c <= EDGE_REACH ? BUDDING_CORNER : a - b <= EDGE_REACH ? BUDDING_EDGE : 0.0;
 							if (chance > 0.0 && touches(dist, n, ny, ix, iz, iy, 0) && unit(seed + 31L, cube[0], cy, cube[2]) < chance) {
 								state = budding;
+								buddingPositions.add(new int[] {sx, sy, sz});
 							}
 						} else if (d == 0) {
 							state = air;
@@ -200,6 +203,28 @@ public record CoreCavern() implements Feature {
 						level.setBlock(pos, state, 2);
 						placed = true;
 					}
+				}
+			}
+		}
+
+		// Like a geode, a budding block starts with some cores already grown. Only air of this chunk and face is written.
+		BlockState core = Blocks.HEAVY_CORE.defaultBlockState();
+		int[] other = new int[3];
+		for (int[] b : buddingPositions) {
+			for (int k = 0; k < 6; k++) {
+				int tx = b[0] + (k == 0 ? 1 : k == 1 ? -1 : 0);
+				int ty = b[1] + (k == 2 ? 1 : k == 3 ? -1 : 0);
+				int tz = b[2] + (k == 4 ? 1 : k == 5 ? -1 : 0);
+				if (tx < x0 || tx >= x0 + 16 || tz < z0 || tz >= z0 + 16) {
+					continue;
+				}
+				layout.toCube(face, tx, ty, tz, other);
+				if (layout.ownerFace(other[0], other[1], other[2]) != face || unit(seed + 37L, other[0], other[1], other[2]) >= PREGROWN_CHANCE) {
+					continue;
+				}
+				pos.set(tx, ty, tz);
+				if (level.getBlockState(pos).isAir()) {
+					level.setBlock(pos, core, 2);
 				}
 			}
 		}
