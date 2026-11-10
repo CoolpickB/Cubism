@@ -11,7 +11,7 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Bedrock that grows heavy cores into the air next to it, as budding amethyst grows buds. */
 public class BuddingBedrockBlock extends Block {
 	/** A random tick tries to grow with this chance, in one of the six directions. */
-	public static final int GROWTH_CHANCE = 10;
+	public static final int GROWTH_CHANCE = 40;
 
 	public BuddingBedrockBlock(Properties properties) {
 		super(properties);
