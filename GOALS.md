@@ -148,7 +148,8 @@ A cavern wraps the inner bedrock cube. The heavy cores for the boots and the mac
 - **Purpur.** The raw form of the purpur of the End cities, which the gravity of a core compresses. It has the strength of the vanilla block and needs a pickaxe. The vanilla Purpur Block is now called Purpur Bricks, with its stairs and slab, as prismarine has prismarine bricks.
 - **Budding bedrock.** Acts as bedrock in every way. On a random tick, with a chance of 1 in 40, it tries one of its six sides, and a heavy core grows there if the side is air. It is rare: it replaces bedrock only on the edges and corners of the cube where the bedrock touches air, with a chance of 1 in 100 on an edge block and 1 in 4 on a corner block. Only the outermost two cell rows of an edge and corner count. At generation, each air side of a budding block holds a heavy core with a chance of 1 in 3, as a geode starts with some buds.
 - **Shulkers.** At generation, 1 purpur block in 150 that touches the air has a shulker on its air side, at most 2 per chunk. They stay: they do not despawn and do not respawn.
-- **Not yet.** A recipe from purpur to purpur bricks. The textures of the purpur and the budding bedrock are placeholders.
+- **Textures.** Purpur is animated: 4 frames with the frame order and timing of prismarine.
+- **Not yet.** A recipe from purpur to purpur bricks.
 
 Tested on the dev server (size 24): the feature runs without errors in 78 s of generation. In the sampled area there are 6 budding blocks and 2 heavy cores at generation. With the random tick speed at 4000 for 60 s, the cores grew to 6, which is every free air side. Crying obsidian is next to air. 14 shulkers in the cavern of the whole cube, all at its depth, persistent. Not tested: a larger size, where vanilla caves reach the tubes, and walking in the cavern.
 
