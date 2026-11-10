@@ -507,10 +507,11 @@ public final class SeamRenderer {
 			// Sections of the camera face show here only for the few frames after a crossing, before the chunks of the
 			// new face reach the vanilla view area. Kept meshes of the old face show until their chunks arrive.
 			for (int face = 0; face < SeamLayout.FACES.length; face++) {
-				// The opposite face shares no seam with the camera face. Its sections can be left over from a quick
-				// second crossing, and its motion would draw them in the sky. A locked camera past its wedge sees it.
+				// The opposite face shares no seam with the camera face. It shows only within the render distance, near
+				// the core or in open dimensions. Out of range its sections can be left over from a quick second crossing.
 				int[] shown = layout.motion(face, cameraFace);
-				if (shown[4] == -1 && !SeamClient.seesOpposite(layout, cameraPos) || SeamClient.faceHidden(layout, cameraPos, face)) {
+				if (shown[4] == -1 && !SeamClient.seesOpposite(layout, cameraPos, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0)
+					|| SeamClient.faceHidden(layout, cameraPos, face)) {
 					continue;
 				}
 				visible.clear();

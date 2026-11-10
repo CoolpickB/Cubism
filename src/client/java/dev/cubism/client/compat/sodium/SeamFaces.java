@@ -204,7 +204,7 @@ public final class SeamFaces {
 				continue;
 			}
 			int[] m = layout.motion(f, primary);
-			if (m[4] == -1 && !SeamClient.seesOpposite(layout, camera.position()) || SeamClient.faceHidden(layout, camera.position(), f)) {
+			if (m[4] == -1 && !SeamClient.seesOpposite(layout, camera.position(), renderDistance * 16.0) || SeamClient.faceHidden(layout, camera.position(), f)) {
 				continue;
 			}
 			Vector3d p = foldedCamera(m, camera.position());

@@ -961,7 +961,9 @@ public final class SeamLayout {
 		int top = this.surfaceY + this.openHeight;
 		int half = this.spacing / 2;
 		for (int g = 0; g < FACES.length; g++) {
-			if (face != SPACE && (g == face || FACES[g] == FACES[face].getOpposite())) {
+			// The opposite face counts too: its wedge meets this one only at the center, so the distance test below keeps it
+			// out from the surface of a large cube and lets it in near the core.
+			if (face != SPACE && g == face) {
 				continue;
 			}
 			this.toStorage(g, cube[0], cube[1], cube[2], viewer);

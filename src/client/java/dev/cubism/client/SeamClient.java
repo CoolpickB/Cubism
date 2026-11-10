@@ -30,8 +30,7 @@ public final class SeamClient {
 
 	/**
 	 * The motion that moves a position in another face region to where it shows from the camera, or null when the
-	 * position is in the region of the camera or in no region. The opposite face shares no seam with the camera face,
-	 * and gets none either, unless the camera is past the wedge of its region (see {@link #seesOpposite}).
+	 * position is in the region of the camera or in no region, or on an opposite face out of view range.
 	 */
 	public static int @Nullable [] motionToCamera(double x, double z) {
 		SeamLayout layout = SeamClient.layout;
@@ -40,16 +39,31 @@ public final class SeamClient {
 		}
 		Vec3 camera = Minecraft.getInstance().gameRenderer.mainCamera().position();
 		int[] m = SeamInteraction.regionMotion(layout, x, z, camera.x, camera.z);
-		return m == null || m[4] == -1 && !seesOpposite(layout, camera) ? null : m;
+		return m == null || m[4] == -1 && !seesOpposite(layout, camera, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0) ? null : m;
 	}
 
 	/**
-	 * True when the camera is past the wedge of its region, so the opposite face of the region is in view. Only a
-	 * Steadfast lock keeps a camera there: without it the camera crosses to the face whose air it is in. From space
-	 * every face can be in view.
+	 * True when the opposite face of the camera region can be within {@code reach} blocks of the camera. The opposite
+	 * wedge meets the camera face only at the center of the cube, so from the surface of a large cube it is far out of
+	 * range, and near the core it is close. Past the wedge (a Steadfast lock) and in space every face can be in view.
 	 */
-	public static boolean seesOpposite(SeamLayout layout, Vec3 camera) {
-		return layout.crossingFace(camera.x, camera.y, camera.z, 0.0) >= 0 || SeamInteraction.regionFace(layout, camera.x, camera.z) == SeamLayout.SPACE;
+	public static boolean seesOpposite(SeamLayout layout, Vec3 camera, double reach) {
+		int face = SeamInteraction.regionFace(layout, camera.x, camera.z);
+		if (face == SeamLayout.SPACE || layout.crossingFace(camera.x, camera.y, camera.z, 0.0) >= 0) {
+			return true;
+		}
+		if (face < 0) {
+			return false;
+		}
+		Vec3 c = layout.cubeOffset(face, camera.x, camera.y, camera.z);
+		Vec3 down = layout.faceDown(face);
+		double up = -(down.x * c.x + down.y * c.y + down.z * c.z);
+		double sides = (down.x == 0.0 ? Math.abs(c.x) : 0.0) + (down.y == 0.0 ? Math.abs(c.y) : 0.0) + (down.z == 0.0 ? Math.abs(c.z) : 0.0);
+		// The opposite wedge is a cone from the center. From inside the camera wedge, its nearest point is the center, or a
+		// point on its edge ray toward the camera's corner when the camera is closer to that corner than to the center.
+		double along = (sides - up) / Math.sqrt(3.0);
+		double distanceSqr = c.lengthSqr() - (along > 0.0 ? along * along : 0.0);
+		return distanceSqr <= reach * reach;
 	}
 
 	/** True when the camera is in space, where the faces are in view from further away than the chunks reach. */
