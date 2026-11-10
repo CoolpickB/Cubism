@@ -9,6 +9,9 @@ import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -42,6 +45,9 @@ public record CoreCavern() implements Feature {
 	private static final double BUDDING_EDGE = 1.0 / 100.0;
 	private static final double BUDDING_CORNER = 1.0 / 4.0;
 	private static final double PREGROWN_CHANCE = 1.0 / 3.0;
+	/** Per purpur block that touches the air. The tubes are narrow, so a few shulkers already make a stretch hard. */
+	private static final double SHULKER_CHANCE = 1.0 / 150.0;
+	private static final int SHULKERS_PER_CHUNK = 2;
 	private static final int EDGE_REACH = 1;
 	private static final byte FAR = 127;
 	private static final int ARCS_PER_EDGE = 4;
@@ -154,6 +160,7 @@ public record CoreCavern() implements Feature {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		boolean placed = false;
 		List<int[]> buddingPositions = new ArrayList<>();
+		List<BlockPos> shulkers = new ArrayList<>();
 
 		for (int dx = 0; dx < 16; dx++) {
 			for (int dz = 0; dz < 16; dz++) {
@@ -192,6 +199,13 @@ public record CoreCavern() implements Feature {
 							state = air;
 						} else if (d <= PURPUR_DEPTH) {
 							state = cleared(layout, face, seed, dist, n, ny, x0, y0, z0, ix, iz, iy, d) ? air : purpur;
+							if (state == purpur && d == 1 && shulkers.size() < SHULKERS_PER_CHUNK && unit(seed + 41L, cube[0], cy, cube[2]) < SHULKER_CHANCE) {
+								int[] o = OFFSETS[(int) (unit(seed + 43L, cube[0], cy, cube[2]) * OFFSETS.length)];
+								if (ix + o[0] >= MARGIN && ix + o[0] < MARGIN + 16 && iz + o[1] >= MARGIN && iz + o[1] < MARGIN + 16
+									&& iy + o[2] < ny && dist[((ix + o[0]) * n + iz + o[1]) * ny + iy + o[2]] == 0) {
+									shulkers.add(new BlockPos(sx + o[0], sy + o[2], sz + o[1]));
+								}
+							}
 						} else if (d <= SHELL_DEPTH) {
 							state = d == PURPUR_DEPTH + 1 && isCrying(seed, cube[0], cy, cube[2]) ? crying : obsidian;
 						} else {
@@ -226,6 +240,20 @@ public record CoreCavern() implements Feature {
 				if (level.getBlockState(pos).isAir()) {
 					level.setBlock(pos, core, 2);
 				}
+			}
+		}
+
+		// Shulkers cling to the purpur, the raw form of the blocks they live on in the End. They are placed once and stay.
+		for (BlockPos at : shulkers) {
+			layout.toCube(face, at.getX(), at.getY(), at.getZ(), other);
+			if (layout.ownerFace(other[0], other[1], other[2]) != face || !level.getBlockState(at).isAir()) {
+				continue;
+			}
+			Shulker shulker = EntityTypes.SHULKER.create(level.getLevel(), EntitySpawnReason.STRUCTURE);
+			if (shulker != null) {
+				shulker.setPos(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+				shulker.setPersistenceRequired();
+				level.addFreshEntity(shulker);
 			}
 		}
 		return placed;
