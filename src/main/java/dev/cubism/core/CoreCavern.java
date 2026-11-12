@@ -75,7 +75,7 @@ public record CoreCavern() implements Feature {
 						int c = Math.min(ax, Math.min(ay, az));
 						int b = ax + ay + az - a - c;
 						double chance = a - c <= EDGE_REACH ? BUDDING_CORNER : a - b <= EDGE_REACH ? BUDDING_EDGE : 0.0;
-						if (chance > 0.0 && touchesAir(level, pos, sx, sy, sz) && unit(seed + 31L, cube[0], cy, cube[2]) < chance) {
+						if (chance > 0.0 && touchesAir(layout, level, pos, sx, sy, sz) && unit(seed + 31L, cube[0], cy, cube[2]) < chance) {
 							state = budding;
 							buddingPositions.add(new int[] {sx, sy, sz});
 						}
@@ -113,10 +113,11 @@ public record CoreCavern() implements Feature {
 		return placed;
 	}
 
-	private static boolean touchesAir(WorldGenLevel level, BlockPos.MutableBlockPos pos, int sx, int sy, int sz) {
+	/** Neighbors outside the wedge are skipped: reading one counts as a refused block and would undo the whole feature. */
+	private static boolean touchesAir(SeamLayout layout, WorldGenLevel level, BlockPos.MutableBlockPos pos, int sx, int sy, int sz) {
 		for (int k = 0; k < 6; k++) {
 			pos.set(sx + (k == 0 ? 1 : k == 1 ? -1 : 0), sy + (k == 2 ? 1 : k == 3 ? -1 : 0), sz + (k == 4 ? 1 : k == 5 ? -1 : 0));
-			if (level.getBlockState(pos).isAir()) {
+			if (layout.insideWedge(pos.getX(), pos.getY(), pos.getZ()) && level.getBlockState(pos).isAir()) {
 				return true;
 			}
 		}
