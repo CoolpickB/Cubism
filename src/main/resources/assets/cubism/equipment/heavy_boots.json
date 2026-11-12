@@ -2,12 +2,12 @@
   "layers": {
     "humanoid": [
       {
-        "texture": "cubism:shulker_treads"
+        "texture": "cubism:heavy_boots"
       }
     ],
     "humanoid_baby": [
       {
-        "texture": "cubism:shulker_treads"
+        "texture": "cubism:heavy_boots"
       }
     ]
   }

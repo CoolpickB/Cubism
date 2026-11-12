@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "#": "minecraft:diamond",
+    "C": "minecraft:heavy_core",
+    "S": "cubism:heavy_upgrade_smithing_template"
+  },
+  "pattern": [
+    "#S#",
+    "#C#",
+    "###"
+  ],
+  "result": {
+    "count": 2,
+    "id": "cubism:heavy_upgrade_smithing_template"
+  }
+}

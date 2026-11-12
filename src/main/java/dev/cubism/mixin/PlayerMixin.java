@@ -31,9 +31,9 @@ public abstract class PlayerMixin extends LivingEntity {
 	}
 
 	@Inject(method = "tick", at = @At("TAIL"))
-	private void cubism$treadsTick(CallbackInfo ci) {
+	private void cubism$bootsTick(CallbackInfo ci) {
 		GravityLock.tickSneak((Player) (Object) this);
-		GravityLock.tickTreads((Player) (Object) this);
+		GravityLock.tickBoots((Player) (Object) this);
 	}
 
 	/** A block across a seam is stored in another face region, but the player reaches it where it shows. */

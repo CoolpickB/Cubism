@@ -73,7 +73,8 @@ public final class SeamDensity {
 			|| fn instanceof BlendedNoise
 			|| fn instanceof CubeDensityFunctions.CubeSurfaceNoiseFunction
 			|| fn instanceof CubeDensityFunctions.CubeShiftNoiseFunction
-			|| fn instanceof CubeDensityFunctions.CubeRadialGradientFunction;
+			|| fn instanceof CubeDensityFunctions.CubeRadialGradientFunction
+			|| fn instanceof CubeDensityFunctions.CubeCoreFloorFunction;
 	}
 
 	record ToCube(DensityFunction input, SeamLayout layout) implements DensityFunction {

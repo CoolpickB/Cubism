@@ -101,7 +101,12 @@
   "cubism.customize.history.forward": "Next seed",
   "options.cubism.edgeCameraTilt": "Edge Camera Tilt",
   "options.cubism.edgeCameraTilt.tooltip": "When on, the camera turns smoothly over a cube edge. Turn it off if the tilt makes you feel sick. When off, the camera stays level with the face until the last 2 blocks before the next face. Flight still tilts.",
-  "item.cubism.shulker_treads": "Shulker Treads",
+  "item.cubism.heavy_boots": "Heavy Boots",
+  "item.cubism.heavy_upgrade_smithing_template": "Heavy Upgrade",
+  "item.cubism.smithing_template.heavy_upgrade.applies_to": "Iron Boots",
+  "item.cubism.smithing_template.heavy_upgrade.ingredients": "Heavy Core",
+  "item.cubism.smithing_template.heavy_upgrade.base_slot_description": "Add iron boots",
+  "item.cubism.smithing_template.heavy_upgrade.additions_slot_description": "Add Heavy Core",
   "effect.cubism.steadfast": "Steadfast",
   "item.minecraft.potion.effect.steadfast": "Potion of Steadfastness",
   "item.minecraft.splash_potion.effect.steadfast": "Splash Potion of Steadfastness",
@@ -113,9 +118,5 @@
   "effect.cubism.steadfast.south": "Steadfast (South)",
   "effect.cubism.steadfast.west": "Steadfast (West)",
   "effect.cubism.steadfast.east": "Steadfast (East)",
-  "block.cubism.purpur": "Purpur",
-  "block.cubism.budding_bedrock": "Budding Bedrock",
-  "block.minecraft.purpur_block": "Purpur Bricks",
-  "block.minecraft.purpur_stairs": "Purpur Brick Stairs",
-  "block.minecraft.purpur_slab": "Purpur Brick Slab"
+  "block.cubism.budding_bedrock": "Budding Bedrock"
 }

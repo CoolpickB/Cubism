@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smithing_transform",
+  "addition": "minecraft:heavy_core",
+  "base": "minecraft:iron_boots",
+  "result": {
+    "id": "cubism:heavy_boots"
+  },
+  "template": "cubism:heavy_upgrade_smithing_template"
+}

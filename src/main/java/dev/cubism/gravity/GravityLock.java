@@ -3,6 +3,7 @@ package dev.cubism.gravity;
 import dev.cubism.CubismMod;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
 import dev.cubism.worldgen.SeamLayout;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -10,9 +11,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
+import net.minecraft.util.Util;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -22,6 +26,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Rarity;
+import net.minecraft.world.item.SmithingTemplateItem;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.equipment.ArmorMaterial;
@@ -30,6 +36,7 @@ import net.minecraft.world.item.equipment.EquipmentAssets;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -51,21 +58,35 @@ public final class GravityLock {
 	);
 
 	// Diamond values with the knockback resistance of netherite.
-	private static final ArmorMaterial SHULKER = new ArmorMaterial(
+	private static final ArmorMaterial HEAVY = new ArmorMaterial(
 		33, Map.of(ArmorType.BOOTS, 3), 10, SoundEvents.ARMOR_EQUIP_NETHERITE, 2.0F, 0.1F,
-		TagKey.create(Registries.ITEM, id("repairs_shulker_treads")), ResourceKey.create(EquipmentAssets.ROOT_ID, id("shulker_treads"))
+		TagKey.create(Registries.ITEM, id("repairs_heavy_boots")), ResourceKey.create(EquipmentAssets.ROOT_ID, id("heavy_boots"))
 	);
-	public static final Item SHULKER_TREADS = Registry.register(
-		BuiltInRegistries.ITEM, id("shulker_treads"),
-		new Item(new Item.Properties().humanoidArmor(SHULKER, ArmorType.BOOTS).setId(ResourceKey.create(Registries.ITEM, id("shulker_treads"))))
+	public static final Item HEAVY_BOOTS = Registry.register(
+		BuiltInRegistries.ITEM, id("heavy_boots"),
+		new Item(new Item.Properties().humanoidArmor(HEAVY, ArmorType.BOOTS).setId(ResourceKey.create(Registries.ITEM, id("heavy_boots"))))
+	);
+	public static final Item HEAVY_UPGRADE_TEMPLATE = Registry.register(
+		BuiltInRegistries.ITEM, id("heavy_upgrade_smithing_template"),
+		new SmithingTemplateItem(
+			templateText("applies_to"), templateText("ingredients"), templateText("base_slot_description"), templateText("additions_slot_description"),
+			List.of(Identifier.withDefaultNamespace("container/slot/boots")), List.of(Identifier.withDefaultNamespace("container/slot/ingot")),
+			new Item.Properties().rarity(Rarity.UNCOMMON).setId(ResourceKey.create(Registries.ITEM, id("heavy_upgrade_smithing_template")))
+		)
 	);
 
-	private static final int TREADS_TICKS = 200;
+	private static final int BOOTS_TICKS = 200;
 
 	private GravityLock() {}
 
 	public static void register() {
-		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT).register(output -> output.insertAfter(Items.TURTLE_HELMET, SHULKER_TREADS));
+		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT).register(output -> output.insertAfter(Items.TURTLE_HELMET, HEAVY_BOOTS));
+		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.INGREDIENTS).register(output -> output.insertAfter(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, HEAVY_UPGRADE_TEMPLATE));
+	}
+
+	private static Component templateText(String part) {
+		MutableComponent text = Component.translatable(Util.makeDescriptionId("item", id("smithing_template.heavy_upgrade." + part)));
+		return part.endsWith("slot_description") ? text : text.withStyle(ChatFormatting.BLUE);
 	}
 
 	private static Identifier id(String path) {
@@ -156,18 +177,18 @@ public final class GravityLock {
 	}
 
 	/**
-	 * Worn treads give the effect as the turtle shell gives water breathing: on both sides, every tick, for 10 s, so the
-	 * icon has the normal frame and does not blink. Unlike the shell, the treads take their effect away on the tick that
+	 * Worn heavy boots give the effect as the turtle shell gives water breathing: on both sides, every tick, for 10 s, so the
+	 * icon has the normal frame and does not blink. Unlike the shell, the boots take their effect away on the tick that
 	 * they come off. Their effect has no particles, which a potion or a command effect has, so a running potion stays.
 	 */
-	public static void tickTreads(Player player) {
-		if (player.getItemBySlot(EquipmentSlot.FEET).is(SHULKER_TREADS)) {
-			player.addEffect(new MobEffectInstance(STEADFAST, TREADS_TICKS, 0, false, false, true));
+	public static void tickBoots(Player player) {
+		if (player.getItemBySlot(EquipmentSlot.FEET).is(HEAVY_BOOTS)) {
+			player.addEffect(new MobEffectInstance(STEADFAST, BOOTS_TICKS, 0, false, false, true));
 			return;
 		}
 		MobEffectInstance effect = player.getEffect(STEADFAST);
 		if (effect != null && effect.getAmplifier() == 0 && !effect.isVisible() && !effect.isInfiniteDuration()
-			&& effect.getDuration() <= TREADS_TICKS) {
+			&& effect.getDuration() <= BOOTS_TICKS) {
 			player.removeEffect(STEADFAST);
 		}
 	}

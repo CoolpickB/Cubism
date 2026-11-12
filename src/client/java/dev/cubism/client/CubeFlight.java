@@ -367,7 +367,7 @@ public final class CubeFlight {
 
 	/**
 	 * A roll of the view, in radians, that warns that Steadfast runs out: it grows over the last 5 s. The effect of
-	 * worn treads is ambient and lasts 1 s at a time, and it does not wobble.
+	 * worn heavy boots is ambient and lasts 1 s at a time, and it does not wobble.
 	 */
 	public static float steadfastWobble(LocalPlayer player, float partialTicks) {
 		MobEffectInstance effect = player.getEffect(GravityLock.STEADFAST);

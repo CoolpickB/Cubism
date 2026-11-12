@@ -1,9 +1,11 @@
 package dev.cubism.worldgen;
 
 import com.mojang.serialization.MapCodec;
+import dev.cubism.core.CoreCavern;
 import dev.cubism.math.CubePlanetMath;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Interval;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.levelgen.NoiseRouter;
@@ -15,9 +17,11 @@ import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
 import net.minecraft.world.level.levelgen.densityfunction.DensityVolume;
 import net.minecraft.world.level.levelgen.densityfunction.DfRewriteRule;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
+import net.minecraft.world.level.levelgen.densityfunction.generator.ConstantFunction;
 import net.minecraft.world.level.levelgen.densityfunction.generator.GradientFunction;
 import net.minecraft.world.level.levelgen.densityfunction.generator.NoiseFunction;
 import net.minecraft.world.level.levelgen.densityfunction.generator.ShiftNoiseFunction;
+import net.minecraft.world.level.levelgen.densityfunction.op.LerpFunction;
 import net.minecraft.world.level.levelgen.densityfunction.op.SliceFunction;
 import net.minecraft.world.level.levelgen.synth.Noise;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
@@ -166,6 +170,12 @@ public final class CubeDensityFunctions {
 		if (fn instanceof ShiftNoiseFunction snf) {
 			ShiftAxis axis = (snf instanceof ShiftNoiseFunction.ShiftB) ? ShiftAxis.Z : ShiftAxis.X;
 			return new CubeShiftNoiseFunction(snf.offsetNoise(), axis, centerY, surfaceNoiseRadius, rounding, snf.range());
+		}
+
+		// The slide over the world bottom fades the density to a solid constant. Over a patch it fades to air instead.
+		if (fn instanceof LerpFunction lerp && lerp.alpha() instanceof CubeRadialGradientFunction slide && slide.fromCoordinate() == -64 && slide.toCoordinate() == -40
+			&& lerp.first() instanceof ConstantFunction solid) {
+			return new LerpFunction(lerp.alpha(), new CubeCoreFloorFunction(solid.value(), centerY, innerBedrockRadius + CoreCavern.BEDROCK_TOP), lerp.second());
 		}
 
 		if (fn instanceof GradientFunction gf && gf.axis() == Direction.Axis.Y) {
@@ -344,6 +354,66 @@ public final class CubeDensityFunctions {
 		@Override
 		public MapCodec<? extends DensityFunction> codec() {
 			return ShiftNoiseFunction.ShiftA.CODEC;
+		}
+	}
+
+	/** Where this noise is above {@link #PATCH_THRESHOLD}, the bottom slide fades to air, and the bedrock cube is open to the caves. */
+	private static final double PATCH_THRESHOLD = 0.22;
+	private static final double PATCH_FADE = 0.1;
+	private static final int PATCH_OCTAVE = -7;
+	/** A bedrock face narrower than this gets finer patches, so that a small cube has some of each. */
+	private static final double PATCH_MIN_FACE_WIDTH = 256.0;
+	/** The density that the slide fades to in a patch. Positive is solid. */
+	private static final float PATCH_DENSITY = -0.4f;
+
+	/**
+	 * The density that the bottom slide fades to. It is the solid constant of vanilla, and in the patches of a noise it
+	 * is {@link #PATCH_DENSITY}. The noise is read at the point of the bedrock cube under the position, in cube coordinates,
+	 * so it is the same on every face, whole across a diagonal, and does not change with the height.
+	 */
+	public record CubeCoreFloorFunction(float solid, int centerY, int bedrockHalf) implements DensityFunction {
+		@Override
+		public DensitySampler compileSampler(CompileContext context) {
+			Noise noise = NormalNoise.builder().setBaseOctave(PATCH_OCTAVE).setOctaveCount(3).build()
+				.create(context.createRandom(Identifier.fromNamespaceAndPath("cubism", "core_patches")));
+			float solid = this.solid;
+			int cy = this.centerY;
+			double half = this.bedrockHalf;
+			double scale = Math.max(1.0, PATCH_MIN_FACE_WIDTH / (2.0 * half));
+			return new DensitySampler() {
+				@Override
+				public void sampleVolume(SamplerContext ctx, DensityBuffer buffer, DensityVolume volume) {
+					DensitySampler.sampleVolumeNaive(ctx, buffer, volume, this);
+				}
+
+				@Override
+				public float sampleValue(SamplerContext ctx, int x, int y, int z) {
+					int dy = y - cy;
+					double k = scale * half / Math.max(1, Math.max(Math.abs(x), Math.max(Math.abs(dy), Math.abs(z))));
+					float patch = Mth.clamp((float) ((noise.get(x * k, dy * k, z * k) - PATCH_THRESHOLD) / PATCH_FADE), 0.0f, 1.0f);
+					return solid + patch * (PATCH_DENSITY - solid);
+				}
+			};
+		}
+
+		@Override
+		public DensityFunction rewriteChildren(DfRewriteRule rule) {
+			return this;
+		}
+
+		@Override
+		public Interval range() {
+			return Interval.of(Math.min(PATCH_DENSITY, this.solid), Math.max(PATCH_DENSITY, this.solid));
+		}
+
+		@Override
+		public int domainAxes() {
+			return DensityFunction.ALL_AXES;
+		}
+
+		@Override
+		public MapCodec<ConstantFunction> codec() {
+			return ConstantFunction.CODEC;
 		}
 	}
 

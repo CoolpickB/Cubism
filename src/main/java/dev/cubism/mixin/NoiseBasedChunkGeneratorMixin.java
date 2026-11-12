@@ -8,6 +8,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import dev.cubism.CubismMod;
+import dev.cubism.core.CoreCavern;
 import dev.cubism.worldgen.CubeSettings;
 import dev.cubism.worldgen.SeamFold;
 import dev.cubism.math.CubePlanetMath;
@@ -125,10 +126,23 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 	@Mutable
 	private Supplier<Aquifer.FluidPicker> globalFluidPicker;
 
+	/** The lava sea over the inner bedrock reaches this many blocks above the face of the bedrock cube. */
+	@Unique
+	private static final int LAVA_SEA_HEIGHT = 8;
+
+	/** The lava sea stays this far, along the face, from every edge of the bedrock cube. */
+	@Unique
+	private static final int LAVA_SEA_EDGE_MARGIN = 40;
+
 	/**
 	 * The vanilla sea is flat in each face frame. Next to an edge the rounded ground sinks under it, and the flat sea
 	 * stops at the diagonal as a wall of water. In a seam world, the sea level of a column follows the rounded cube.
 	 * The settings and the layout are known only when the first chunk generates, so the choice is made then.
+	 * <p>
+	 * Vanilla floods everything under storage Y -54 with lava, but the cube has 191 blocks of crust over the bedrock, so
+	 * that would be the whole deep. In the overworld, lava lies only as a sea over the bedrock cube, away from its edges.
+	 * Elsewhere the deep has the water rule of the sea, like the caves above -54 in vanilla. The rule reads the cube
+	 * position, so a position that two faces can see gets the same answer from both.
 	 */
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void cubism$roundedSea(CallbackInfo ci) {
@@ -144,9 +158,36 @@ public abstract class NoiseBasedChunkGeneratorMixin implements CubeSettings.Hold
 			BlockState fluid = generator.generatorSettings().value().defaultFluid();
 			return (x, y, z) -> {
 				Aquifer.FluidStatus status = picker.computeFluid(x, y, z);
-				return status.fluidType().is(Blocks.LAVA) ? status : new Aquifer.FluidStatus(layout.seaLevelAt(x, z, seaLevel), fluid);
+				if (!status.fluidType().is(Blocks.LAVA)) {
+					return new Aquifer.FluidStatus(layout.seaLevelAt(x, z, seaLevel), fluid);
+				}
+				if (layout.nether) {
+					return status;
+				}
+				if (cubism$inLavaSea(layout, x, y, z)) {
+					return new Aquifer.FluidStatus(layout.centerY + layout.innerBedrockRadius + CoreCavern.BEDROCK_TOP + LAVA_SEA_HEIGHT + 1, status.fluidType());
+				}
+				return new Aquifer.FluidStatus(layout.seaLevelAt(x, z, seaLevel), fluid);
 			};
 		});
+	}
+
+	/**
+	 * True for the cube position of a storage position that lies over the face of the bedrock cube up to
+	 * {@link #LAVA_SEA_HEIGHT}, at least {@link #LAVA_SEA_EDGE_MARGIN} from its nearest edge. The nearest edge of a face is
+	 * across the larger of the two cube axes that are not the face axis.
+	 */
+	@Unique
+	private static boolean cubism$inLavaSea(SeamLayout layout, int x, int y, int z) {
+		int[] cube = new int[3];
+		layout.toCube(layout.faceIndexAt(x), x, y, z, cube);
+		int a = Math.abs(cube[0]);
+		int b = Math.abs(cube[1] - layout.centerY);
+		int c = Math.abs(cube[2]);
+		int top = Math.max(a, Math.max(b, c));
+		int across = a + b + c - top - Math.min(a, Math.min(b, c));
+		int half = layout.innerBedrockRadius + CoreCavern.BEDROCK_TOP;
+		return top - half <= LAVA_SEA_HEIGHT && across <= half - LAVA_SEA_EDGE_MARGIN;
 	}
 
 	/**
