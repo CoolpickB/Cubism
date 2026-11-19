@@ -1,10 +1,10 @@
 # Cubism
 
-Cubism is a Minecraft mod that turns the world into a finite cube.
+Cubism is a Minecraft mod that makes the overworld a finite cube planet in space.
 
-You live on a six-sided planet floating in space. Each face plays like a normal Minecraft world, right up to the edge. Step over it and gravity turns with you, onto a side of the game you haven't seen before.
+Each of the six faces is a full Minecraft world. When you walk over an edge, gravity turns and you stand on the next face. Above the build height, you can float into space and see the whole planet. The Nether is a smaller cube. The End is vanilla.
 
-Above the sky, the world opens into space. You can float out and see the whole planet.
+[GOALS.md](GOALS.md) lists the features and the known limits.
 
 ## Requirements
 
@@ -21,15 +21,15 @@ To play, select the **Cubism** world type when you create a world. The mod must 
 |---|---|---|
 | C2ME | 🟢 | |
 | Continuity | 🟢 | Connected textures connect across the edges of the cube. |
-| Distant Horizons | 🔴 | Support planned for the future, use Voxy for now. |
+| Distant Horizons | 🔴 | Not supported. Use Voxy. |
 | Do a Barrel Roll | 🟢 | |
-| Entity Culling | 🟡 | Entity Culling does not cull or stop the entities of other faces. As a result, these entities do not get its performance gain. |
-| Iris | 🟢 | Shader packs generally load fine, but Complementary Unbound r5.9.3 is currently the only one that follows the cube's shape properly. |
+| Entity Culling | 🟡 | Entity Culling does not cull the entities of other faces. |
+| Iris | 🟢 | Shader packs load. Only Complementary Unbound r5.9.3 follows the shape of the cube. |
 | Lithium | 🟢 | Turns off a few options for collisions. |
 | More Culling | 🟡 | |
 | Sodium | 🟢 | |
 | Voxy | 🟢 | |
-| Voxygen | 🟡 | Voxygen scans around the player on a face, and around the face under the player in space. It skips the chunks outside the faces. This is not tested in game yet. |
+| Voxygen | 🟢 | |
 | Xaero's Minimap and Xaero's World Map | 🟡 | The maps show the six faces side by side, not as a cube. Waypoint markers and teleports work across faces. |
 
 If you find a problem with another mod, open an issue. See [CONTRIBUTING.md](CONTRIBUTING.md).
