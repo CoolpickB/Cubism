@@ -35,16 +35,13 @@ import net.minecraft.world.item.equipment.ArmorType;
 import net.minecraft.world.item.equipment.EquipmentAssets;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
 
 /**
  * Steadfast keeps an entity in the region of the face it stands on: it does not cross a diagonal, so its down stays
  * the down of that face. Past the diagonal the collision of the region reads the turned blocks of the next face (see
- * {@code BlockCollisionsMixin}), so the entity walks on that rock as on a wall, under the vanilla pull. A player who
- * sneaks on the ground crosses as usual, which sets the lock to the face it then stands on.
+ * {@code BlockCollisionsMixin}), so the entity walks on that rock as on a wall, under the vanilla pull.
  */
 public final class GravityLock {
 	public static final Holder<MobEffect> STEADFAST = Registry.registerForHolder(
@@ -134,27 +131,6 @@ public final class GravityLock {
 			((GravityEntityAccess) entity).cubism$setSpaceFace(left);
 		}
 		return left;
-	}
-
-	/**
-	 * True when a locked entity must not cross a diagonal now. A player that sneaks on the ground crosses, unless a
-	 * level of the effect forces the face. The sneak must start on the ground: in creative flight sneak flies down, and
-	 * a landing with it held crossed to the face the player was over.
-	 */
-	public static boolean holdsFace(Entity entity) {
-		return locked(entity) && (forcedFace(entity) >= 0 || !(entity instanceof Player player && player.onGround()
-			&& SNEAK_FROM_GROUND.getOrDefault(player, false)));
-	}
-
-	/** For each sneaking player, whether the sneak started on the ground. Players of the client and the server thread. */
-	private static final Map<Player, Boolean> SNEAK_FROM_GROUND = Collections.synchronizedMap(new WeakHashMap<>());
-
-	public static void tickSneak(Player player) {
-		if (!player.isShiftKeyDown()) {
-			SNEAK_FROM_GROUND.remove(player);
-		} else {
-			SNEAK_FROM_GROUND.putIfAbsent(player, player.onGround() && !player.getAbilities().flying);
-		}
 	}
 
 	/**

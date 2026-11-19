@@ -90,7 +90,7 @@ public final class SeamCrossing {
 				transitions.add(transition(level, layout, entity, forced));
 				continue;
 			}
-			if (GravityLock.holdsFace(entity)) {
+			if (GravityLock.locked(entity)) {
 				continue;
 			}
 			Vec3 center = entity.getBoundingBox().getCenter();

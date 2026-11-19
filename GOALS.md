@@ -57,7 +57,7 @@ Trial keys, camels and the maps found in chests have no new source.
 
 The Steadfast effect keeps you on the face where you stand. Use it to mine near a diagonal or deep near the core without a change of face.
 
-- **Change of face.** Sneak on the ground to cross a diagonal. The lock then holds the new face.
+- **Change of face.** To go to another face, take off the boots or let the effect end.
 - **No safety release.** If you walk off an edge with Steadfast, you fall past the side of the cube with no end.
 - **Elytra.** The lock has no effect while you glide.
 - **Forced face.** For map makers, the levels 1 to 6 of `/effect` force the down, up, north, south, west or east face.
