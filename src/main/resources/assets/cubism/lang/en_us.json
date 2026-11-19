@@ -21,7 +21,7 @@
   "cubism.customize.size.custom": "%s Chunks",
   "cubism.customize.size.tooltip": "%s chunks (%s blocks) along each edge. Strongholds, Nether fortresses and bastions: %s of each.",
   "cubism.customize.edge_rounding": "Edge Rounding (Experimental): %s Blocks",
-  "cubism.customize.edge_rounding.tooltip": "Rounds the edges of the cube at the surface. Underground, caves still meet the edge in a straight line. We test the mod at 2 blocks.",
+  "cubism.customize.edge_rounding.tooltip": "Rounds the edges of the cube at the surface. Underground, caves still meet the edge in a straight line.",
   "cubism.customize.temperature": "Temperature: %s",
   "cubism.customize.humidity": "Humidity: %s",
   "cubism.customize.climate.normal": "Normal",
