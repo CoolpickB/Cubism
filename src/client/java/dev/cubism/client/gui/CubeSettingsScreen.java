@@ -91,9 +91,9 @@ final class CubeSettingsScreen extends Screen {
 		this.repositionElements();
 	}
 
-	/** The sizes on offer: each has its own count of strongholds, fortresses and bastions (1, 2 and 3). */
-	private static final int[] SIZES = {24, 64, 128};
-	private static final String[] SIZE_NAMES = {"small", "medium", "large"};
+	/** The sizes on offer, closer together at the small end, where a few chunks change a cube more. */
+	private static final int[] SIZES = {24, 32, 48, 80, 128};
+	private static final String[] SIZE_NAMES = {"tiny", "small", "medium", "large", "huge"};
 
 	/** The three sizes, and the size of the world if a world preset gave it another one. */
 	private static List<Integer> sizes(int current) {
@@ -117,9 +117,9 @@ final class CubeSettingsScreen extends Screen {
 		return Component.translatable("cubism.customize.size.custom", diameter);
 	}
 
-	/** The whole small cube generates in moments. On a larger cube, the spawn face alone shows the planet sooner. */
+	/** A whole small cube generates in moments. On a larger cube, the spawn face alone shows the planet sooner. */
 	private static CubeSettings.Pregen defaultPregen(int diameter) {
-		return diameter <= SIZES[0] ? CubeSettings.Pregen.WHOLE_CUBE : CubeSettings.Pregen.SPAWN_FACE;
+		return diameter <= SIZES[1] ? CubeSettings.Pregen.WHOLE_CUBE : CubeSettings.Pregen.SPAWN_FACE;
 	}
 
 	private static Component climateText(String key, int shift) {
