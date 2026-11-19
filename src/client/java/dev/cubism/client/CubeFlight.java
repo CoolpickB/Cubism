@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 
 /**
  * The frame of the air for the local player in flight: with an elytra, or in creative or spectator flight. Its up is
- * the direction of the rounded cube surface under the player, the reverse of {@link SeamLayout#airGravity}. Above the
+ * the direction of the rounded cube surface under the player, the reverse of {@code CubeGravity.airGravity}. Above the
  * flat part of a face it is the frame of the face. Over an edge it turns with the surface, and on the diagonal it is
  * half way between the two faces, so the frame has no step at a crossing.
  *
@@ -456,12 +456,12 @@ public final class CubeFlight {
 			return new Quaternionf();
 		}
 		Vec3 center = entity.getPosition(partialTicks).add(0.0, entity.getBbHeight() / 2.0, 0.0);
-		return withLock(layout, entity, partialTicks, () -> frameAt(layout, center, t, radiusAt(layout, center, layout.turnRadius(), partialTicks), true));
+		return withLock(layout, entity, partialTicks, () -> frameAt(layout, center, t, radiusAt(layout, center, layout.gravity.turnRadius(), partialTicks), true));
 	}
 
 	/**
 	 * The turn radius at a body center: the given one, and for creative and spectator flight a radius that grows with
-	 * the height over the ground (see {@link SeamLayout#flightRadius}), eased in and out with the flight.
+	 * the height over the ground (see {@code CubeGravity.flightRadius}), eased in and out with the flight.
 	 */
 	private static double radiusAt(SeamLayout layout, Vec3 center, double base, float partialTicks) {
 		float wide = Mth.lerp(partialTicks, wideWeightO, wideWeight);
@@ -471,7 +471,7 @@ public final class CubeFlight {
 		}
 		Vec3 c = layout.cubeOffset(region, center.x, center.y, center.z);
 		double level = Math.max(Math.abs(c.x), Math.max(Math.abs(c.y), Math.abs(c.z)));
-		return Mth.lerp(wide, base, layout.flightRadius(level));
+		return Mth.lerp(wide, base, layout.gravity.flightRadius(level));
 	}
 
 	/**
@@ -490,7 +490,7 @@ public final class CubeFlight {
 
 	/** The air frame at a body center for a radius of the turn over an edge, eased in by a weight. */
 	private static Quaternionf frameAt(SeamLayout layout, Vec3 center, float t, double radius, boolean local) {
-		Vec3 gravity = layout.pullAt(center.x, center.y, center.z, radius);
+		Vec3 gravity = layout.gravity.pullAt(center.x, center.y, center.z, radius);
 		if (gravity == null || t <= 0.0F) {
 			return new Quaternionf();
 		}
@@ -509,7 +509,7 @@ public final class CubeFlight {
 		SeamLayout layout = SeamLayout.of(player.level());
 		Vec3 center = player.position().add(0.0, player.getBbHeight() / 2.0, 0.0);
 		Vec3 gravity = layout == null || SeamInteraction.regionFace(layout, center.x, center.z) != SeamLayout.SPACE ? null
-			: layout.pullAt(center.x, center.y, center.z, layout.turnRadius());
+			: layout.gravity.pullAt(center.x, center.y, center.z, layout.gravity.turnRadius());
 		if (gravity == null || gravity.lengthSqr() < 1.0E-12) {
 			hasSpaceFrame = false;
 			return;
@@ -570,7 +570,7 @@ public final class CubeFlight {
 		Vec3 position = entity.getPosition(partialTicks);
 		Vec3 offset = entity instanceof LocalPlayer ? viewOffsetO.lerp(viewOffset, partialTicks) : Vec3.ZERO;
 		Vec3 center = position.add(offset).add(0.0, entity.getBbHeight() / 2.0, 0.0);
-		double radius = entity instanceof LocalPlayer ? radiusAt(layout, center, layout.turnRadius(), partialTicks) : layout.turnRadius();
+		double radius = entity instanceof LocalPlayer ? radiusAt(layout, center, layout.gravity.turnRadius(), partialTicks) : layout.gravity.turnRadius();
 		if (ClientConfig.edgeCameraTilt() || !(entity instanceof LocalPlayer)) {
 			return frameAt(layout, center, 1.0F, radius, entity instanceof LocalPlayer);
 		}

@@ -18,7 +18,7 @@ Each package holds one feature. The mixins of a feature are in a subpackage of `
 
 | Package | Contents |
 |---|---|
-| `dev.cubism.cube` | The shape of the cube: `SeamLayout`, the paths over edges, the sizes |
+| `dev.cubism.cube` | The shape of the cube (`SeamLayout`), its gravity (`CubeGravity`), the paths over edges and the sizes |
 | `dev.cubism.seam` | Blocks, light, updates and entities across a seam |
 | `dev.cubism.worldgen` | Terrain, biomes, pregeneration and the Customize settings |
 | `dev.cubism.worldgen.structure` | Structures and features that meet an edge |

@@ -149,7 +149,7 @@ public final class SeamCrossing {
 	/**
 	 * The pull on an entity in space, in the frame of the space region, or null when the entity is not in space. A
 	 * Steadfast lock pulls along the down of its face at full strength, without end. Else the pull is
-	 * {@link SeamLayout#spacePull}, which is zero past the exosphere.
+	 * {@code CubeGravity.spacePull}, which is zero past the exosphere.
 	 */
 	public static @Nullable Vec3 spacePull(SeamLayout layout, Entity entity) {
 		if (layout.regionAt(Mth.floor(entity.getX()), Mth.floor(entity.getZ())) != SeamLayout.SPACE) {
@@ -161,7 +161,7 @@ public final class SeamCrossing {
 		}
 		Vec3 center = entity.getBoundingBox().getCenter();
 		Vec3 p = layout.cubeOffset(SeamLayout.SPACE, center.x, center.y, center.z);
-		Vec3 pull = layout.spacePull(p.x, p.y, p.z);
+		Vec3 pull = layout.gravity.spacePull(p.x, p.y, p.z);
 		return pull == null ? Vec3.ZERO : pull;
 	}
 
@@ -222,7 +222,7 @@ public final class SeamCrossing {
 			return vanillaEye;
 		}
 		Vec3 center = player.position().add(0.0, player.getBbHeight() / 2.0, 0.0);
-		Vec3 gravity = layout.airGravity(center.x, center.y, center.z);
+		Vec3 gravity = layout.gravity.airGravity(center.x, center.y, center.z);
 		return gravity == null ? vanillaEye : clearEye(player, vanillaEye, center.subtract(gravity.scale(player.getEyeHeight() - player.getBbHeight() / 2.0)));
 	}
 

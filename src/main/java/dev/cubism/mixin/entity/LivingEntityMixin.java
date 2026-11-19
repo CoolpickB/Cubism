@@ -79,7 +79,7 @@ public abstract class LivingEntityMixin extends Entity {
 	}
 
 	/**
-	 * Vanilla pulls straight down in the frame of the face. Over an edge the pull turns to {@link SeamLayout#airGravity},
+	 * Vanilla pulls straight down in the frame of the face. Over an edge the pull turns to {@code CubeGravity.airGravity},
 	 * applied with the same drag as the vanilla pull. Only with no ground close along the pull: the rounded edge is a
 	 * stair of blocks, and a pull during each short drop from one step to the next would slide the entity down the
 	 * stair. Past the diagonal, the ground of the next face lies along the pull, not straight down. A fall that stays
@@ -122,7 +122,7 @@ public abstract class LivingEntityMixin extends Entity {
 			return;
 		}
 		Vec3 center = this.getBoundingBox().getCenter();
-		Vec3 direction = layout.airGravity(center.x, center.y, center.z);
+		Vec3 direction = layout.gravity.airGravity(center.x, center.y, center.z);
 		if (direction == null || !this.level().noCollision(this, this.getBoundingBox().expandTowards(direction.scale(EDGE_GRAVITY_GROUND_GAP)))) {
 			return;
 		}

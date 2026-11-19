@@ -44,7 +44,7 @@ public final class DebugTrace {
 			return;
 		}
 		Vec3 center = player.getBoundingBox().getCenter();
-		@Nullable Vec3 pull = layout.airGravity(center.x, center.y, center.z);
+		@Nullable Vec3 pull = layout.gravity.airGravity(center.x, center.y, center.z);
 		Vec3 velocity = player.getDeltaMovement();
 		LoadTrace.event(String.format(Locale.ROOT, "fall pos=%s face=%d vel=%s speed=%.3f pull=%s fallFlying=%b",
 			vec(player.position()), face(player.getX(), player.getZ()), vec(velocity), velocity.length(), pull == null ? "down" : vec(pull), player.isFallFlying()));

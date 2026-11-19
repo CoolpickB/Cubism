@@ -76,7 +76,7 @@ public abstract class EntityMixin implements GravityEntityAccess {
 	/**
 	 * Items, projectiles, falling blocks and other entities without a living body take their pull from here. Over an
 	 * edge they get the same pull as living entities in {@code LivingEntityMixin}: once they pass into the region of
-	 * another face in the air, they fall along {@link SeamLayout#airGravity}. Without it an arrow bends by a right
+	 * another face in the air, they fall along {@code CubeGravity.airGravity}. Without it an arrow bends by a right
 	 * angle at the diagonal.
 	 */
 	@Inject(method = "applyGravity", at = @At("HEAD"), cancellable = true)
@@ -121,7 +121,7 @@ public abstract class EntityMixin implements GravityEntityAccess {
 			return null;
 		}
 		Vec3 center = this.getBoundingBox().getCenter();
-		Vec3 direction = layout.airGravity(center.x, center.y, center.z);
+		Vec3 direction = layout.gravity.airGravity(center.x, center.y, center.z);
 		boolean groundClose = direction != null
 			&& !this.level.noCollision((Entity) (Object) this, this.getBoundingBox().expandTowards(direction.scale(EDGE_GRAVITY_GROUND_GAP)));
 		return groundClose ? null : direction;
