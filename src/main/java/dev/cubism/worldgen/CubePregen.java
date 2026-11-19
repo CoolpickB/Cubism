@@ -1,6 +1,7 @@
 package dev.cubism.worldgen;
 
-import dev.cubism.mixin.ChunkMapAccessor;
+import dev.cubism.cube.SeamLayout;
+import dev.cubism.mixin.tracking.ChunkMapAccessor;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;

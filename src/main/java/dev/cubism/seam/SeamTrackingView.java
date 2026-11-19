@@ -1,7 +1,7 @@
 package dev.cubism.seam;
 
 import dev.cubism.CubismMod;
-import dev.cubism.mixin.ChunkMapAccessor;
+import dev.cubism.mixin.tracking.ChunkMapAccessor;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.server.level.ChunkHolder;

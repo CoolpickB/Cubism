@@ -6,7 +6,7 @@ import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.cubism.client.SeamClient;
 import dev.cubism.client.render.FaceLightmaps;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;

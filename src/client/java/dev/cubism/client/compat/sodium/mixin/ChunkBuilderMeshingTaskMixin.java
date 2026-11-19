@@ -4,7 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.cubism.client.SeamClient;
 import dev.cubism.client.compat.sodium.ShadeSlice;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.caffeinemc.mods.sodium.client.render.chunk.compile.tasks.ChunkBuilderMeshingTask;
 import net.caffeinemc.mods.sodium.client.world.LevelSlice;
 import net.minecraft.world.level.block.Blocks;

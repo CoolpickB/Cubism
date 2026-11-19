@@ -3,7 +3,7 @@ package dev.cubism.client.compat.voxy;
 import dev.cubism.client.compat.sodium.SeamFaces;
 
 import dev.cubism.client.SeamClient;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;

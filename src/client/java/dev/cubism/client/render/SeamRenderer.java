@@ -1,9 +1,9 @@
 package dev.cubism.client.render;
 
-import dev.cubism.client.LoadTraceClient;
+import dev.cubism.client.debug.LoadTraceClient;
 import dev.cubism.client.SeamClient;
 import dev.cubism.seam.SeamInteraction;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
@@ -18,8 +18,8 @@ import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
-import dev.cubism.client.mixin.LevelExtractorAccessor;
-import dev.cubism.client.mixin.RenderSectionAccessor;
+import dev.cubism.client.mixin.render.LevelExtractorAccessor;
+import dev.cubism.client.mixin.render.RenderSectionAccessor;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;

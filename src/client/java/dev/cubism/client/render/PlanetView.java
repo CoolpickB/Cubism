@@ -12,7 +12,7 @@ import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import dev.cubism.client.SeamClient;
 import dev.cubism.worldgen.PlanetMap;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;

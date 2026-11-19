@@ -1,5 +1,7 @@
 package dev.cubism.worldgen;
 
+import dev.cubism.cube.SeamLayout;
+
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Interval;

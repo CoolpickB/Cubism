@@ -1,10 +1,10 @@
 package dev.cubism.client.gui;
 
-import dev.cubism.client.mixin.LevelLoadingScreenAccessor;
+import dev.cubism.client.mixin.gui.LevelLoadingScreenAccessor;
 import dev.cubism.debug.LoadTrace;
 import dev.cubism.worldgen.CubePregen;
 import dev.cubism.worldgen.CubeSettings;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.Direction;

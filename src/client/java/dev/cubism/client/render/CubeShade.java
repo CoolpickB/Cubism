@@ -1,7 +1,7 @@
 package dev.cubism.client.render;
 
 import dev.cubism.client.SeamClient;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;

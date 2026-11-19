@@ -2,7 +2,8 @@ package dev.cubism.worldgen;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import dev.cubism.math.CubePlanetMath;
+import dev.cubism.cube.CubePlanetMath;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.core.Direction;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.level.chunk.ChunkGenerator;

@@ -1,6 +1,7 @@
 package dev.cubism.worldgen;
 
-import dev.cubism.math.CubePlanetMath;
+import dev.cubism.cube.CubePlanetMath;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.Vec3i;

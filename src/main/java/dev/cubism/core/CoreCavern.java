@@ -1,7 +1,7 @@
 package dev.cubism.core;
 
 import com.mojang.serialization.MapCodec;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;

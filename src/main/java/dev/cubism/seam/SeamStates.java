@@ -1,7 +1,7 @@
 package dev.cubism.seam;
 
 import com.mojang.math.OctahedralGroup;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;

@@ -1,7 +1,7 @@
 package dev.cubism.seam;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;

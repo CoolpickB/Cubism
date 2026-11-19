@@ -2,7 +2,7 @@ package dev.cubism.loot;
 
 import com.mojang.serialization.MapCodec;
 import dev.cubism.CubismMod;
-import dev.cubism.mixin.AbstractVillagerInvoker;
+import dev.cubism.mixin.loot.AbstractVillagerInvoker;
 import dev.cubism.worldgen.CubeSettings;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;

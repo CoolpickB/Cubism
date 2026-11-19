@@ -2,7 +2,7 @@ package dev.cubism.worldgen;
 
 import com.mojang.serialization.MapCodec;
 import dev.cubism.core.CoreCavern;
-import dev.cubism.math.CubePlanetMath;
+import dev.cubism.cube.CubePlanetMath;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.Identifier;

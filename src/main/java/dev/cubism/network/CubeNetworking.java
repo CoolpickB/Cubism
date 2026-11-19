@@ -3,7 +3,7 @@ package dev.cubism.network;
 import dev.cubism.CubismMod;
 import dev.cubism.worldgen.CubeSettings;
 import dev.cubism.worldgen.PlanetMap;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;

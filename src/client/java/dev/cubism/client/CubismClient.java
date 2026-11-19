@@ -1,11 +1,13 @@
 package dev.cubism.client;
 
-import dev.cubism.debug.LoadTrace;
-import dev.cubism.math.CubePlanetMath;
+import dev.cubism.client.debug.DebugLight;
+import dev.cubism.client.debug.LoadTraceClient;
 import dev.cubism.client.render.CubeSky;
 import dev.cubism.client.render.SeamRenderer;
+import dev.cubism.cube.CubePlanetMath;
+import dev.cubism.cube.SeamLayout;
+import dev.cubism.debug.LoadTrace;
 import dev.cubism.network.CubeNetworking;
-import dev.cubism.worldgen.SeamLayout;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;

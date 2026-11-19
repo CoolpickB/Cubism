@@ -2,7 +2,7 @@ package dev.cubism.gravity;
 
 import dev.cubism.CubismMod;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;

@@ -1,8 +1,8 @@
 package dev.cubism.client.render;
 
-import dev.cubism.client.mixin.CloudRendererAccessor;
+import dev.cubism.client.mixin.sky.CloudRendererAccessor;
 import dev.cubism.seam.SeamInteraction;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.renderer.CloudRenderer;
 import net.minecraft.util.Mth;

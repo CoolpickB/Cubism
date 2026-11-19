@@ -1,6 +1,6 @@
 package dev.cubism.debug;
 
-import dev.cubism.mixin.ChunkMapAccessor;
+import dev.cubism.mixin.tracking.ChunkMapAccessor;
 import dev.cubism.seam.SeamTrackingView;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.fabricmc.loader.api.FabricLoader;

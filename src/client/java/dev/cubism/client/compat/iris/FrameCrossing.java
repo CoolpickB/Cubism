@@ -1,7 +1,7 @@
 package dev.cubism.client.compat.iris;
 
 import dev.cubism.client.SeamClient;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import org.joml.Matrix3f;

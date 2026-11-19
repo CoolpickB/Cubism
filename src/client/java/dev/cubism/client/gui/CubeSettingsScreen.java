@@ -1,6 +1,6 @@
 package dev.cubism.client.gui;
 
-import dev.cubism.math.CubePlanetMath;
+import dev.cubism.cube.CubePlanetMath;
 import dev.cubism.worldgen.CubePregen;
 import dev.cubism.worldgen.CubeSettings;
 import net.minecraft.client.gui.components.AbstractSliderButton;

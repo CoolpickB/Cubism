@@ -2,7 +2,7 @@ package dev.cubism.client.compat.xaerominimap;
 
 import dev.cubism.client.SeamClient;
 import dev.cubism.seam.SeamInteraction;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;

@@ -1,5 +1,7 @@
 package dev.cubism.worldgen;
 
+import dev.cubism.cube.SeamLayout;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;

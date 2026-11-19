@@ -4,7 +4,7 @@ import dev.cubism.client.SeamClient;
 import dev.cubism.client.render.CubeShade;
 import dev.cubism.client.compat.sodium.ShadeSlice;
 import dev.cubism.seam.SeamStates;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.caffeinemc.mods.sodium.client.world.LevelSlice;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;

@@ -3,7 +3,7 @@ package dev.cubism.client.render;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.cubism.client.SeamClient;
 import dev.cubism.client.compat.sodium.SeamFaces;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import java.util.function.BiConsumer;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.Lightmap;

@@ -2,7 +2,7 @@ package dev.cubism.client.render;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.cubism.seam.SeamInteraction;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.WeatherEffectRenderer;
 import net.minecraft.util.ARGB;

@@ -1,7 +1,7 @@
 package dev.cubism.client;
 
 import dev.cubism.seam.SeamInteraction;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.phys.Vec3;

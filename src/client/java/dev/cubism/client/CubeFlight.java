@@ -1,11 +1,12 @@
 package dev.cubism.client;
 
+import dev.cubism.client.compat.BarrelRoll;
+import dev.cubism.cube.SeamLayout;
+import dev.cubism.debug.LoadTrace;
 import dev.cubism.gravity.GravityEntityAccess;
 import dev.cubism.gravity.GravityLock;
-import dev.cubism.debug.LoadTrace;
 import dev.cubism.seam.SeamCrossing;
 import dev.cubism.seam.SeamInteraction;
-import dev.cubism.worldgen.SeamLayout;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;

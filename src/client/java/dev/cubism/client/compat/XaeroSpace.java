@@ -1,7 +1,7 @@
 package dev.cubism.client.compat;
 
 import dev.cubism.client.SeamClient;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;

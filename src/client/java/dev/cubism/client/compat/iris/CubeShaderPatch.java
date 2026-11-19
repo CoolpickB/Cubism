@@ -4,7 +4,7 @@ import dev.cubism.client.compat.sodium.SeamFaces;
 
 import dev.cubism.client.SeamClient;
 import dev.cubism.client.render.CubeSky;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import java.nio.file.Path;
 import net.minecraft.client.Minecraft;
 import net.irisshaders.iris.api.v0.IrisApi;

@@ -3,7 +3,7 @@ package dev.cubism.seam;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import dev.cubism.gravity.GravityEntityAccess;
 import dev.cubism.gravity.GravityLock;
-import dev.cubism.worldgen.SeamLayout;
+import dev.cubism.cube.SeamLayout;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
