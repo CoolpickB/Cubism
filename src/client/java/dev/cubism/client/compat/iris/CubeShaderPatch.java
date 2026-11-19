@@ -110,7 +110,7 @@ public final class CubeShaderPatch {
 	 * it is the plain y of the face storage, so the cloud height of the pack stays as it is.
 	 */
 	private static final String HELPERS = """
-		#define CUBEWORLD
+		#define CUBISM
 		#ifndef VOXY_PATCH
 		    uniform int cubism_active;
 		    uniform vec3 cubism_sunPosition;
@@ -150,7 +150,7 @@ public final class CubeShaderPatch {
 		    #define cubismSkyColor() (cubism_active != 0 ? cubism_daySkyColor * clamp(sin(cubismSunAngle() * 6.28318531) * 2.0 + 0.5, 0.0, 1.0) : skyColor)
 		    // 0 on the ground, 1 well above the air. In orbit the air no longer lies between the camera and what it sees.
 		    #define cubismSpace() (cubism_active != 0 ? cubism_orbit : 0.0)
-		    #define CUBEWORLD_UP_VEC (cubism_active != 0 ? normalize(cubism_upPosition) : normalize(gbufferModelView[1].xyz))
+		    #define CUBISM_UP_VEC (cubism_active != 0 ? normalize(cubism_upPosition) : normalize(gbufferModelView[1].xyz))
 		    float cubismAlt(vec3 p) {
 		        if (cubism_active == 0) return p.y;
 		        return cubism_centerY + cubism_core + length(max(abs(p) - cubism_core, 0.0));
@@ -280,14 +280,14 @@ public final class CubeShaderPatch {
 		    }
 		    // The programs that draw the ground take the up, and so the time of day, of each point they draw. Two faces
 		    // then meet at an edge with the same light, and the light turns smoothly around it.
-		    #if defined CUBEWORLD_POINT_UP && defined FRAGMENT_SHADER
+		    #if defined CUBISM_POINT_UP && defined FRAGMENT_SHADER
 		        vec3 cubismPointUp() {
 		            if (cubism_active == 0) return normalize(gbufferModelView[1].xyz);
 		            vec4 clip = vec4(vec3(gl_FragCoord.xy / vec2(viewWidth, viewHeight), gl_FragCoord.z) * 2.0 - 1.0, 1.0);
 		            vec4 view = gbufferProjectionInverse * clip;
 		            return cubismUpAtView(view.xyz / view.w);
 		        }
-		    #elif defined CUBEWORLD_POINT_UP && defined VERTEX_SHADER
+		    #elif defined CUBISM_POINT_UP && defined VERTEX_SHADER
 		        vec3 cubismPointUp() {
 		            if (cubism_active == 0) return normalize(gbufferModelView[1].xyz);
 		            return cubismUpAtView((gl_ModelViewMatrix * gl_Vertex).xyz);
@@ -300,9 +300,9 @@ public final class CubeShaderPatch {
 		    // stable value there. Morning or afternoon comes from the side the sun is on. Same in CubeShaderPatch.java.
 		    float cubismSunAngle() {
 		        if (cubism_active == 0) return sunAngle;
-		        #if defined CUBEWORLD_CAMERA_UP
+		        #if defined CUBISM_CAMERA_UP
 		            vec3 upView = cubism_upPosition;
-		        #elif defined CUBEWORLD_POINT_UP && (defined FRAGMENT_SHADER || defined VERTEX_SHADER)
+		        #elif defined CUBISM_POINT_UP && (defined FRAGMENT_SHADER || defined VERTEX_SHADER)
 		            vec3 upView = cubismPointUp();
 		        #else
 		            vec3 upView = gbufferModelView[1].xyz;
@@ -326,7 +326,7 @@ public final class CubeShaderPatch {
 	 */
 	private static final String CUBE_AURORA = """
 
-		#ifdef CUBEWORLD
+		#ifdef CUBISM
 		#define CUBISM_CUBE_AURORA
 		const float cubismAuroraLow = 320.0;
 		const float cubismAuroraDepth = 240.0;
@@ -468,7 +468,7 @@ public final class CubeShaderPatch {
 		#endif
 
 		vec3 GetAuroraBorealis(vec3 viewPos, float VdotU, float dither) {
-		    #ifdef CUBEWORLD
+		    #ifdef CUBISM
 		        if (cubism_active != 0) return GetAuroraBorealisCube(viewPos, VdotU, dither, 1.0e9);
 		    #endif
 		    return GetAuroraBorealisFlat(viewPos, VdotU, dither);
@@ -510,7 +510,7 @@ public final class CubeShaderPatch {
 				return source;
 			}
 			pending = true;
-			String sun = "    #ifdef CUBEWORLD\n"
+			String sun = "    #ifdef CUBISM\n"
 				+ "        #define GetSunVector() (cubism_active != 0 ? normalize(cubism_sunPosition) : "
 				+ SUN_DEFINE.substring(SUN_DEFINE.indexOf("normalize(")) + ")\n"
 				+ "    #else\n" + SUN_DEFINE + "\n    #endif";
@@ -519,7 +519,7 @@ public final class CubeShaderPatch {
 		if (name.endsWith(COMMON_ROOT)) {
 			// The helpers go after the uniforms of the pack and before the time of day, which they replace.
 			// Without a shadow map the pack takes the time of the world. On the cube it takes the local sun as with one.
-			return source.replace(TIME_ANCHOR, HELPERS + TIME_ANCHOR.replace("#if SHADOW_QUALITY == -1", "#if SHADOW_QUALITY == -1 && !defined CUBEWORLD"))
+			return source.replace(TIME_ANCHOR, HELPERS + TIME_ANCHOR.replace("#if SHADOW_QUALITY == -1", "#if SHADOW_QUALITY == -1 && !defined CUBISM"))
 				.replace(SUN_ANGLE, "float tAmin     = fract(cubismSunAngle() - 0.033333333);");
 		}
 		if (name.endsWith(AURORA)) {
@@ -567,7 +567,7 @@ public final class CubeShaderPatch {
 			// light builds up from nothing over the next frames.
 			return source.replace("\tivec3 previousPos = pos - ivec3(posOffset);\n", """
 					\tivec3 previousPos = pos - ivec3(posOffset);
-					#ifdef CUBEWORLD
+					#ifdef CUBISM
 					\tpreviousPos = ivec3(floor(cubism_crossTurn * (vec3(previousPos - voxelVolumeSize / 2) + 0.5))) + voxelVolumeSize / 2;
 					#endif
 					""");
@@ -598,7 +598,7 @@ public final class CubeShaderPatch {
 			// other one would read the shadows of the wrong side, so it takes the light of the pack past the shadow
 			// distance. At the line where the light turns over, the shadows are faded out in any case.
 			source = source.replace("    float NdotL = dot(normalM, lightVec);\n", """
-				#ifdef CUBEWORLD
+				#ifdef CUBISM
 				    vec3 cubismLightBent = cubismBendLight(lightVec, viewPos);
 				#else
 				    vec3 cubismLightBent = lightVec;
@@ -609,7 +609,7 @@ public final class CubeShaderPatch {
 				"float shadowLength = shadowDistance * 0.9166667 - lViewPos;",
 				"""
 				float shadowLength = shadowDistance * 0.9166667 - lViewPos;
-				                    #ifdef CUBEWORLD
+				                    #ifdef CUBISM
 				                        if (cubism_active != 0 && dot(lightVec, cubism_shadowLight) < 0.0) shadowLength = 0.0;
 				                    #endif""");
 		}
@@ -679,7 +679,7 @@ public final class CubeShaderPatch {
 			source = source.replace("    vec3 worldPos = playerPos.xyz + cameraPosition.xyz;\n",
 				"""
 				    vec3 worldPos = playerPos.xyz + cameraPosition.xyz;
-				    #ifdef CUBEWORLD
+				    #ifdef CUBISM
 				        if (cubism_active != 0) {
 				            vec3 cubePos = (cubism_cubeFromView * vec4(viewPos.xyz, 1.0)).xyz;
 				            vec3 a = abs(cubePos);
@@ -693,7 +693,7 @@ public final class CubeShaderPatch {
 			// tilted near an edge, and a folded face has to use the matrix it draws with.
 			source = source.replace("    float RVdotU = dot(nViewPosR, upVec);",
 				"""
-				    #if defined GBUFFERS_WATER && defined CUBEWORLD
+				    #if defined GBUFFERS_WATER && defined CUBISM
 				        float RVdotU = dot(nViewPosR, cubism_active != 0 ? normalize(gbufferModelView[1].xyz) : upVec);
 				    #else
 				        float RVdotU = dot(nViewPosR, upVec);
@@ -745,12 +745,12 @@ public final class CubeShaderPatch {
 		}
 		for (String program : POINT_UP_PROGRAMS) {
 			if (name.endsWith("/program/" + program + ".glsl")) {
-				return "#define CUBEWORLD_POINT_UP\n" + source.replace(UP, "upVec = cubismPointUp();");
+				return "#define CUBISM_POINT_UP\n" + source.replace(UP, "upVec = cubismPointUp();");
 			}
 		}
 		for (String program : CAMERA_UP_PROGRAMS) {
 			if (name.endsWith("/program/" + program + ".glsl")) {
-				return "#define CUBEWORLD_CAMERA_UP\n" + source.replace(UP, "upVec = CUBEWORLD_UP_VEC;");
+				return "#define CUBISM_CAMERA_UP\n" + source.replace(UP, "upVec = CUBISM_UP_VEC;");
 			}
 		}
 		return source;
@@ -783,7 +783,7 @@ public final class CubeShaderPatch {
 	 * layer, the map of the clouds there, on the plane of the face under it as the clouds of the cube read it.
 	 */
 	private static final String CLOUD_SHADOW_LAYER = """
-		    #if defined CUBEWORLD && defined CLOUDS_REIMAGINED
+		    #if defined CUBISM && defined CLOUDS_REIMAGINED
 		        float cubismCloudShadowLayer(vec3 p, float pAlt, vec3 l, float s, int cloudAltitude) {
 		            float dist = float(cloudAltitude) - pAlt;
 		            vec3 q = p + l * dist / max(s, 0.1);
@@ -805,7 +805,7 @@ public final class CubeShaderPatch {
 	 * the cube they take the height over the rounded cube, the light at the point, and the plane of the face under it.
 	 */
 	private static final String CLOUD_SHADOW_CUBE = """
-		        #ifdef CUBEWORLD
+		        #ifdef CUBISM
 		        if (cubism_active != 0) {
 		            vec3 cubismP = (cubism_cubeFromView * vec4(mat3(gbufferModelView) * playerPos, 1.0)).xyz;
 		            float cubismPAlt = cubismAlt(cubismP);
@@ -836,8 +836,8 @@ public final class CubeShaderPatch {
 	 */
 	private static final String CLOUD_PLANE = """
 
-		#ifndef CUBEWORLD_CLOUD_PLANE
-		#define CUBEWORLD_CLOUD_PLANE
+		#ifndef CUBISM_CLOUD_PLANE
+		#define CUBISM_CLOUD_PLANE
 		vec3 cubismPlanar(vec3 v, vec3 p) {
 		    if (cubism_active == 0) return v;
 		    vec3 a = abs(p);

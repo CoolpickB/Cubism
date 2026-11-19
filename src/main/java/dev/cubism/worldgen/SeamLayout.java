@@ -82,6 +82,7 @@ public final class SeamLayout {
 	/** Distance between region centers. A wedge is 2(R + open height) + 1 blocks wide at the top, and region edges are chunk-aligned. */
 	public final int spacing;
 	private final int[][] rotations = new int[FACES.length + 1][];
+	private final int[][][] motions = new int[FACES.length + 1][FACES.length + 1][];
 
 	public SeamLayout(int diameterChunks) {
 		this(
@@ -102,6 +103,11 @@ public final class SeamLayout {
 			this.rotations[i] = rotation(FACES[i]);
 		}
 		this.rotations[SPACE] = rotation(Direction.UP);
+		for (int from = 0; from < this.motions.length; from++) {
+			for (int to = 0; to < this.motions.length; to++) {
+				this.motions[from][to] = this.computeMotion(from, to);
+			}
+		}
 		this.fold = new SeamFold(this);
 	}
 
@@ -415,9 +421,14 @@ public final class SeamLayout {
 	 * The rigid motion {@code s_to = R s_from + t} from the storage frame of one face to the storage frame of
 	 * another, for continuous positions. Returns {@code {R (row-major, 9 values), t (3 values)}}. The block map of
 	 * {@link #toCube} and {@link #toStorage} sends block s to block {@code R s + t0}. A block fills
-	 * {@code [s, s + 1)}, so on each axis that R negates, a continuous position needs one more block than t0.
+	 * {@code [s, s + 1)}, so on each axis that R negates, a continuous position needs one more block than t0. The array
+	 * is shared by all callers and must not be changed.
 	 */
 	public int[] motion(int fromFace, int toFace) {
+		return this.motions[fromFace][toFace];
+	}
+
+	private int[] computeMotion(int fromFace, int toFace) {
 		int[] a = this.rotations[toFace];
 		int[] b = this.rotations[fromFace];
 		int[] m = new int[12];

@@ -31,8 +31,10 @@ import java.util.List;
 public final class CubeNetworking {
 	private CubeNetworking() {}
 
-	/** Tells the client that the level stores the cube in seam regions, and the shape of the cube. */
-	/** The cube of the overworld, and whether the Nether is a cube too. Worlds made before the cube Nether have a vanilla Nether. */
+	/**
+	 * Tells the client the shape of the overworld cube, and whether the Nether is a cube too. Worlds made before the cube
+	 * Nether have a vanilla Nether.
+	 */
 	public record SeamPayload(int diameterChunks, int edgeRounding, boolean cubeNether) implements CustomPacketPayload {
 		public static final Type<SeamPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(CubismMod.MOD_ID, "seam"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, SeamPayload> CODEC = StreamCodec.composite(

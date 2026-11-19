@@ -149,12 +149,6 @@ public final class CubeFlight {
 	private static final Vector3f lastUp = new Vector3f(0.0F, 1.0F, 0.0F);
 	private static int lastUpFace = -1;
 
-	/**
-	 * Turns the look with the up of the view frame, by the shortest turn from the last up to this one, as games with
-	 * round planets do. The look then keeps its angle to the up: a look that stood still in the face while the frame
-	 * tilted under it went over straight down of the frame, where the yaw in the frame flips, so the keys walked the
-	 * other way and the camera rolled over, back and forth each tick.
-	 */
 	/** The cosine of the largest turn of the up at a crossing that the look turns with: 30 degrees. */
 	private static final float SEAM_CARRY_MIN_COS = 0.866F;
 
@@ -182,6 +176,12 @@ public final class CubeFlight {
 		return last.distanceToSqr(position) > TELEPORT_DISTANCE * TELEPORT_DISTANCE;
 	}
 
+	/**
+	 * Turns the look with the up of the view frame, by the shortest turn from the last up to this one, as games with
+	 * round planets do. The look then keeps its angle to the up: a look that stood still in the face while the frame
+	 * tilted under it went over straight down of the frame, where the yaw in the frame flips, so the keys walked the
+	 * other way and the camera rolled over, back and forth each tick.
+	 */
 	private static void carryLook(LocalPlayer player) {
 		glideRollO = glideRoll;
 		glideRoll *= GLIDE_ROLL_KEEP;
@@ -198,26 +198,23 @@ public final class CubeFlight {
 		}
 		if (BarrelRoll.rolling(player)) {
 			// The roll of the mod holds the screen up. When it stops, the screen up starts again from the yaw.
-			hasScreenUp = false;
-			screenUpTilted = false;
+			screenUpState = ScreenUp.NONE;
 			glideRoll = 0.0F;
 			glideRollO = 0.0F;
 			return;
 		}
-		boolean tiltEnds = screenUpTilted && isIdentity(view);
+		boolean tiltEnds = screenUpState == ScreenUp.TILTED && isIdentity(view);
 		// A world that was just joined or a teleport keeps no screen up from before: it would stay in the frame of the old
 		// place, tilted wrong, until the look changed.
 		Vec3 position = player.position();
 		boolean placed = lastFace < 0 || teleported(layout, lastFace, face, position);
 		lastPosition = position;
 		if (placed) {
-			hasScreenUp = false;
-			screenUpTilted = false;
+			screenUpState = ScreenUp.NONE;
 		}
 		syncScreenUp(player, view);
 		if (placed) {
 			upright(screenUp, syncedLook, view);
-			screenUpTilted = !isIdentity(view);
 			lastUp.set(up);
 		}
 		screenUpO.set(screenUp);
@@ -275,9 +272,9 @@ public final class CubeFlight {
 	private static final Vector3f screenUpO = new Vector3f(0.0F, 1.0F, 0.0F);
 	/** The look that {@link #screenUp} belongs to. */
 	private static final Vector3f syncedLook = new Vector3f(0.0F, 0.0F, 1.0F);
-	private static boolean hasScreenUp;
-	/** Whether {@link #screenUp} was last synced in a tilted view frame. */
-	private static boolean screenUpTilted;
+	/** Whether {@link #screenUp} is unset, or was last synced in the face frame or in a tilted view frame. */
+	private enum ScreenUp { NONE, FLAT, TILTED }
+	private static ScreenUp screenUpState = ScreenUp.NONE;
 
 	/**
 	 * Gives the yaw the heading of the screen when the view frame turns back to the face frame, where the screen up
@@ -314,20 +311,19 @@ public final class CubeFlight {
 	 */
 	private static void syncScreenUp(LocalPlayer player, Quaternionf view) {
 		boolean identity = isIdentity(view);
-		if (identity && hasScreenUp && screenUpTilted) {
+		if (identity && screenUpState == ScreenUp.TILTED) {
 			yawToScreenHeading(player);
 		}
-		screenUpTilted = !identity;
 		Vector3f look = look(player.getYRot(), player.getXRot());
-		if (!hasScreenUp || identity) {
+		if (screenUpState == ScreenUp.NONE || identity) {
 			screenUp.set(faceScreenUp(player.getYRot(), player.getXRot()));
 			screenUpO.set(faceScreenUp(player.yRotO, player.xRotO));
-			hasScreenUp = true;
 		} else if (!look.equals(syncedLook, 1.0E-6F)) {
 			new Quaternionf().rotationTo(syncedLook, look).transform(screenUp);
 			upright(screenUp, look, view);
 		}
 		syncedLook.set(look);
+		screenUpState = identity ? ScreenUp.FLAT : ScreenUp.TILTED;
 	}
 
 	/**
@@ -390,7 +386,6 @@ public final class CubeFlight {
 	private static java.io.PrintWriter lookLog;
 	private static int lookTicksLeft;
 
-	/** Writes one line per tick while the view frame is tilted and for 20 ticks after: for finding where the look and the keys disagree. */
 	/** Writes a line to the look log when {@link ClientConfig#traceLook} is on. */
 	public static void traceLine(String line) {
 		if (!ClientConfig.traceLook || lookLog == null || lookTicksLeft <= 0) {
@@ -399,6 +394,7 @@ public final class CubeFlight {
 		lookLog.println(line);
 	}
 
+	/** Writes one line per tick while the view frame is tilted and for 20 ticks after: for finding where the look and the keys disagree. */
 	private static void traceLook(LocalPlayer player) {
 		if (!ClientConfig.traceLook) {
 			return;
@@ -861,9 +857,9 @@ public final class CubeFlight {
 	/**
 	 * Puts a body where the crossing turns it, with its velocity and yaw. The last positions turn along, so the frame
 	 * between the two ticks stays in place. The crossing can move the body off a block (see SeamCrossing.turned); the
-	 * last positions move with it, or the camera passes through that block on the way during the first tick.
+	 * last positions move with it, or the camera passes through that block on the way during the first tick. Returns
+	 * how far the yaw of a body other than the player turned, in degrees.
 	 */
-	/** Returns how far the yaw of a body other than the player turned, in degrees. */
 	private static float turnBody(Entity body, int[] m, SeamCrossing.Turned turned) {
 		double halfHeight = body.getBbHeight() / 2.0;
 		Vec3 old = SeamInteraction.move(m, new Vec3(body.xo, body.yo + halfHeight, body.zo));

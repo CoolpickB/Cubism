@@ -677,7 +677,6 @@ public final class SeamRenderer {
 		}
 	}
 
-	/** True for an entity that {@link #extractEntities} draws instead of vanilla. */
 	/**
 	 * An entity whose last-frame position is far from its position, as after a crossing that its old position did not
 	 * follow, such as two crossings at a corner. The frame between the two would draw it somewhere on the line between
@@ -693,6 +692,7 @@ public final class SeamRenderer {
 
 	private static final double TORN_DISTANCE = 64.0;
 
+	/** True for an entity that {@link #extractEntities} draws instead of vanilla. */
 	public static boolean inOtherRegion(Entity entity, double cameraX, double cameraZ) {
 		SeamLayout layout = SeamClient.layout;
 		if (layout == null) {

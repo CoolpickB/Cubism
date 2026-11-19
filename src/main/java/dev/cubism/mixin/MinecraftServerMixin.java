@@ -27,7 +27,7 @@ import java.util.function.BooleanSupplier;
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerMixin {
 	@Unique
-	private static final Logger CUBEWORLD$LOGGER = LoggerFactory.getLogger("cubism");
+	private static final Logger cubism$LOGGER = LoggerFactory.getLogger("cubism");
 
 	@Shadow
 	@Final
@@ -116,7 +116,7 @@ public abstract class MinecraftServerMixin {
 		if (pregen == null) {
 			return;
 		}
-		CUBEWORLD$LOGGER.info("Generating {} chunk columns of the cube before the first player joins", pregen.total());
+		cubism$LOGGER.info("Generating {} chunk columns of the cube before the first player joins", pregen.total());
 		long start = Util.getMillis();
 		long lastLog = start;
 		// The vanilla tracker does not count this stage. It only makes the loading screen show the progress bar, and the
@@ -139,7 +139,7 @@ public abstract class MinecraftServerMixin {
 				}
 				if (Util.getMillis() - lastLog > 5000L) {
 					lastLog = Util.getMillis();
-					CUBEWORLD$LOGGER.info("Generated {} of {} chunk columns", pregen.done(), pregen.total());
+					cubism$LOGGER.info("Generated {} of {} chunk columns", pregen.done(), pregen.total());
 				}
 				this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
 				this.waitUntilNextTick();
@@ -153,7 +153,7 @@ public abstract class MinecraftServerMixin {
 		}
 		this.levelLoadListener.finish(LevelLoadListener.Stage.PREPARE_GLOBAL_SPAWN);
 		LoadTrace.event("server: pre-generation done in " + (Util.getMillis() - start) + " ms");
-		CUBEWORLD$LOGGER.info("Generated {} chunk columns in {} s", pregen.total(), (Util.getMillis() - start) / 1000L);
+		cubism$LOGGER.info("Generated {} chunk columns in {} s", pregen.total(), (Util.getMillis() - start) / 1000L);
 	}
 
 	@Inject(method = "prepareLevels", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;waitUntilNextTick()V"))
