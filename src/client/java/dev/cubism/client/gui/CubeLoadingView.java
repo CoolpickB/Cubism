@@ -21,7 +21,7 @@ import org.joml.Vector3f;
 import java.util.Arrays;
 
 /**
- * Draws the pre-generation of the cube in the colors and cell size of the vanilla loading map. The whole cube shows as
+ * Draws the pre-generation of the cube in the colors of the vanilla loading map. The whole cube shows as
  * a cube seen from a corner. The face that generates is the face at the right, and when it is done the cube turns to
  * bring the next face there. At the end the cube turns back to the spawn face on top. The spawn face alone shows as
  * one square with the strips of its neighbor faces around it.
@@ -30,8 +30,11 @@ import java.util.Arrays;
  * face is the square z = h, and the cube is behind it, centered on the origin.
  */
 public final class CubeLoadingView {
-	/** Size of a chunk column in GUI pixels, as on the vanilla map. Smaller only if the view does not fit. */
-	private static final float CELL_SIZE = 2.0F;
+	/**
+	 * Half the height of the view in GUI pixels, smaller only if the screen is too small. The view has this size at every
+	 * cube size and pre-generation setting, so a chunk column is a different size on each.
+	 */
+	private static final float HALF_HEIGHT = 80.0F;
 	/** How long the cube takes to turn the next face to the right. */
 	private static final long TURN_MS = 350L;
 	/** The cube stays on the screen this long after its last turn, before the game starts. */
@@ -79,7 +82,7 @@ public final class CubeLoadingView {
 		boolean wholeCube = progress.settings.pregen() == CubeSettings.Pregen.WHOLE_CUBE;
 		// A turning cube reaches out to its half diagonal.
 		float halfHeight = wholeCube ? (float) Math.sqrt(3.0) * h : h + CubePregen.SPAWN_FACE_MARGIN;
-		float scale = Math.min(CELL_SIZE, Math.max(1, maxHalfHeight) / halfHeight);
+		float scale = Math.min(HALF_HEIGHT, Math.max(1, maxHalfHeight)) / halfHeight;
 		Matrix4f base = new Matrix4f().translate(xCenter, yCenter, 0.0F).scale(scale);
 		if (wholeCube) {
 			base.rotate(turn(progress));

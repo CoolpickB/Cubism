@@ -18,10 +18,10 @@ import java.util.Arrays;
  * @param pregen what to generate before the first player joins
  * @param temperature a shift of the temperature of the climate, in hundredths of its range: 100 is a full range hotter
  * @param humidity a shift of the humidity of the climate, in hundredths of its range
- * @param finiteLoot whether trades, gifts and drops give the items that a finite cube may lack, see {@code GOALS.md}
+ * @param extraItemSources whether trades, gifts and drops give the items that a finite cube may lack, see {@code GOALS.md}
  */
 public record CubeSettings(
-	int diameterChunks, int edgeRounding, Direction spawnFace, Pregen pregen, int temperature, int humidity, boolean finiteLoot
+	int diameterChunks, int edgeRounding, Direction spawnFace, Pregen pregen, int temperature, int humidity, boolean extraItemSources
 ) {
 	public static final int MIN_CLIMATE_SHIFT = -100;
 	public static final int MAX_CLIMATE_SHIFT = 100;
@@ -43,7 +43,7 @@ public record CubeSettings(
 		Codec.intRange(MIN_CLIMATE_SHIFT, MAX_CLIMATE_SHIFT).optionalFieldOf("temperature", 0).forGetter(CubeSettings::temperature),
 		Codec.intRange(MIN_CLIMATE_SHIFT, MAX_CLIMATE_SHIFT).optionalFieldOf("humidity", 0).forGetter(CubeSettings::humidity),
 		// A world without the field keeps the vanilla trades, gifts and drops.
-		Codec.BOOL.optionalFieldOf("finite_loot", false).forGetter(CubeSettings::finiteLoot)
+		Codec.BOOL.optionalFieldOf("extra_item_sources", false).forGetter(CubeSettings::extraItemSources)
 	).apply(i, CubeSettings::new));
 
 	public enum Pregen implements StringRepresentable {
@@ -66,27 +66,27 @@ public record CubeSettings(
 	}
 
 	public CubeSettings withDiameterChunks(int diameterChunks) {
-		return new CubeSettings(diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, this.finiteLoot);
+		return new CubeSettings(diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, this.extraItemSources);
 	}
 
 	public CubeSettings withEdgeRounding(int edgeRounding) {
-		return new CubeSettings(this.diameterChunks, edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, this.finiteLoot);
+		return new CubeSettings(this.diameterChunks, edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, this.extraItemSources);
 	}
 
 	public CubeSettings withPregen(Pregen pregen) {
-		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, pregen, this.temperature, this.humidity, this.finiteLoot);
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, pregen, this.temperature, this.humidity, this.extraItemSources);
 	}
 
 	public CubeSettings withTemperature(int temperature) {
-		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, temperature, this.humidity, this.finiteLoot);
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, temperature, this.humidity, this.extraItemSources);
 	}
 
 	public CubeSettings withHumidity(int humidity) {
-		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, humidity, this.finiteLoot);
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, humidity, this.extraItemSources);
 	}
 
-	public CubeSettings withFiniteLoot(boolean finiteLoot) {
-		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, finiteLoot);
+	public CubeSettings withExtraItemSources(boolean extraItemSources) {
+		return new CubeSettings(this.diameterChunks, this.edgeRounding, this.spawnFace, this.pregen, this.temperature, this.humidity, extraItemSources);
 	}
 
 	/** True when the climate differs from the vanilla noise. */

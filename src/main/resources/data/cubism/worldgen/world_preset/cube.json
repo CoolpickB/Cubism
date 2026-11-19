@@ -14,7 +14,7 @@
           "edge_rounding": 2,
           "spawn_face": "up",
           "pregen": "whole_cube",
-          "finite_loot": true
+          "extra_item_sources": true
         }
       }
     },

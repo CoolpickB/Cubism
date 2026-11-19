@@ -58,7 +58,7 @@
             }
           },
           {
-            "type": "cubism:finite_loot"
+            "type": "cubism:extra_item_sources"
           },
           {
             "type": "minecraft:random_chance",

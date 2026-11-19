@@ -8,7 +8,7 @@ import net.minecraft.world.item.trading.TradeSet;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-/** Lets {@link dev.cubism.loot.FiniteLoot} add a trade set to the offers of a villager or a trader. */
+/** Lets {@link dev.cubism.loot.ExtraItemSources} add a trade set to the offers of a villager or a trader. */
 @Mixin(AbstractVillager.class)
 public interface AbstractVillagerInvoker {
 	@Invoker("addOffersFromTradeSet")

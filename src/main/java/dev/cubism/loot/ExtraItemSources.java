@@ -19,10 +19,10 @@ import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
  * The trades, gifts and drops that give a finite cube the items that its structures may not generate. The setting
  * belongs to the overworld generator, so every dimension reads it there.
  */
-public final class FiniteLoot {
+public final class ExtraItemSources {
 	/** True in a cube world that has the setting on. Other worlds keep vanilla loot. */
 	public static boolean enabled(ServerLevel level) {
-		return CubeSettings.of(level.getServer().overworld().getChunkSource().getGenerator()).finiteLoot();
+		return CubeSettings.of(level.getServer().overworld().getChunkSource().getGenerator()).extraItemSources();
 	}
 
 	/** Adds the trade set {@code cubism:<path>} to the offers of a merchant, if the setting is on and the set exists. */
@@ -36,7 +36,7 @@ public final class FiniteLoot {
 		}
 	}
 
-	/** Loot tables use this as the condition {@code cubism:finite_loot}. */
+	/** Loot tables use this as the condition {@code cubism:extra_item_sources}. */
 	public record Condition() implements LootItemCondition {
 		public static final MapCodec<Condition> CODEC = MapCodec.unit(new Condition());
 
@@ -52,9 +52,9 @@ public final class FiniteLoot {
 	}
 
 	public static void register() {
-		Registry.register(BuiltInRegistries.LOOT_CONDITION_TYPE, Identifier.fromNamespaceAndPath(CubismMod.MOD_ID, "finite_loot"), Condition.CODEC);
+		Registry.register(BuiltInRegistries.LOOT_CONDITION_TYPE, Identifier.fromNamespaceAndPath(CubismMod.MOD_ID, "extra_item_sources"), Condition.CODEC);
 	}
 
-	private FiniteLoot() {
+	private ExtraItemSources() {
 	}
 }

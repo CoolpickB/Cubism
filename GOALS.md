@@ -8,7 +8,7 @@ The overworld is one cube planet in empty space. Each of the six faces is a full
 
 Every system in the mod obeys these rules:
 
-1. **Geometry.** The cube center is `(0, centerY, 0)`. The surface (sea level) is at Chebyshev distance `R` from the center. The diameter is 24 to 128 chunks. The edges of the surface are rounded by `edge_rounding`.
+1. **Geometry.** The cube center is `(0, centerY, 0)`. The surface (sea level) is at Chebyshev distance `R` from the center. The Customize screen gives three sizes: Small (24 chunks), Medium (64) and Large (128). The edges of the surface are rounded by `edge_rounding`, which is experimental.
 2. **Storage.** Each face is stored upright in its own region along +X, as the pyramid wedge `max(|x|, |z|) <= y - centerY`. Thus each face is a vanilla world in which the local up is world up. `SeamLayout` changes storage positions to cube positions and back.
 3. **Seams.** The diagonal between two wedges is a seam. Rendering, light, block updates and entity tracking cross a seam with a 90 degree turn. A block next to a seam reads the turned blocks across it. A block that cannot turn reads as air from the other face.
 4. **Worldgen stays in the wedge.** The mod refuses writes outside the wedge of a face. A feature or a structure that the diagonal cuts is whole or not placed.
@@ -27,7 +27,7 @@ Every system in the mod obeys these rules:
 - **Terrain.** Terrain continues across edges with no cliffs or gaps. Heights, biomes, caves, ores and decoration follow the vanilla rules.
 - **Light.** Sky light comes from the local up of each face. The bottom face is not dark at noon.
 - **Navigation.** Commands, F3 and `/locate` use cube coordinates. Compasses and eyes of ender point across edges. The clock shows the local time of the face.
-- **Structures.** Structures generate on all faces. Villages, ancient cities, trial chambers and mineshafts fold across an edge. Other structures move in from the edge, or they do not generate. Each world has 1 to 3 strongholds, by size.
+- **Structures.** Structures generate on all faces. Villages, ancient cities, trial chambers and mineshafts fold across an edge. Other structures move in from the edge, or they do not generate. Small, Medium and Large worlds have 1, 2 and 3 strongholds.
 - **Core.** Caves go down to the bedrock cube at the center. Budding bedrock on its edges and corners grows heavy cores. A lava sea fills only the middle of each bedrock face.
 - **Space.** Above the build height, the world opens into space. Gravity decreases with distance and stops past the exosphere. In space, you float and see the whole planet.
 
@@ -36,11 +36,11 @@ Every system in the mod obeys these rules:
 - The Nether is a cube with a 128-block cave on each face, between a bedrock floor and a bedrock roof.
 - A portal leads to the same face, at half the distance from the face center.
 - Each face has vanilla Nether terrain and biomes. Caves continue across the edges.
-- Each world has 1 to 3 fortresses and 1 to 3 bastions, by size. Fortress corridors continue across an edge.
+- Small, Medium and Large worlds have 1, 2 and 3 fortresses, and the same number of bastions. Fortress corridors continue across an edge.
 
 ### Loot of a finite world
 
-The overworld and the Nether are finite. Some structures are not sure to generate on a small cube, so 70 items can be missing from a world. The `finite_loot` setting gives each of these items another source. The setting is on by default, and you can change it on the Customize screen.
+The overworld and the Nether are finite. Some structures are not sure to generate on a small cube, so 70 items can be missing from a world. The **Extra Item Sources** setting gives each of these items another source. The setting is on by default, and you can change it on the Customize screen.
 
 - **Armor trims.** The armorer sells one trim at each of the levels 2 to 5.
 - **Music discs.** A skeleton that kills a creeper can drop one of the newer discs.
