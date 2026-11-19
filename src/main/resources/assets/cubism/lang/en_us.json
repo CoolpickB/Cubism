@@ -21,7 +21,7 @@
   "cubism.customize.size.custom": "%s Chunks",
   "cubism.customize.size.tooltip": "%s chunks (%s blocks) along each edge. Strongholds, Nether fortresses and bastions: %s of each.",
   "cubism.customize.edge_rounding": "Edge Rounding (Experimental): %s Blocks",
-  "cubism.customize.edge_rounding.tooltip": "Rounds the edges of the cube. Experimental: larger values break things near the edges.",
+  "cubism.customize.edge_rounding.tooltip": "Rounds the edges of the cube. Experimental: MAY BREAK THINGS",
   "cubism.customize.temperature": "Temperature: %s",
   "cubism.customize.humidity": "Humidity: %s",
   "cubism.customize.climate.normal": "Normal",
