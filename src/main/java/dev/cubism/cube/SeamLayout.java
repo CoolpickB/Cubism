@@ -1,7 +1,6 @@
 package dev.cubism.cube;
 
 import dev.cubism.CubismMod;
-import dev.cubism.cube.CubePlanetMath;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import dev.cubism.time.CubeTime;
 import dev.cubism.worldgen.CubeSettings;

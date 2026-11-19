@@ -12,6 +12,26 @@ Each face is stored upright, in its own region along +X. A face is the pyramid w
 
 Most mod conflicts come from this layout. A mod that reads or draws by storage position gets six wedges in a row, not a cube. The diagonal between two wedges is a seam. Rendering, light, block updates and entities cross a seam with a 90 degree turn.
 
+## Where the code is
+
+Each package holds one feature. The mixins of a feature are in a subpackage of `mixin` with the same name, for example `mixin.structure`.
+
+| Package | Contents |
+|---|---|
+| `dev.cubism.cube` | The shape of the cube: `SeamLayout`, the paths over edges, the sizes |
+| `dev.cubism.seam` | Blocks, light, updates and entities across a seam |
+| `dev.cubism.worldgen` | Terrain, biomes, pregeneration and the Customize settings |
+| `dev.cubism.worldgen.structure` | Structures and features that meet an edge |
+| `dev.cubism.gravity` | Steadfast and the gravity of entities |
+| `dev.cubism.core` | The bedrock cube at the center and its heavy cores |
+| `dev.cubism.time` | The local time of each face |
+| `dev.cubism.loot` | Other sources for the loot of structures that can be missing |
+| `dev.cubism.client` | The camera and the movement of the player over an edge |
+| `dev.cubism.client.render` | Seam rendering, sky, clouds, weather and the planet view |
+| `dev.cubism.client.gui` | The Customize screen |
+| `dev.cubism.client.compat` | Support for other mods, one package for each mod id |
+| `dev.cubism.debug`, `dev.cubism.client.debug` | Debug commands and load traces |
+
 ## Add support for a mod
 
 Each integration has its own package and its own mixin config:

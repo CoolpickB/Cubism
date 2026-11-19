@@ -1,6 +1,5 @@
 package dev.cubism.cube;
 
-import dev.cubism.cube.CubePlanetMath;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;

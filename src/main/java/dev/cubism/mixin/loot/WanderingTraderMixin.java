@@ -1,6 +1,5 @@
 package dev.cubism.mixin.loot;
 
-import dev.cubism.mixin.loot.AbstractVillagerInvoker;
 import dev.cubism.loot.FiniteLoot;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.npc.wanderingtrader.WanderingTrader;
