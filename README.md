@@ -4,7 +4,7 @@
 
 Cubism is a Minecraft mod that makes the overworld a finite cube planet in space.
 
-Each of the six faces is a full Minecraft world. When you walk over an edge, gravity turns and you stand on the next face. Above the build height, you can float into space and see the whole planet. The Nether is a smaller cube. The End is vanilla.
+Each of the six faces is a full Minecraft world. When you walk over an edge, gravity turns and you stand on the next face. Above the build height, you can float into space and see the whole planet. Overworld and Nether supported, End not yet supported.
 
 [GOALS.md](GOALS.md) lists the features and the known limits.
 
