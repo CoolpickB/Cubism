@@ -40,6 +40,7 @@ The client options are in `config/cubism-client.properties`. The game writes thi
 
 | Key | Default | Effect |
 |---|---|---|
+| `debugCommands` | `false` | Adds the `/cubelight` and `/cubevoxy` commands. For debugging. |
 | `edgeCameraTilt` | `true` | The camera turns with gravity over an edge. When false, the camera turns only over the last 2 blocks before the seam. You can also set this in the Accessibility options. |
 | `showStorageLine` | `false` | F3 shows the storage position and the chunks that are missing near you. For debugging. |
 | `traceLoads` | `false` | Each world load writes a timeline to `logs/cubism-load-<time>.log`. For debugging. |

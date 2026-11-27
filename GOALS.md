@@ -74,6 +74,7 @@ The Steadfast effect keeps you on the face where you stand. Use it to mine near 
 - Entities and particles use the light of the face the camera is on.
 - Of the shader packs, only Complementary Unbound r5.9.3 follows the shape of the cube.
 - Maps are blank past the edge of a face.
+- Sometimes a short strip of chunks near an edge does not show. Fly away and come back to load it again.
 
 ## Later
 

@@ -7,6 +7,11 @@
 	"authors": [
 		"Coolpick"
 	],
+	"contact": {
+		"homepage": "https://github.com/CoolpickB/Cubism",
+		"sources": "https://github.com/CoolpickB/Cubism",
+		"issues": "https://github.com/CoolpickB/Cubism/issues"
+	},
 	"license": "MIT",
 	"environment": "*",
 	"entrypoints": {

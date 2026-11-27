@@ -19,6 +19,10 @@ public final class ClientConfig {
 	/** Whether the look, the walking yaw and the face of the player go to logs/cubism-look.log while the view frame is tilted. */
 	public static final boolean traceLook = Boolean.parseBoolean(PROPERTIES.getProperty("traceLook", "false"));
 
+	/** Whether /cubelight and /cubevoxy are registered. They are only of use when debugging the mod. */
+	public static final boolean debugCommands = FabricLoader.getInstance().isDevelopmentEnvironment()
+		|| Boolean.parseBoolean(PROPERTIES.getProperty("debugCommands", "false"));
+
 	/** Whether each world load writes a timeline to logs/cubism-load-<time>.log, see LoadTrace. */
 	public static final boolean traceLoads = Boolean.parseBoolean(PROPERTIES.getProperty("traceLoads", "false"));
 

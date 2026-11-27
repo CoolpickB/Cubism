@@ -40,18 +40,20 @@ public class CubismClient implements ClientModInitializer {
 				context.getSource().sendFeedback(net.minecraft.network.chat.Component.literal("Tracing to logs/cubism-load-*.log"));
 				return 1;
 			}))));
-		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-			ClientCommands.literal("cubelight").executes(context -> DebugLight.print())));
-		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-			ClientCommands.literal("cubevoxy").then(ClientCommands.literal("hide").then(
-				ClientCommands.argument("mode", IntegerArgumentType.integer(0, 2)).executes(context -> {
-					ClientConfig.voxyHide = IntegerArgumentType.getInteger(context, "mode");
-					return 1;
-				}))).then(ClientCommands.literal("only").then(
-				ClientCommands.argument("face", IntegerArgumentType.integer(-1, 6)).executes(context -> {
-					ClientConfig.voxyOnly = IntegerArgumentType.getInteger(context, "face");
-					return 1;
-				})))));
+		if (ClientConfig.debugCommands) {
+			ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+				ClientCommands.literal("cubelight").executes(context -> DebugLight.print())));
+			ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+				ClientCommands.literal("cubevoxy").then(ClientCommands.literal("hide").then(
+					ClientCommands.argument("mode", IntegerArgumentType.integer(0, 2)).executes(context -> {
+						ClientConfig.voxyHide = IntegerArgumentType.getInteger(context, "mode");
+						return 1;
+					}))).then(ClientCommands.literal("only").then(
+					ClientCommands.argument("face", IntegerArgumentType.integer(-1, 6)).executes(context -> {
+						ClientConfig.voxyOnly = IntegerArgumentType.getInteger(context, "face");
+						return 1;
+					})))));
+		}
 
 		ClientPlayNetworking.registerGlobalReceiver(CubeNetworking.SeamPayload.TYPE, (payload, context) -> {
 			CubePlanetMath.setEdgeRounding(payload.edgeRounding());
