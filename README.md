@@ -1,3 +1,5 @@
+<img src="src/main/resources/assets/cubism/icon.png" width="128" alt="Cubism logo">
+
 # Cubism
 
 Cubism is a Minecraft mod that makes the overworld a finite cube planet in space.
